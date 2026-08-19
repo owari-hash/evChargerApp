@@ -25,21 +25,28 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       appBar: AppBar(
+        toolbarHeight: 76,
         automaticallyImplyLeading: false,
         title: Text(
           AppStrings.get('nearby_stations'),
-          style: const TextStyle(
-            fontSize: 20,
+          maxLines: 2,
+          style: TextStyle(
+            fontSize: 17,
             fontWeight: FontWeight.w900,
-            color: AppTheme.darkForest,
-            letterSpacing: -0.5,
+            color: context.palette.ink,
+            letterSpacing: -0.4,
+            height: 1.15,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner_rounded, color: AppTheme.darkForest, size: 28),
+            icon: Icon(
+              Icons.qr_code_scanner_rounded,
+              color: context.palette.ink,
+              size: 28,
+            ),
             onPressed: () => _openQrScannerModal(context),
             tooltip: AppStrings.get('scan_qr'),
           ),
@@ -56,7 +63,7 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppTheme.darkForest,
+                color: context.palette.panel,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: const [
                   BoxShadow(
@@ -70,7 +77,11 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.qr_code_scanner_rounded, color: AppTheme.sageGreen, size: 36),
+                      const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        color: AppTheme.sageGreen,
+                        size: 36,
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -87,7 +98,10 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                             const SizedBox(height: 2),
                             Text(
                               AppStrings.get('scan_qr_desc'),
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -107,7 +121,10 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                       icon: const Icon(Icons.camera_alt_rounded, size: 20),
                       label: Text(
                         AppStrings.get('scan_button'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -118,29 +135,34 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
 
             Text(
               AppStrings.get('nearby_stations'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.darkForest,
+                color: context.palette.ink,
               ),
             ),
             const SizedBox(height: 12),
 
-            ..._service.nearbyStations.map((station) => _buildStationCard(station, context)),
+            ..._service.nearbyStations.map(
+              (station) => _buildStationCard(station, context),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStationCard(ChargingStationLocation station, BuildContext context) {
+  Widget _buildStationCard(
+    ChargingStationLocation station,
+    BuildContext context,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,18 +175,18 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                   children: [
                     Text(
                       station.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.darkForest,
+                        color: context.palette.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       station.address,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppTheme.textMuted,
+                        color: context.palette.inkMuted,
                       ),
                     ),
                   ],
@@ -172,11 +194,15 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               ),
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: AppTheme.softBg,
+                decoration: BoxDecoration(
+                  color: context.palette.bg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.ev_station_rounded, color: AppTheme.darkForest, size: 18),
+                child: Icon(
+                  Icons.ev_station_rounded,
+                  color: context.palette.ink,
+                  size: 18,
+                ),
               ),
             ],
           ),
@@ -184,9 +210,12 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: AppTheme.lightSage,
+                  color: context.palette.accent.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -201,15 +230,15 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               const SizedBox(width: 8),
               Text(
                 '${station.availableConnectors}/${station.totalConnectors} Сул байна',
-                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
               ),
               const Spacer(),
               Text(
                 '₮${station.pricePerKwh.toInt()}/кВт.ц',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.darkForest,
+                  color: context.palette.ink,
                 ),
               ),
             ],
@@ -225,7 +254,8 @@ class _QrScannerCheckoutSheet extends StatefulWidget {
   const _QrScannerCheckoutSheet();
 
   @override
-  State<_QrScannerCheckoutSheet> createState() => _QrScannerCheckoutSheetState();
+  State<_QrScannerCheckoutSheet> createState() =>
+      _QrScannerCheckoutSheetState();
 }
 
 class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
@@ -249,7 +279,9 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Төлбөр амжилттай! Цэнэглэж эхэллээ (₮${_depositAmountMnt.toInt()}).'),
+          content: Text(
+            'Төлбөр амжилттай! Цэнэглэж эхэллээ (₮${_depositAmountMnt.toInt()}).',
+          ),
           backgroundColor: AppTheme.sageGreen,
           duration: const Duration(seconds: 3),
         ),
@@ -261,8 +293,8 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: AppTheme.darkForest,
+      decoration: BoxDecoration(
+        color: context.palette.panel,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -271,10 +303,16 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
-                const Icon(Icons.qr_code_scanner_rounded, color: AppTheme.sageGreen, size: 24),
+                const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: AppTheme.sageGreen,
+                  size: 24,
+                ),
                 const SizedBox(width: 10),
                 Text(
-                  _isScanned ? 'Төлбөр баталгаажуулах' : AppStrings.get('scan_qr'),
+                  _isScanned
+                      ? AppStrings.get('confirm_payment')
+                      : AppStrings.get('scan_qr'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -321,12 +359,12 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                const Icon(Icons.qr_code_2_rounded, size: 140, color: Colors.white24),
-                Container(
-                  width: 210,
-                  height: 2,
-                  color: AppTheme.sageGreen,
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  size: 140,
+                  color: Colors.white24,
                 ),
+                Container(width: 210, height: 2, color: AppTheme.sageGreen),
               ],
             ),
           ),
@@ -359,14 +397,22 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.ev_station_rounded, color: AppTheme.sageGreen, size: 32),
+                Icon(
+                  Icons.ev_station_rounded,
+                  color: AppTheme.sageGreen,
+                  size: 32,
+                ),
                 SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Шангри-Ла Молл Цэнэглэгч',
-                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       'Загуур #1 (CCS2 Fast 180kW) • ₮450/кВт.ц',
@@ -381,7 +427,11 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
 
           Text(
             AppStrings.get('select_deposit'),
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 10),
 
@@ -417,7 +467,11 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
 
           Text(
             AppStrings.get('payment_method'),
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 10),
 
@@ -429,14 +483,26 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.qr_code_2_rounded, color: AppTheme.sageGreen, size: 24),
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  color: AppTheme.sageGreen,
+                  size: 24,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   AppStrings.get('qpay'),
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const Spacer(),
-                const Icon(Icons.check_circle_rounded, color: AppTheme.sageGreen, size: 20),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppTheme.sageGreen,
+                  size: 20,
+                ),
               ],
             ),
           ),
@@ -454,12 +520,20 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.bolt_rounded, size: 22),
               label: Text(
-                _isProcessing ? 'УНШИЖ БАЙНА...' : '₮${_depositAmountMnt.toInt()} ТӨЛӨӨД ЦЭНЭГЛЭХ',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                _isProcessing
+                    ? AppStrings.get('scanning')
+                    : '₮${_depositAmountMnt.toInt()} ТӨЛӨӨД ЦЭНЭГЛЭХ',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),

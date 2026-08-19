@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
 class ChargingSessionReceiptSheet extends StatelessWidget {
   final String stationName;
@@ -21,8 +22,8 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: AppTheme.cardWhite,
+      decoration: BoxDecoration(
+        color: context.palette.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
@@ -31,26 +32,26 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           // Top Success Icon
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: AppTheme.lightSage,
+            decoration: BoxDecoration(
+              color: context.palette.accent.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle_rounded, color: AppTheme.sageGreen, size: 48),
           ),
           const SizedBox(height: 16),
 
-          const Text(
-            'Цэнэглэлтийн Баримт',
+          Text(
+            AppStrings.get('charging_receipt'),
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-              color: AppTheme.darkForest,
+              color: context.palette.ink,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Гүйлгээний дугаар: #$txRef',
-            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
           ),
           const SizedBox(height: 20),
 
@@ -59,22 +60,22 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              color: AppTheme.softBg,
+              color: context.palette.bg,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
               children: [
-                const Text(
-                  'Нийт Төлөгдсөн Дүн',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                Text(
+                  AppStrings.get('total_paid'),
+                  style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '₮${totalCostMnt.toInt()}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
-                    color: AppTheme.darkForest,
+                    color: context.palette.ink,
                   ),
                 ),
               ],
@@ -83,15 +84,15 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Breakdown List
-          _buildReceiptRow('Цэнэглэх станц', stationName),
-          const Divider(height: 20, color: AppTheme.borderSubtle),
-          _buildReceiptRow('Загуур / Хурд', '${activePowerKw.toInt()} кВт CCS2 Fast'),
-          const Divider(height: 20, color: AppTheme.borderSubtle),
-          _buildReceiptRow('Шилжүүлсэн эрчим хүч', '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц'),
-          const Divider(height: 20, color: AppTheme.borderSubtle),
-          _buildReceiptRow('Нэгжийн үнэ', '₮450 / кВт.ц'),
-          const Divider(height: 20, color: AppTheme.borderSubtle),
-          _buildReceiptRow('Төлбөрийн хэрэгсэл', 'QPay (Амжилттай)'),
+          _buildReceiptRow(context, AppStrings.get('charging_station'), stationName),
+          Divider(height: 20, color: context.palette.border),
+          _buildReceiptRow(context, AppStrings.get('connector_speed'), '${activePowerKw.toInt()} кВт CCS2 Fast'),
+          Divider(height: 20, color: context.palette.border),
+          _buildReceiptRow(context, AppStrings.get('energy_delivered'), '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц'),
+          Divider(height: 20, color: context.palette.border),
+          _buildReceiptRow(context, AppStrings.get('unit_price'), '₮450 / кВт.ц'),
+          Divider(height: 20, color: context.palette.border),
+          _buildReceiptRow(context, 'Төлбөрийн хэрэгсэл', 'QPay (Амжилттай)'),
           const SizedBox(height: 28),
 
           // Action Buttons
@@ -102,17 +103,31 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
                   onPressed: () {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('И-мэйлээр баримт илгээгдлээ.'),
-                        backgroundColor: AppTheme.darkForest,
+                      SnackBar(
+                        content: Text(AppStrings.get('receipt_emailed')),
+                        backgroundColor: context.palette.panel,
                       ),
                     );
                   },
                   icon: const Icon(Icons.download_rounded, size: 18),
-                  label: const Text('БАРИМТ ТАТАХ'),
+                  // Never wrap: label length varies by language.
+                  label: Text(
+                    AppStrings.get('download_receipt'),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: AppTheme.darkForest),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    side: BorderSide(color: context.palette.panel, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
               ),
@@ -121,10 +136,24 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.darkForest,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: context.palette.panel,
+                    foregroundColor: context.palette.onPanel,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
                   ),
-                  child: const Text('БОЛСОН'),
+                  child: Text(
+                    AppStrings.get('done'),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -135,20 +164,21 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptRow(String label, String value) {
+  Widget _buildReceiptRow(
+      BuildContext context, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+          style: TextStyle(fontSize: 13, color: context.palette.inkMuted),
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textDark,
+            color: context.palette.ink,
           ),
         ),
       ],

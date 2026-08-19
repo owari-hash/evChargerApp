@@ -20,22 +20,22 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
+        title: Text(
           'Book A Demo Drive',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w900,
-            color: AppTheme.darkForest,
+            color: context.palette.ink,
             letterSpacing: -0.5,
           ),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notes_rounded, color: AppTheme.darkForest, size: 28),
+            icon: Icon(Icons.notes_rounded, color: context.palette.ink, size: 28),
             onPressed: () {},
           ),
           const SizedBox(width: 8),
@@ -49,18 +49,18 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search Your Vehicle',
-                hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
-                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.darkForest),
+                hintStyle: TextStyle(color: context.palette.inkMuted, fontSize: 14),
+                prefixIcon: Icon(Icons.search_rounded, color: context.palette.ink),
                 filled: true,
-                fillColor: AppTheme.cardWhite,
+                fillColor: context.palette.card,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: AppTheme.borderSubtle),
+                  borderSide: BorderSide(color: context.palette.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: AppTheme.borderSubtle),
+                  borderSide: BorderSide(color: context.palette.border),
                 ),
               ),
             ),
@@ -88,7 +88,7 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? AppTheme.darkForest : AppTheme.textMuted,
+                              color: isSelected ? context.palette.ink : context.palette.inkMuted,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -97,7 +97,7 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
                               width: 32,
                               height: 2.5,
                               decoration: BoxDecoration(
-                                color: AppTheme.darkForest,
+                                color: context.palette.panel,
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -137,9 +137,9 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,18 +181,18 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: AppTheme.textMuted,
+                      color: context.palette.inkMuted,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -216,11 +216,11 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
                 imageAssetPath,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Center(
+                  return Center(
                     child: Icon(
                       Icons.electric_car_rounded,
                       size: 90,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                     ),
                   );
                 },
@@ -237,7 +237,7 @@ class _DemoDriveScreenState extends State<DemoDriveScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Demo Drive requested for $title $subtitle!'),
-                    backgroundColor: AppTheme.darkForest,
+                    backgroundColor: context.palette.panel,
                   ),
                 );
               },

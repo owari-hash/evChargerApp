@@ -20,16 +20,16 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'OCPP 1.6 Profile 5',
               style: TextStyle(
                 fontSize: 12,
-                color: AppTheme.textMuted,
+                color: context.palette.inkMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -38,14 +38,14 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.darkForest,
+                color: context.palette.ink,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.code_rounded, color: AppTheme.darkForest),
+            icon: Icon(Icons.code_rounded, color: context.palette.ink),
             onPressed: () => OcppJsonLoggerSheet.show(context),
           ),
           const SizedBox(width: 8),
@@ -60,7 +60,7 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppTheme.darkForest,
+                color: context.palette.panel,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Row(
@@ -96,19 +96,19 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppTheme.cardWhite,
+                color: context.palette.card,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.borderSubtle),
+                border: Border.all(color: context.palette.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Charging Profile Purpose',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -116,10 +116,10 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
                     value: _purpose,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: AppTheme.softBg,
+                      fillColor: context.palette.bg,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.borderSubtle),
+                        borderSide: BorderSide(color: context.palette.border),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
@@ -147,12 +147,12 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Charging Rate Unit',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.darkForest,
+                          color: context.palette.ink,
                         ),
                       ),
                       SegmentedButton<String>(
@@ -172,10 +172,10 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
                   // Current Slider
                   Text(
                     'Max Limit: ${_maxCurrentLimit.toInt()} $_rateUnit',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                     ),
                   ),
                   Slider(
@@ -184,7 +184,7 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
                     max: 64.0,
                     divisions: 58,
                     activeColor: AppTheme.sageGreen,
-                    inactiveColor: AppTheme.lightSage,
+                    inactiveColor: context.palette.accent.withValues(alpha: 0.16),
                     label: '${_maxCurrentLimit.toInt()} $_rateUnit',
                     onChanged: (val) {
                       setState(() => _maxCurrentLimit = val);
@@ -244,25 +244,25 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppTheme.cardWhite,
+                color: context.palette.card,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.borderSubtle),
+                border: Border.all(color: context.palette.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Composite Schedule Query',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Fetch combined calculated schedule limit for next 24 hours.',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -276,7 +276,7 @@ class _SmartChargingScreenState extends State<SmartChargingScreen> {
                         });
                         OcppJsonLoggerSheet.show(context);
                       },
-                      icon: const Icon(Icons.analytics_rounded, color: AppTheme.darkForest),
+                      icon: Icon(Icons.analytics_rounded, color: context.palette.ink),
                       label: const Text('Query GetCompositeSchedule'),
                     ),
                   ),

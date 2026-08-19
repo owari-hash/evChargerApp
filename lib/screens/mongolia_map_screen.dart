@@ -5,16 +5,76 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ocpp_mock_service.dart';
+import '../services/route_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+
+/// Whether an incoming GPS fix is allowed to write the driver's position.
+///
+/// A simulated route owns that position while it runs. Letting real GPS fixes
+/// write it at the same time snaps the driver back to their true location once
+/// a second, so the route never advances and turn-by-turn appears frozen.
+@visibleForTesting
+bool gpsFixOwnsPosition({required bool isNavigatingRoute}) =>
+    !isNavigatingRoute;
+
+/// One step of the simulated drive: closes [fraction] of the remaining gap
+/// between [from] and [to].
+@visibleForTesting
+LatLng stepTowardsDestination(LatLng from, LatLng to, double fraction) {
+  return LatLng(
+    from.latitude + (to.latitude - from.latitude) * fraction,
+    from.longitude + (to.longitude - from.longitude) * fraction,
+  );
+}
+
+/// Which label the primary route button shows. Extracted so the start/stop
+/// behaviour is verifiable without driving the map widget.
+@visibleForTesting
+String routeActionLabelKey({required bool isNavigating}) =>
+    isNavigating ? 'stop_route' : 'start_route';
+
+/// Compass heading for a bearing in degrees, in the active language.
+@visibleForTesting
+String compassLabel(double bearing) {
+  const List<String> keys = <String>[
+    'dir_n',
+    'dir_ne',
+    'dir_e',
+    'dir_se',
+    'dir_s',
+    'dir_sw',
+    'dir_w',
+    'dir_nw',
+  ];
+  final double normalised = (bearing % 360 + 360) % 360;
+  return AppStrings.get(keys[(((normalised + 22.5) % 360) ~/ 45).toInt()]);
+}
+
+/// Guidance line for the navigation HUD, from the remaining distance and the
+/// real bearing to the target. Replaces what used to be a fixed string.
+@visibleForTesting
+String navigationInstruction(double metres, double bearing) {
+  final String heading = compassLabel(bearing);
+  final String toward = AppStrings.get('toward');
+  final String km = AppStrings.get('unit_km');
+  final String m = AppStrings.get('unit_m');
+  if (metres < 30) {
+    return AppStrings.get('arrived_short');
+  }
+  if (metres < 300) {
+    return '${metres.round()} $m · $toward $heading';
+  }
+  if (metres < 1000) {
+    return '${(metres / 50).round() * 50} $m · $toward $heading';
+  }
+  return '${(metres / 1000).toStringAsFixed(1)} $km · $toward $heading';
+}
 
 class MongoliaMapScreen extends StatefulWidget {
   final VoidCallback onOpenQrScanner;
 
-  const MongoliaMapScreen({
-    super.key,
-    required this.onOpenQrScanner,
-  });
+  const MongoliaMapScreen({super.key, required this.onOpenQrScanner});
 
   @override
   State<MongoliaMapScreen> createState() => _MongoliaMapScreenState();
@@ -25,14 +85,22 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   final MapController _mapController = MapController();
 
   StreamSubscription<Position>? _positionStreamSub;
-  LatLng _userPosition = const LatLng(47.9130, 106.9140); // Ulaanbaatar default GPS
+  LatLng _userPosition = const LatLng(
+    47.9130,
+    106.9140,
+  ); // Ulaanbaatar default GPS
   double _userSpeedKmH = 0.0;
   bool _isGpsPermissionGranted = false;
 
   String _searchQuery = '';
-  int _selectedStationIndex = 0;
+  String? _selectedStationId;
+
+  /// Destination the running route is actually driving to.
+  LatLng? _navDestination;
   bool _isNavigatingRoute = false;
-  Timer? _simulatedNavTimer;
+  DrivingRoute? _route;
+  bool _routeLoading = false;
+  String? _routeError;
 
   @override
   void initState() {
@@ -47,7 +115,8 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
         permission = await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+      if (permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse) {
         setState(() => _isGpsPermissionGranted = true);
 
         // Get current initial GPS position
@@ -59,75 +128,135 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
         });
 
         // Listen to live continuous real-time GPS updates
-        _positionStreamSub = Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 5,
-          ),
-        ).listen((Position pos) {
-          setState(() {
-            _userPosition = LatLng(pos.latitude, pos.longitude);
-            _userSpeedKmH = (pos.speed * 3.6).clamp(0.0, 120.0);
-          });
+        _positionStreamSub =
+            Geolocator.getPositionStream(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                distanceFilter: 5,
+              ),
+            ).listen((Position pos) {
+              if (!mounted) return;
+              setState(() {
+                _userPosition = LatLng(pos.latitude, pos.longitude);
+                _userSpeedKmH = (pos.speed * 3.6).clamp(0.0, 200.0);
+              });
 
-          if (_isNavigatingRoute) {
-            _mapController.move(_userPosition, 16.0);
-          }
-        });
+              if (_isNavigatingRoute) {
+                // Follow the driver rather than driving the map ourselves.
+                _mapController.move(_userPosition, _mapController.camera.zoom);
+                _checkArrival();
+              }
+            });
       }
     } catch (e) {
       debugPrint('GPS Location error: $e');
     }
   }
 
-  void _startSimulatedNavigation(LatLng destination) {
-    _simulatedNavTimer?.cancel();
+  /// Starts guidance to [destination]: fetches the real driving route and
+  /// then follows the driver's own GPS along it.
+  ///
+  /// This used to animate the car towards the destination on a timer, which
+  /// looked like navigation but ignored where the driver actually was.
+  Future<void> _startNavigation(LatLng destination) async {
     setState(() {
       _isNavigatingRoute = true;
+      _navDestination = destination;
+      _route = null;
+      _routeError = null;
+      _routeLoading = true;
     });
 
-    _mapController.move(_userPosition, 16.0);
+    _mapController.move(_userPosition, 15.0);
 
-    // Dynamic animated movement towards charging station for testing navigation
-    _simulatedNavTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!_isNavigatingRoute) {
-        timer.cancel();
-        return;
-      }
-
-      final double newLat = _userPosition.latitude + (destination.latitude - _userPosition.latitude) * 0.08;
-      final double newLng = _userPosition.longitude + (destination.longitude - _userPosition.longitude) * 0.08;
-
-      setState(() {
-        _userPosition = LatLng(newLat, newLng);
-        _userSpeedKmH = 42.0;
-      });
-
-      _mapController.move(_userPosition, 16.0);
-
-      final double distanceMeters = Geolocator.distanceBetween(
-        _userPosition.latitude,
-        _userPosition.longitude,
-        destination.latitude,
-        destination.longitude,
+    try {
+      final DrivingRoute route = await RouteService.fetchDrivingRoute(
+        _userPosition,
+        destination,
       );
+      if (!mounted || !_isNavigatingRoute) return;
+      setState(() {
+        _route = route;
+        _routeLoading = false;
+      });
+      _fitRoute(route);
+    } on RouteUnavailable catch (e) {
+      debugPrint('Route lookup failed: $e');
+      if (!mounted) return;
+      // Guidance still works from bearing and distance; only the road
+      // geometry is missing.
+      setState(() {
+        _routeLoading = false;
+        _routeError = AppStrings.get('route_unavailable');
+      });
+    }
+  }
 
-      if (distanceMeters < 20) {
-        timer.cancel();
-        setState(() {
-          _isNavigatingRoute = false;
-          _userSpeedKmH = 0.0;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Цэнэглэх станцад хүрч ирлээ! QR кодыг уншуулна уу.'),
-              backgroundColor: AppTheme.sageGreen,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
-      }
+  /// Frames the whole route so the driver can see where they are going.
+  void _fitRoute(DrivingRoute route) {
+    if (route.points.length < 2) return;
+    try {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(route.points),
+          padding: const EdgeInsets.fromLTRB(48, 120, 48, 260),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Could not fit route bounds: $e');
+    }
+  }
+
+  /// Ends guidance once the driver reaches the charger.
+  void _checkArrival() {
+    final LatLng? target = _navDestination;
+    if (target == null) return;
+
+    final double metres = Geolocator.distanceBetween(
+      _userPosition.latitude,
+      _userPosition.longitude,
+      target.latitude,
+      target.longitude,
+    );
+    if (metres > 30) return;
+
+    _stopSimulatedNavigation();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppStrings.get('arrived_full')),
+        backgroundColor: AppTheme.sageGreen,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  String _navigationInstruction(LatLng from, LatLng to) {
+    final double metres = Geolocator.distanceBetween(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
+    final double bearing = Geolocator.bearingBetween(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
+    return navigationInstruction(metres, bearing);
+  }
+
+  /// Ends the running route and clears everything it owns.
+  void _stopSimulatedNavigation() {
+    if (!mounted) return;
+    setState(() {
+      _isNavigatingRoute = false;
+      _navDestination = null;
+      _route = null;
+      _routeError = null;
+      _routeLoading = false;
+      _userSpeedKmH = 0.0;
     });
   }
 
@@ -146,14 +275,18 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   }
 
   Future<void> _launchExternalGpsNavigation(double lat, double lng) async {
-    final Uri googleMapsUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+    );
     if (await canLaunchUrl(googleMapsUrl)) {
       await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Чиглэл авч байна: $lat, $lng'),
+            content: Text(
+              '${AppStrings.get('getting_directions')}: $lat, $lng',
+            ),
             backgroundColor: AppTheme.sageGreen,
           ),
         );
@@ -164,7 +297,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   @override
   void dispose() {
     _positionStreamSub?.cancel();
-    _simulatedNavTimer?.cancel();
     super.dispose();
   }
 
@@ -176,21 +308,42 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
           st.address.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
 
-    final activeStation = stations.isNotEmpty
-        ? stations[_selectedStationIndex % stations.length]
-        : _service.nearbyStations.first;
+    final activeStation = stations.firstWhere(
+      (st) => st.id == _selectedStationId,
+      orElse: () =>
+          stations.isNotEmpty ? stations.first : _service.nearbyStations.first,
+    );
 
-    final LatLng destinationPos = LatLng(activeStation.latitude, activeStation.longitude);
+    final LatLng destinationPos = LatLng(
+      activeStation.latitude,
+      activeStation.longitude,
+    );
 
-    final double navDistanceKm = (Geolocator.distanceBetween(
+    // While a route runs, every readout follows the route's own destination so
+    // the HUD can't disagree with where the car is actually heading.
+    final LatLng routeTarget = _isNavigatingRoute
+        ? (_navDestination ?? destinationPos)
+        : destinationPos;
+
+    final double navDistanceMeters = Geolocator.distanceBetween(
       _userPosition.latitude,
       _userPosition.longitude,
-      destinationPos.latitude,
-      destinationPos.longitude,
-    ) / 1000.0);
+      routeTarget.latitude,
+      routeTarget.longitude,
+    );
+    final double navDistanceKm = navDistanceMeters / 1000.0;
+    // While the road route is being fetched, say so; if routing failed, say
+    // that too rather than pretending the bearing line is a road route.
+    final String navInstruction = _routeLoading
+        ? AppStrings.get('route_loading')
+        : (_routeError ??
+            _navigationInstruction(
+              _userPosition,
+              routeTarget,
+            ));
 
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       body: Stack(
         children: [
           // 1. Real Interactive OpenStreetMap Layer with Real-Time User Position & Polyline
@@ -206,7 +359,9 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 tileProvider: NetworkTileProvider(
-                  headers: {'User-Agent': 'ZevChargerApp/1.0 (contact@zevcharger.mn)'},
+                  headers: {
+                    'User-Agent': 'ZevChargerApp/1.0 (contact@zevcharger.mn)',
+                  },
                 ),
               ),
 
@@ -214,17 +369,18 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               if (_isNavigatingRoute)
                 PolylineLayer(
                   polylines: [
+                    // Real road geometry when we have it; a direct line only
+                    // as a fallback while it loads or if routing is down.
                     Polyline(
-                      points: [
-                        _userPosition,
-                        LatLng(
-                          (_userPosition.latitude + destinationPos.latitude) / 2,
-                          _userPosition.longitude,
-                        ),
-                        destinationPos,
-                      ],
+                      points:
+                          _route?.points ??
+                          <LatLng>[_userPosition, routeTarget],
                       strokeWidth: 6.0,
-                      color: AppTheme.sageGreen,
+                      color: _route == null
+                          ? AppTheme.sageGreen.withValues(alpha: 0.45)
+                          : AppTheme.sageGreen,
+                      borderStrokeWidth: _route == null ? 0 : 2,
+                      borderColor: Colors.white,
                     ),
                   ],
                 ),
@@ -240,11 +396,11 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppTheme.darkForest,
+                        color: context.palette.panel,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.sageGreen.withOpacity(0.6),
+                            color: AppTheme.sageGreen.withValues(alpha: 0.6),
                             blurRadius: 12,
                             spreadRadius: 3,
                           ),
@@ -261,17 +417,25 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                   // Real Station Pin Markers in Ulaanbaatar
                   ...List.generate(_service.nearbyStations.length, (index) {
                     final station = _service.nearbyStations[index];
-                    final LatLng pos = LatLng(station.latitude, station.longitude);
-                    final bool isSelected = (_selectedStationIndex % _service.nearbyStations.length) == index;
+                    final LatLng pos = LatLng(
+                      station.latitude,
+                      station.longitude,
+                    );
+                    final bool isSelected = station.id == activeStation.id;
 
                     return Marker(
                       point: pos,
-                      width: isSelected ? 120 : 80,
-                      height: isSelected ? 70 : 50,
+                      width: isSelected ? 130 : 92,
+                      height: isSelected ? 74 : 58,
                       child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            _selectedStationIndex = index;
+                            _selectedStationId = station.id;
+                            // Picking a new pin mid-route retargets the route
+                            // rather than leaving it driving to the old one.
+                            if (_isNavigatingRoute) {
+                              _navDestination = pos;
+                            }
                           });
                           _mapController.move(pos, 15.0);
                         },
@@ -279,12 +443,20 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppTheme.darkForest : AppTheme.cardWhite,
+                                color: isSelected
+                                    ? context.palette.panel
+                                    : context.palette.card,
                                 borderRadius: BorderRadius.circular(8),
                                 boxShadow: const [
-                                  BoxShadow(color: Colors.black26, blurRadius: 4),
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 4,
+                                  ),
                                 ],
                               ),
                               child: Text(
@@ -293,7 +465,9 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: isSelected ? Colors.white : AppTheme.darkForest,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : context.palette.ink,
                                 ),
                               ),
                             ),
@@ -302,17 +476,30 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                               duration: const Duration(milliseconds: 200),
                               padding: EdgeInsets.all(isSelected ? 8 : 6),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppTheme.sageGreen : AppTheme.darkForest,
+                                color: isSelected
+                                    ? AppTheme.sageGreen
+                                    : context.palette.panel,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: isSelected ? AppTheme.sageGreen.withOpacity(0.5) : Colors.black26,
+                                    color: isSelected
+                                        ? AppTheme.sageGreen.withValues(
+                                            alpha: 0.5,
+                                          )
+                                        : Colors.black26,
                                     blurRadius: isSelected ? 10 : 4,
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.ev_station_rounded, color: Colors.white, size: 16),
+                              child: const Icon(
+                                Icons.ev_station_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                             ),
                           ],
                         ),
@@ -333,10 +520,14 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.darkForest,
+                  color: context.palette.panel,
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 4)),
+                    BoxShadow(
+                      color: Colors.black38,
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
                   ],
                 ),
                 child: Row(
@@ -347,7 +538,11 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                         color: AppTheme.sageGreen,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.turn_right_rounded, color: Colors.white, size: 28),
+                      child: const Icon(
+                        Icons.turn_right_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -355,7 +550,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '500 м дараа баруун тийш эргэнэ үү',
+                            navInstruction,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
@@ -364,20 +559,22 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${activeStation.name} • ${navDistanceKm.toStringAsFixed(1)} км (${_userSpeedKmH.toInt()} км/ц)',
-                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            '${activeStation.name} • ${navDistanceKm.toStringAsFixed(1)} ${AppStrings.get('unit_km')} (${_userSpeedKmH.toInt()} ${AppStrings.get('unit_kmh')})',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white),
-                      onPressed: () {
-                        setState(() {
-                          _isNavigatingRoute = false;
-                        });
-                        _simulatedNavTimer?.cancel();
-                      },
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                      tooltip: AppStrings.get('stop_route'),
+                      onPressed: _stopSimulatedNavigation,
                     ),
                   ],
                 ),
@@ -394,20 +591,32 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppTheme.cardWhite,
+                        color: context.palette.card,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: const [
-                          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
                         ],
                       ),
                       child: TextField(
                         onChanged: (val) => setState(() => _searchQuery = val),
                         decoration: InputDecoration(
-                          hintText: 'Улаанбаатар дахь цэнэглэгч хайх...',
-                          hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                          prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.darkForest),
+                          hintText: AppStrings.get('search_stations'),
+                          hintStyle: TextStyle(
+                            color: context.palette.inkMuted,
+                            fontSize: 13,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            color: context.palette.ink,
+                          ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
                         ),
                       ),
                     ),
@@ -418,23 +627,34 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                       setState(() {
                         AppStrings.currentLanguage =
                             AppStrings.currentLanguage == AppLanguage.mn
-                                ? AppLanguage.en
-                                : AppLanguage.mn;
+                            ? AppLanguage.en
+                            : AppLanguage.mn;
                       });
                     },
                     borderRadius: BorderRadius.circular(18),
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.cardWhite,
+                      decoration: BoxDecoration(
+                        color: context.palette.card,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
                         ],
                       ),
                       child: Text(
-                        AppStrings.currentLanguage == AppLanguage.mn ? '🇲🇳' : '🇬🇧',
-                        style: const TextStyle(fontSize: 16),
+                        AppStrings.currentLanguage == AppLanguage.mn
+                            ? 'МН'
+                            : 'EN',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: context.palette.ink,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -481,10 +701,14 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.cardWhite,
+                    color: context.palette.card,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -495,10 +719,16 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppTheme.lightSage,
+                              color: context.palette.accent.withValues(
+                                alpha: 0.16,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: const Icon(Icons.ev_station_rounded, color: AppTheme.sageGreen, size: 24),
+                            child: const Icon(
+                              Icons.ev_station_rounded,
+                              color: AppTheme.sageGreen,
+                              size: 24,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -507,21 +737,24 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                               children: [
                                 Text(
                                   activeStation.name,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: AppTheme.darkForest,
+                                    color: context.palette.ink,
                                   ),
                                 ),
                                 Text(
                                   activeStation.address,
-                                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: context.palette.inkMuted,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           Text(
-                            '${navDistanceKm.toStringAsFixed(1)} км',
+                            '${navDistanceKm.toStringAsFixed(1)} ${AppStrings.get('unit_km')}',
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -534,28 +767,42 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
-                              color: AppTheme.darkForest,
+                              color: context.palette.panel,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '${activeStation.kwSpeed.toInt()} кВт Супер',
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              '${activeStation.kwSpeed.toInt()} ${AppStrings.get('kw_super')}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            '${activeStation.availableConnectors}/${activeStation.totalConnectors} Сул байна',
-                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          Flexible(
+                            child: Text(
+                              '${activeStation.availableConnectors}/${activeStation.totalConnectors} ${AppStrings.get('available')}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.palette.inkMuted,
+                              ),
+                            ),
                           ),
                           const Spacer(),
                           Text(
                             '₮${activeStation.pricePerKwh.toInt()}/кВт.ц',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
-                              color: AppTheme.darkForest,
+                              color: context.palette.ink,
                             ),
                           ),
                         ],
@@ -573,18 +820,34 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                       child: SizedBox(
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            _startSimulatedNavigation(destinationPos);
-                          },
+                          // Tapping this while a route ran used to restart it,
+                          // and the only way out was a small X in the HUD.
+                          onPressed: _isNavigatingRoute
+                              ? _stopSimulatedNavigation
+                              : () => _startNavigation(destinationPos),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.sageGreen,
+                            backgroundColor: _isNavigatingRoute
+                                ? AppTheme.errorRed
+                                : AppTheme.sageGreen,
                             foregroundColor: Colors.white,
                             elevation: 4,
                           ),
-                          icon: const Icon(Icons.navigation_rounded, size: 20),
+                          icon: Icon(
+                            _isNavigatingRoute
+                                ? Icons.stop_rounded
+                                : Icons.navigation_rounded,
+                            size: 20,
+                          ),
                           label: Text(
-                            _isNavigatingRoute ? 'НАВИГАЦИ ЯВАГДАЖ БАЙНА' : 'ЧИГЛЭЛ ЭХЛҮҮЛЭХ',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            AppStrings.get(
+                              routeActionLabelKey(
+                                isNavigating: _isNavigatingRoute,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -602,11 +865,15 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.darkForest,
+                          backgroundColor: context.palette.panel,
                           foregroundColor: Colors.white,
                           elevation: 4,
                         ),
-                        child: const Icon(Icons.map_rounded, size: 20, color: AppTheme.sageGreen),
+                        child: const Icon(
+                          Icons.map_rounded,
+                          size: 20,
+                          color: AppTheme.sageGreen,
+                        ),
                       ),
                     ),
                   ],
@@ -629,14 +896,18 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: const BoxDecoration(
-          color: AppTheme.cardWhite,
+        decoration: BoxDecoration(
+          color: context.palette.card,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
-        child: Icon(icon, color: AppTheme.darkForest, size: 20),
+        child: Icon(icon, color: context.palette.ink, size: 20),
       ),
     );
   }

@@ -1,4 +1,4 @@
-package com.example.evchargerapp
+package mn.zevcharger.app
 
 import io.flutter.embedding.android.FlutterActivity
 

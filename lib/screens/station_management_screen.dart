@@ -17,16 +17,16 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Station & Connector Control',
               style: TextStyle(
                 fontSize: 12,
-                color: AppTheme.textMuted,
+                color: context.palette.inkMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -35,14 +35,14 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.darkForest,
+                color: context.palette.ink,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.code_rounded, color: AppTheme.darkForest),
+            icon: Icon(Icons.code_rounded, color: context.palette.ink),
             onPressed: () => OcppJsonLoggerSheet.show(context),
           ),
           const SizedBox(width: 8),
@@ -57,7 +57,7 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppTheme.darkForest,
+                color: context.palette.panel,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
@@ -136,12 +136,12 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
             ),
             const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'Connector Statuses (OCPP StatusNotification)',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.darkForest,
+                color: context.palette.ink,
               ),
             ),
             const SizedBox(height: 12),
@@ -182,9 +182,9 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,17 +194,17 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.darkForest,
+                    color: context.palette.ink,
                   ),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.15),
+                  color: badgeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: badgeColor, width: 1),
                 ),
@@ -227,10 +227,10 @@ class _StationManagementScreenState extends State<StationManagementScreen> {
             decoration: InputDecoration(
               labelText: 'Simulate Status Change',
               filled: true,
-              fillColor: AppTheme.softBg,
+              fillColor: context.palette.bg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.borderSubtle),
+                borderSide: BorderSide(color: context.palette.border),
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),

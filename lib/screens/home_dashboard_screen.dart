@@ -21,6 +21,9 @@ class HomeDashboardScreen extends StatefulWidget {
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
 }
 
+/// Demo vehicle name, previously inlined into the markup.
+const String _vehicleName = 'BMW X5 xDrive50e';
+
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final OcppMockService _service = OcppMockService.instance;
 
@@ -33,7 +36,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final double energy = _service.totalEnergyKwh;
     final double power = _service.activePowerKw;
     final double cost = energy * 450.0;
-    final String station = _service.activeStationName ?? 'Шангри-Ла Молл Цэнэглэгч';
+    final String station =
+        _service.activeStationName ?? 'Шангри-Ла Молл Цэнэглэгч';
 
     await _service.stopUserChargingSession();
 
@@ -58,25 +62,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return StreamBuilder<Map<String, dynamic>>(
       stream: _service.telemetryStream,
       builder: (context, snapshot) {
-        final bool isCharging = _service.connectorStatuses[1] == ConnectorStatus.charging;
+        final bool isCharging =
+            _service.connectorStatuses[1] == ConnectorStatus.charging;
 
         return Scaffold(
-          backgroundColor: AppTheme.softBg,
+          backgroundColor: context.palette.bg,
           body: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Spec Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildSpecChip(AppStrings.get('power'), '${_service.activePowerKw.toInt()} кВт'),
-                    _buildSpecChip(AppStrings.get('vmax'), '190 км/ц'),
-                    _buildSpecChip(AppStrings.get('range'), '${_service.remainingKm.toInt()} км'),
-                  ],
-                ),
-                const SizedBox(height: 18),
 
                 // Hero View: Hero Car Banner with Particle Matrix FX during Charging
                 VehicleChargingMatrix(
@@ -85,13 +80,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     width: double.infinity,
                     height: 200,
                     decoration: BoxDecoration(
-                      color: AppTheme.darkForest,
+                      color: context.palette.panel,
                       borderRadius: BorderRadius.circular(28),
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Colors.black12,
+                          color: context.palette.shadow,
                           blurRadius: 12,
-                          offset: Offset(0, 4),
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -103,34 +98,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             child: Image.asset(
                               'assets/images/bmw_x5.jpg',
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: AppTheme.darkForest,
-                                child: const Icon(Icons.directions_car_rounded, size: 80, color: AppTheme.sageGreen),
-                              ),
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    color: AppTheme.darkForest,
+                                    child: const Icon(
+                                      Icons.directions_car_rounded,
+                                      size: 80,
+                                      color: AppTheme.sageGreen,
+                                    ),
+                                  ),
                             ),
                           ),
                           Positioned(
                             bottom: 16,
                             left: 16,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isCharging ? Icons.bolt_rounded : Icons.electric_car_rounded,
-                                    color: AppTheme.sageGreen,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    isCharging ? 'SUPERCHARGING ACTIVE • 180 кВт' : 'BMW X5 xDrive50e • ₮0/кВт.ц',
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
+                            right: 16,
+                            // Bounded so a long status line can ellipsize
+                            // instead of overflowing the hero card.
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isCharging
+                                          ? Icons.bolt_rounded
+                                          : Icons.electric_car_rounded,
+                                      color: AppTheme.sageGreen,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        isCharging
+                                            ? 'ЦЭНЭГЛЭЖ БАЙНА • ${_service.activePowerKw.toInt()} кВт'
+                                            : '$_vehicleName • ₮0/кВт.ц',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -163,9 +185,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         foregroundColor: Colors.white,
                       ),
                       icon: const Icon(Icons.stop_circle_rounded, size: 22),
-                      label: const Text(
-                        'ЦЭНЭГЛЭЛТИЙГ ЗОГСООХ',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                      label: Text(
+                        AppStrings.get('stop_charging'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -182,38 +208,50 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   // Swipe to Start Action Slider (Dribbble Seamless EV Flow)
                   SwipeToSlideButton(
                     onSwipeCompleted: _handleStartChargingSession,
-                    text: 'Цэнэглэж эхлэхийн тулд гулсуулна уу',
+                    text: AppStrings.get('slide_to_start'),
                   ),
                 ],
                 const SizedBox(height: 22),
 
                 // Quick Action Controls Row
-                Row(
-                  children: [
-                    _buildQuickActionBtn(
-                      icon: _service.isPlugLocked ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
-                      label: _service.isPlugLocked ? AppStrings.get('locked') : AppStrings.get('unlocked'),
-                      isActive: _service.isPlugLocked,
-                      onTap: () => setState(() => _service.toggleLock()),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildQuickActionBtn(
-                      icon: Icons.tune_rounded,
-                      label: AppStrings.get('control'),
-                      isActive: false,
-                      onTap: widget.onNavigateToQuickControls,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildMetricCard(
-                        title: AppStrings.get('battery'),
-                        value: '${_service.batteryLevel.toStringAsFixed(0)}%',
-                        subtitle: isCharging ? AppStrings.get('charging') : AppStrings.get('idle'),
-                        icon: Icons.battery_charging_full_rounded,
-                        accentColor: AppTheme.sageGreen,
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildQuickActionBtn(
+                          icon: _service.isPlugLocked
+                              ? Icons.lock_outline_rounded
+                              : Icons.lock_open_rounded,
+                          label: _service.isPlugLocked
+                              ? AppStrings.get('locked')
+                              : AppStrings.get('unlocked'),
+                          isActive: _service.isPlugLocked,
+                          onTap: () => setState(() => _service.toggleLock()),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildQuickActionBtn(
+                          icon: Icons.tune_rounded,
+                          label: AppStrings.get('control'),
+                          isActive: false,
+                          onTap: widget.onNavigateToQuickControls,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildMetricCard(
+                          title: AppStrings.get('battery'),
+                          value: '${_service.batteryLevel.toStringAsFixed(0)}%',
+                          subtitle: isCharging
+                              ? AppStrings.get('charging')
+                              : AppStrings.get('idle'),
+                          icon: Icons.battery_charging_full_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -223,50 +261,40 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  Widget _buildSpecChip(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
-      child: Column(
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.darkForest)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildQuickActionBtn({
     required IconData icon,
     required String label,
     required bool isActive,
     required VoidCallback onTap,
   }) {
+    final AppPalette palette = context.palette;
+    final Color foreground = isActive ? palette.onPanel : palette.ink;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: isActive ? AppTheme.darkForest : AppTheme.cardWhite,
+          color: isActive ? palette.panel : palette.card,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppTheme.borderSubtle),
+          border: Border.all(color: palette.border),
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: isActive ? Colors.white : AppTheme.darkForest, size: 20),
-            const SizedBox(height: 4),
+            Icon(icon, color: foreground, size: 20),
+            const SizedBox(height: 5),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isActive ? Colors.white : AppTheme.darkForest,
+                color: foreground,
               ),
             ),
           ],
@@ -280,28 +308,56 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     required String value,
     required String subtitle,
     required IconData icon,
-    required Color accentColor,
   }) {
+    final AppPalette palette = context.palette;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: palette.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: palette.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: accentColor, size: 24),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(title, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.darkForest),
+              Icon(icon, color: palette.accent, size: 16),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: palette.inkMuted),
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: palette.ink,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: palette.accent,
+            ),
           ),
         ],
       ),

@@ -32,16 +32,16 @@ class _OcppProtocolSuiteScreenState extends State<OcppProtocolSuiteScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: context.palette.bg,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'OCPP 1.6J Specification',
               style: TextStyle(
                 fontSize: 12,
-                color: AppTheme.textMuted,
+                color: context.palette.inkMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -50,14 +50,14 @@ class _OcppProtocolSuiteScreenState extends State<OcppProtocolSuiteScreen>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.darkForest,
+                color: context.palette.ink,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.receipt_long_rounded, color: AppTheme.darkForest),
+            icon: Icon(Icons.receipt_long_rounded, color: context.palette.ink),
             tooltip: 'View Raw JSON Logs',
             onPressed: () => OcppJsonLoggerSheet.show(context),
           ),
@@ -66,8 +66,8 @@ class _OcppProtocolSuiteScreenState extends State<OcppProtocolSuiteScreen>
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          labelColor: AppTheme.darkForest,
-          unselectedLabelColor: AppTheme.textMuted,
+          labelColor: context.palette.panel,
+          unselectedLabelColor: context.palette.inkMuted,
           indicatorColor: AppTheme.sageGreen,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -95,7 +95,7 @@ class _OcppProtocolSuiteScreenState extends State<OcppProtocolSuiteScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => OcppJsonLoggerSheet.show(context),
-        backgroundColor: AppTheme.darkForest,
+        backgroundColor: context.palette.panel,
         icon: const Icon(Icons.code, color: Colors.white),
         label: const Text('Live JSON Inspector', style: TextStyle(color: Colors.white)),
       ),
@@ -173,9 +173,9 @@ class _MessageCardState extends State<_MessageCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: context.palette.border),
         boxShadow: const [
           BoxShadow(
             color: Colors.black12,
@@ -190,8 +190,8 @@ class _MessageCardState extends State<_MessageCard> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: isCpToCs
-                ? AppTheme.darkForest.withOpacity(0.1)
-                : AppTheme.warningOrange.withOpacity(0.1),
+                ? context.palette.panel.withValues(alpha: 0.1)
+                : AppTheme.warningOrange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
@@ -199,23 +199,23 @@ class _MessageCardState extends State<_MessageCard> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: isCpToCs ? AppTheme.darkForest : AppTheme.warningOrange,
+              color: isCpToCs ? context.palette.ink : AppTheme.warningOrange,
             ),
           ),
         ),
         title: Text(
           widget.msgInfo.action,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppTheme.darkForest,
+            color: context.palette.ink,
           ),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             widget.msgInfo.summary,
-            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
           ),
         ),
         children: [
@@ -224,29 +224,29 @@ class _MessageCardState extends State<_MessageCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Payload (JSON Request Data):',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.darkForest,
+                    color: context.palette.ink,
                   ),
                 ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _payloadController,
                   maxLines: 5,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
-                    color: AppTheme.textDark,
+                    color: context.palette.ink,
                   ),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: AppTheme.softBg,
+                    fillColor: context.palette.bg,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppTheme.borderSubtle),
+                      borderSide: BorderSide(color: context.palette.border),
                     ),
                     contentPadding: const EdgeInsets.all(12),
                   ),
@@ -259,7 +259,7 @@ class _MessageCardState extends State<_MessageCard> {
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _executeMessage,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.darkForest,
+                      backgroundColor: context.palette.panel,
                     ),
                     icon: _isLoading
                         ? const SizedBox(
@@ -281,12 +281,12 @@ class _MessageCardState extends State<_MessageCard> {
                 // Response Card
                 if (_lastResponseFrame != null) ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Last Response (CALLRESULT / CALLERROR):',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.darkForest,
+                      color: context.palette.ink,
                     ),
                   ),
                   const SizedBox(height: 6),

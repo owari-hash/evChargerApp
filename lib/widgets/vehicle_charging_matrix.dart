@@ -75,7 +75,7 @@ class _ParticleMatrixPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final glowPaint = Paint()
-      ..color = const Color(0xFF6EE7B7).withOpacity(0.4)
+      ..color = const Color(0xFF6EE7B7).withValues(alpha: 0.4)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
     final random = Random(42);

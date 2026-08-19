@@ -149,9 +149,14 @@ class OcppMockService {
     if (!enablePeriodicTimer) return;
     _telemetryTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (connectorStatuses[1] == ConnectorStatus.charging) {
-        batteryLevel = min(targetLimitPct, batteryLevel + 0.15);
-        remainingKm = batteryLevel * 1.58;
-        totalEnergyKwh += 0.02;
+        // Charging only ever adds. Lowering the target below the current level
+        // used to clamp the battery *downwards*, so the charge and the range
+        // fell while the session bill kept climbing.
+        if (batteryLevel < targetLimitPct) {
+          batteryLevel = min(targetLimitPct, batteryLevel + 0.15);
+          remainingKm = batteryLevel * 1.58;
+          totalEnergyKwh += 0.02;
+        }
 
         _telemetryStreamController.add({
           'batteryLevel': batteryLevel,

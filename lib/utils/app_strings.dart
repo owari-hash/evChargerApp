@@ -1,7 +1,33 @@
+import 'package:flutter/foundation.dart';
+
 enum AppLanguage { mn, en }
 
+/// App-wide language selection.
+///
+/// This is a [ValueNotifier] so switching it rebuilds the whole app. It used to
+/// be a bare static field, so a toggle only refreshed the screen it was on and
+/// looked like it did nothing.
+class LanguageController {
+  LanguageController._();
+
+  static final ValueNotifier<AppLanguage> language = ValueNotifier<AppLanguage>(
+    AppLanguage.mn,
+  );
+
+  static AppLanguage get current => language.value;
+
+  static void toggle() => language.value = language.value == AppLanguage.mn
+      ? AppLanguage.en
+      : AppLanguage.mn;
+
+  static void set(AppLanguage value) => language.value = value;
+}
+
 class AppStrings {
-  static AppLanguage currentLanguage = AppLanguage.mn;
+  static AppLanguage get currentLanguage => LanguageController.current;
+
+  static set currentLanguage(AppLanguage value) =>
+      LanguageController.set(value);
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'mn': {
@@ -16,6 +42,89 @@ class AppStrings {
       'phone_email': 'Утасны дугаар эсвэл И-мэйл',
       'password': 'Нууц үг',
       'forgot_password': 'Нууц үг мартсан?',
+      'logout': 'Гарах',
+      'activity_title': 'Үйл ажиллагаа',
+      'activity_subtitle': 'Цэнэглэлтийн түүх',
+      'activity_empty': 'Одоогоор бүртгэл алга байна',
+      'activity_details': 'Техникийн мэдээлэл',
+      'act_authorize': 'Эрх баталгаажлаа',
+      'act_start': 'Цэнэглэлт эхэллээ',
+      'act_stop': 'Цэнэглэлт дууслаа',
+      'act_meter': 'Хэмжилт бүртгэгдлээ',
+      'act_status': 'Төлөв шинэчлэгдлээ',
+      'act_heartbeat': 'Холболт шалгагдлаа',
+      'act_boot': 'Станц холбогдлоо',
+      'act_remote_start': 'Алсаас эхлүүллээ',
+      'act_remote_stop': 'Алсаас зогсоолоо',
+      'act_reserve': 'Захиалга бүртгэгдлээ',
+      'act_other': 'Станцын үйлдэл',
+      'clear_history': 'Түүх цэвэрлэх',
+      'media_artist': 'Ардын хөгжмийн чуулга',
+      'media_track': 'Шангри-Ла аялгуу',
+      'media_system': 'Dolby Atmos систем',
+      'download_receipt': 'БАРИМТ',
+      'done': 'БОЛСОН',
+      'outside_temp': 'Гадаа агаарын хэм',
+      'tx_ref': 'Гүйлгээний дугаар',
+      'connector_speed': 'Залгуур / Хурд',
+      'receipt_emailed': 'И-мэйлээр баримт илгээгдлээ.',
+      'total_paid': 'Нийт Төлөгдсөн Дүн',
+      'total_cost': 'Нийт төлбөр',
+      'unit_price': 'Нэгжийн үнэ',
+      'added_range': 'Нэмэгдэх зай',
+      'last_measured': 'Сүүлийн хэмжилт',
+      'estimated_total': 'Тооцоолсон дүн',
+      'payment_ok': 'Төлбөр амжилттай! Цэнэглэж эхэллээ',
+      'confirm_payment': 'Төлбөр баталгаажуулах',
+      'scanning': 'УНШИЖ БАЙНА...',
+      'vehicle_location': 'Улаанбаатар дахь автомашины байршил',
+      'vehicle_location_hint': 'Дарж интерактив зураг нээх',
+      'limit_label': 'Хязгаар',
+      'charging_now': 'ЦЭНЭГЛЭЖ БАЙНА',
+      'stop_charging': 'ЦЭНЭГЛЭЛТИЙГ ЗОГСООХ',
+      'windows_locked': 'Цонх цоожтой',
+      'slide_to_start': 'Цэнэглэж эхлэхийн тулд гулсуулна уу',
+      'slide_default': 'Эхлүүлэхийн тулд гулсуулна уу',
+      'charging_receipt': 'Цэнэглэлтийн Баримт',
+      'set_charge_limit': 'Цэнэглэх Хязгаар Тохируулах',
+      'charging_station': 'Цэнэглэх станц',
+      'charge_limit': 'Цэнэглэх хязгаар',
+      'energy_delivered': 'Шилжүүлсэн эрчим хүч',
+      'time_remaining': 'Үлдсэн хугацаа',
+      'ocpp_log': 'OCPP лог',
+      'nav_stations': 'Станц',
+      'search_stations': 'Улаанбаатар дахь цэнэглэгч хайх...',
+      'start_route': 'ЧИГЛЭЛ ЭХЛҮҮЛЭХ',
+      'stop_route': 'ЧИГЛЭЛ ЗОГСООХ',
+      'route_loading': 'Замыг тооцоолж байна...',
+      'route_unavailable': 'Замын мэдээлэл авах боломжгүй. Чиглэлээр удирдана.',
+      'navigating': 'НАВИГАЦИ ЯВАГДАЖ БАЙНА',
+      'arrived_full': 'Цэнэглэх станцад хүрч ирлээ! QR кодыг уншуулна уу.',
+      'arrived_short': 'Та очих газартаа ирлээ',
+      'getting_directions': 'Чиглэл авч байна',
+      'map_title': 'Цэнэглэх станцын зураг',
+      'back': 'Буцах',
+      'available': 'Сул байна',
+      'kw_super': 'кВт Супер',
+      'unit_km': 'км',
+      'unit_kw': 'кВт',
+      'unit_m': 'м',
+      'unit_kmh': 'км/ц',
+      'toward': 'чиглэлд',
+      'dir_n': 'хойш',
+      'dir_ne': 'зүүн хойш',
+      'dir_e': 'зүүн',
+      'dir_se': 'зүүн урагш',
+      'dir_s': 'урагш',
+      'dir_sw': 'баруун урагш',
+      'dir_w': 'баруун',
+      'dir_nw': 'баруун хойш',
+      'logout_title': 'Гарах уу?',
+      'logout_body': 'Та бүртгэлээсээ гарна. Дахин нэвтрэх шаардлагатай.',
+      'cancel': 'Цуцлах',
+      'light_mode': 'Гэрэлтэй горим',
+      'theme_dark_on': 'Бараан горим асаалаа',
+      'theme_dark_off': 'Гэрэлтэй горим асаалаа',
       'or_login_with': 'Эсвэл дараах хаягаар нэвтрэх',
       'dont_have_account': 'Хаяггүй юу? Бүртгүүлэх',
       'already_have_account': 'Бүртгэлтэй юу? Нэвтрэх',
@@ -64,6 +173,89 @@ class AppStrings {
       'phone_email': 'Phone Number or Email',
       'password': 'Password',
       'forgot_password': 'Forgot Password?',
+      'logout': 'Log out',
+      'activity_title': 'Activity',
+      'activity_subtitle': 'Your charging history',
+      'activity_empty': 'Nothing recorded yet',
+      'activity_details': 'Technical details',
+      'act_authorize': 'Authorised',
+      'act_start': 'Charging started',
+      'act_stop': 'Charging finished',
+      'act_meter': 'Meter reading recorded',
+      'act_status': 'Status updated',
+      'act_heartbeat': 'Connection checked',
+      'act_boot': 'Station connected',
+      'act_remote_start': 'Started remotely',
+      'act_remote_stop': 'Stopped remotely',
+      'act_reserve': 'Reservation recorded',
+      'act_other': 'Station event',
+      'clear_history': 'Clear history',
+      'media_artist': 'Folk Music Ensemble',
+      'media_track': 'Shangri-La Melody',
+      'media_system': 'Dolby Atmos system',
+      'download_receipt': 'RECEIPT',
+      'done': 'DONE',
+      'outside_temp': 'Outside temperature',
+      'tx_ref': 'Transaction ref',
+      'connector_speed': 'Connector / Speed',
+      'receipt_emailed': 'Receipt sent by email.',
+      'total_paid': 'Total Paid',
+      'total_cost': 'Total cost',
+      'unit_price': 'Unit price',
+      'added_range': 'Added range',
+      'last_measured': 'Last measured',
+      'estimated_total': 'Estimated total',
+      'payment_ok': 'Payment complete. Charging started',
+      'confirm_payment': 'Confirm payment',
+      'scanning': 'SCANNING...',
+      'vehicle_location': 'Vehicle location in Ulaanbaatar',
+      'vehicle_location_hint': 'Tap to open the interactive map',
+      'limit_label': 'Limit',
+      'charging_now': 'CHARGING',
+      'stop_charging': 'STOP CHARGING',
+      'windows_locked': 'Windows locked',
+      'slide_to_start': 'Slide to start charging',
+      'slide_default': 'Slide to start',
+      'charging_receipt': 'Charging Receipt',
+      'set_charge_limit': 'Set Charge Limit',
+      'charging_station': 'Charging station',
+      'charge_limit': 'Charge limit',
+      'energy_delivered': 'Energy delivered',
+      'time_remaining': 'Time remaining',
+      'ocpp_log': 'OCPP log',
+      'nav_stations': 'Stations',
+      'search_stations': 'Search chargers in Ulaanbaatar...',
+      'start_route': 'START ROUTE',
+      'stop_route': 'STOP ROUTE',
+      'route_loading': 'Calculating route...',
+      'route_unavailable': 'Road route unavailable. Guiding by direction.',
+      'navigating': 'NAVIGATING',
+      'arrived_full': 'You have arrived. Scan the QR code to begin.',
+      'arrived_short': 'You have arrived',
+      'getting_directions': 'Getting directions',
+      'map_title': 'Charging station map',
+      'back': 'Back',
+      'available': 'available',
+      'kw_super': 'kW Super',
+      'unit_km': 'km',
+      'unit_kw': 'kW',
+      'unit_m': 'm',
+      'unit_kmh': 'km/h',
+      'toward': 'to the',
+      'dir_n': 'north',
+      'dir_ne': 'north-east',
+      'dir_e': 'east',
+      'dir_se': 'south-east',
+      'dir_s': 'south',
+      'dir_sw': 'south-west',
+      'dir_w': 'west',
+      'dir_nw': 'north-west',
+      'logout_title': 'Log out?',
+      'logout_body': 'You will be signed out and need to log in again.',
+      'cancel': 'Cancel',
+      'light_mode': 'Light Mode',
+      'theme_dark_on': 'Dark mode on',
+      'theme_dark_off': 'Light mode on',
       'or_login_with': 'Or continue with',
       'dont_have_account': 'Don\'t have an account? Register',
       'already_have_account': 'Already registered? Login',
@@ -104,6 +296,8 @@ class AppStrings {
 
   static String get(String key) {
     final langCode = currentLanguage == AppLanguage.mn ? 'mn' : 'en';
-    return _localizedValues[langCode]?[key] ?? _localizedValues['en']?[key] ?? key;
+    return _localizedValues[langCode]?[key] ??
+        _localizedValues['en']?[key] ??
+        key;
   }
 }

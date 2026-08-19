@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
 class ChargingPowerRingGauge extends StatefulWidget {
   final double batteryLevel;
@@ -50,7 +51,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           decoration: BoxDecoration(
-            color: AppTheme.darkForest,
+            color: context.palette.panel,
             borderRadius: BorderRadius.circular(28),
             boxShadow: const [
               BoxShadow(
@@ -77,7 +78,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.sageGreen.withOpacity(0.35),
+                            color: AppTheme.sageGreen.withValues(alpha: 0.35),
                             blurRadius: 30,
                             spreadRadius: 8,
                           ),
@@ -124,16 +125,26 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                         ),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: AppTheme.sageGreen.withOpacity(0.2),
+                            color: AppTheme.sageGreen.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.sageGreen, width: 1),
+                            border: Border.all(
+                              color: AppTheme.sageGreen,
+                              width: 1,
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.bolt_rounded, color: AppTheme.sageGreen, size: 14),
+                              const Icon(
+                                Icons.bolt_rounded,
+                                color: AppTheme.sageGreen,
+                                size: 14,
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${widget.activePowerKw.toInt()} кВт ХУРДТАЙ',
@@ -157,40 +168,54 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Column(
-                    children: [
-                      const Text(
-                        'Шилжүүлсэн эрчим хүч',
-                        style: TextStyle(fontSize: 11, color: Colors.white60),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${widget.totalEnergyKwh.toStringAsFixed(2)} кВт.ц',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          AppStrings.get('energy_delivered'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Colors.white60),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${widget.totalEnergyKwh.toStringAsFixed(2)} кВт.ц',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   Container(width: 1, height: 30, color: Colors.white24),
-                  Column(
-                    children: [
-                      const Text(
-                        'Нийт төлбөр',
-                        style: TextStyle(fontSize: 11, color: Colors.white60),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₮${costMnt.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.sageGreen,
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          AppStrings.get('total_cost'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Colors.white60),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '₮${costMnt.toInt()}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.sageGreen,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -206,10 +231,7 @@ class _GlowingRingPainter extends CustomPainter {
   final double progressPct;
   final double rotationValue;
 
-  _GlowingRingPainter({
-    required this.progressPct,
-    required this.rotationValue,
-  });
+  _GlowingRingPainter({required this.progressPct, required this.rotationValue});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -242,7 +264,9 @@ class _GlowingRingPainter extends CustomPainter {
     );
 
     final activePaint = Paint()
-      ..shader = activeGradient.createShader(Rect.fromCircle(center: center, radius: radius))
+      ..shader = activeGradient.createShader(
+        Rect.fromCircle(center: center, radius: radius),
+      )
       ..strokeWidth = 12
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

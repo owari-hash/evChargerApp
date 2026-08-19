@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
 class ChargeLimitSelector extends StatelessWidget {
   final double targetLimitPct;
@@ -13,16 +14,19 @@ class ChargeLimitSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int estimatedMinutes = ((targetLimitPct - 20) * 0.6).toInt().clamp(10, 60);
+    final int estimatedMinutes = ((targetLimitPct - 20) * 0.6).toInt().clamp(
+      10,
+      60,
+    );
     final int estimatedRangeKm = (targetLimitPct * 6.0).toInt();
     final int estimatedCostMnt = (targetLimitPct * 160.0).toInt();
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,29 +34,47 @@ class ChargeLimitSelector extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.tune_rounded, color: AppTheme.darkForest, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Цэнэглэх Хязгаар Тохируулах',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.darkForest,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      color: context.palette.ink,
+                      size: 20,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        AppStrings.get('set_charge_limit'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: context.palette.ink,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: AppTheme.lightSage,
+                  color: context.palette.accent.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.bolt_rounded, color: AppTheme.sageGreen, size: 14),
+                    const Icon(
+                      Icons.bolt_rounded,
+                      color: AppTheme.sageGreen,
+                      size: 14,
+                    ),
                     const SizedBox(width: 2),
                     Text(
                       '${targetLimitPct.toInt()}%',
@@ -73,9 +95,9 @@ class ChargeLimitSelector extends StatelessWidget {
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: AppTheme.sageGreen,
-              inactiveTrackColor: AppTheme.borderSubtle,
-              thumbColor: AppTheme.darkForest,
-              overlayColor: AppTheme.sageGreen.withOpacity(0.2),
+              inactiveTrackColor: context.palette.border,
+              thumbColor: context.palette.ink,
+              overlayColor: AppTheme.sageGreen.withValues(alpha: 0.2),
               trackHeight: 6,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             ),
@@ -93,22 +115,31 @@ class ChargeLimitSelector extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildEstimateItem(
+              Expanded(
+                child: _buildEstimateItem(
+                context,
                 icon: Icons.timer_outlined,
-                label: 'Үлдсэн хугацаа',
+                label: AppStrings.get('time_remaining'),
                 value: '$estimatedMinutes мин',
               ),
-              Container(width: 1, height: 28, color: AppTheme.borderSubtle),
-              _buildEstimateItem(
+              ),
+              Container(width: 1, height: 28, color: context.palette.border),
+              Expanded(
+                child: _buildEstimateItem(
+                context,
                 icon: Icons.add_road_rounded,
-                label: 'Нэмэгдэх зай',
+                label: AppStrings.get('added_range'),
                 value: '$estimatedRangeKm км',
               ),
-              Container(width: 1, height: 28, color: AppTheme.borderSubtle),
-              _buildEstimateItem(
+              ),
+              Container(width: 1, height: 28, color: context.palette.border),
+              Expanded(
+                child: _buildEstimateItem(
+                context,
                 icon: Icons.payments_outlined,
-                label: 'Тооцоолсон дүн',
+                label: AppStrings.get('estimated_total'),
                 value: '₮$estimatedCostMnt',
+              ),
               ),
             ],
           ),
@@ -117,7 +148,8 @@ class ChargeLimitSelector extends StatelessWidget {
     );
   }
 
-  Widget _buildEstimateItem({
+  Widget _buildEstimateItem(
+    BuildContext context, {
     required IconData icon,
     required String label,
     required String value,
@@ -126,21 +158,29 @@ class ChargeLimitSelector extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: AppTheme.textMuted),
+            Icon(icon, size: 13, color: context.palette.inkMuted),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: context.palette.inkMuted),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.darkForest,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: context.palette.ink,
+            ),
           ),
         ),
       ],

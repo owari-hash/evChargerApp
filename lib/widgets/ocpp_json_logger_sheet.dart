@@ -1,10 +1,16 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/ocpp_models.dart';
 import '../services/ocpp_mock_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
+/// Session activity, in plain language.
+///
+/// The underlying data is the OCPP frame log. Customers see readable events;
+/// the raw JSON-RPC frame is one tap away for anyone who needs it.
 class OcppJsonLoggerSheet extends StatefulWidget {
   const OcppJsonLoggerSheet({super.key});
 
@@ -13,7 +19,7 @@ class OcppJsonLoggerSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const OcppJsonLoggerSheet(),
+      builder: (BuildContext context) => const OcppJsonLoggerSheet(),
     );
   }
 
@@ -21,122 +27,82 @@ class OcppJsonLoggerSheet extends StatefulWidget {
   State<OcppJsonLoggerSheet> createState() => _OcppJsonLoggerSheetState();
 }
 
+/// Plain-language label and icon for an OCPP action.
+({String key, IconData icon}) _describe(String? action) {
+  switch (action) {
+    case 'Authorize':
+      return (key: 'act_authorize', icon: Icons.verified_user_rounded);
+    case 'StartTransaction':
+      return (key: 'act_start', icon: Icons.play_circle_fill_rounded);
+    case 'StopTransaction':
+      return (key: 'act_stop', icon: Icons.check_circle_rounded);
+    case 'MeterValues':
+      return (key: 'act_meter', icon: Icons.speed_rounded);
+    case 'StatusNotification':
+      return (key: 'act_status', icon: Icons.info_rounded);
+    case 'Heartbeat':
+      return (key: 'act_heartbeat', icon: Icons.favorite_rounded);
+    case 'BootNotification':
+      return (key: 'act_boot', icon: Icons.power_rounded);
+    case 'RemoteStartTransaction':
+      return (key: 'act_remote_start', icon: Icons.wifi_tethering_rounded);
+    case 'RemoteStopTransaction':
+      return (key: 'act_remote_stop', icon: Icons.stop_circle_rounded);
+    case 'ReserveNow':
+      return (key: 'act_reserve', icon: Icons.event_available_rounded);
+    default:
+      return (key: 'act_other', icon: Icons.bolt_rounded);
+  }
+}
+
+String _clock(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
 class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
   final OcppMockService _service = OcppMockService.instance;
-  String _searchFilter = '';
+  final Set<String> _expanded = <String>{};
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.82,
-      decoration: const BoxDecoration(
-        color: AppTheme.darkForest,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      height: MediaQuery.of(context).size.height * 0.8,
+      decoration: BoxDecoration(
+        color: palette.bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
-        children: [
-          // Header Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white12, width: 1)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.terminal_rounded, color: AppTheme.sageGreen, size: 24),
-                const SizedBox(width: 10),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'OCPP 1.6J Frame Inspector',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'WebSocket JSON-RPC Frames [2=CALL, 3=RESULT, 4=ERROR]',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70),
-                  onPressed: () {
-                    _service.clearLogs();
-                    setState(() {});
-                  },
-                  tooltip: 'Clear Logs',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-
-          // Search Filter Input
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: TextField(
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              onChanged: (val) => setState(() => _searchFilter = val.toLowerCase()),
-              decoration: InputDecoration(
-                hintText: 'Filter by Action or Message ID...',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.sageGreen, size: 20),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.06),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-
-          // Log List
+        children: <Widget>[
+          _buildHandle(palette),
+          _buildHeader(palette),
           Expanded(
             child: StreamBuilder<List<OcppFrame>>(
               stream: _service.logStream,
               initialData: _service.logs,
-              builder: (context, snapshot) {
-                final logs = (snapshot.data ?? [])
-                    .where((frame) {
-                      if (_searchFilter.isEmpty) return true;
-                      final String action = frame.action?.toLowerCase() ?? '';
-                      final String msgId = frame.messageId.toLowerCase();
-                      final String payload = jsonEncode(frame.payload).toLowerCase();
-                      return action.contains(_searchFilter) ||
-                          msgId.contains(_searchFilter) ||
-                          payload.contains(_searchFilter);
-                    })
+              builder: (BuildContext context,
+                  AsyncSnapshot<List<OcppFrame>> snapshot) {
+                // Requests carry the meaning; results would double every row.
+                final List<OcppFrame> events = (snapshot.data ?? <OcppFrame>[])
+                    .where((OcppFrame f) =>
+                        f.messageTypeId == OcppMessageType.call)
                     .toList();
 
-                if (logs.isEmpty) {
-                  return const Center(
+                if (events.isEmpty) {
+                  return Center(
                     child: Text(
-                      'No OCPP frames recorded yet.',
-                      style: TextStyle(color: Colors.white38, fontSize: 14),
+                      AppStrings.get('activity_empty'),
+                      style: TextStyle(color: palette.inkMuted, fontSize: 14),
                     ),
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: logs.length,
-                  itemBuilder: (context, index) {
-                    final frame = logs[index];
-                    return _buildFrameCard(frame);
-                  },
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  itemCount: events.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (BuildContext context, int index) =>
+                      _buildEventTile(palette, events[index]),
                 );
               },
             ),
@@ -146,109 +112,174 @@ class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
     );
   }
 
-  Widget _buildFrameCard(OcppFrame frame) {
-    final bool isCall = frame.messageTypeId == OcppMessageType.call;
-    final bool isResult = frame.messageTypeId == OcppMessageType.callResult;
-
-    final Color badgeColor = isCall
-        ? const Color(0xFF3498DB)
-        : isResult
-            ? AppTheme.sageGreen
-            : AppTheme.errorRed;
-
-    final String typeLabel = isCall
-        ? 'CALL [2]'
-        : isResult
-            ? 'CALLRESULT [3]'
-            : 'CALLERROR [4]';
-
-    final String jsonStr = const JsonEncoder.withIndent('  ').convert(
-      isCall
-          ? [2, frame.messageId, frame.action ?? '', frame.payload]
-          : isResult
-              ? [3, frame.messageId, frame.payload]
-              : [4, frame.messageId, frame.errorCode ?? 'GenericError', frame.errorDescription ?? '', frame.payload],
-    );
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF133523),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12, width: 1),
+  Widget _buildHandle(AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: palette.border,
+          borderRadius: BorderRadius.circular(2),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: badgeColor, width: 1),
-                ),
-                child: Text(
-                  typeLabel,
+    );
+  }
+
+  Widget _buildHeader(AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  AppStrings.get('activity_title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: badgeColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    color: palette.ink,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                frame.action ?? 'Response',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 2),
+                Text(
+                  AppStrings.get('activity_subtitle'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.inkMuted, fontSize: 12),
                 ),
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: AppStrings.get('clear_history'),
+            icon: Icon(Icons.delete_outline_rounded, color: palette.inkMuted),
+            onPressed: () {
+              _service.clearLogs();
+              setState(() => _expanded.clear());
+            },
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close_rounded, color: palette.ink),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventTile(AppPalette palette, OcppFrame frame) {
+    final ({String key, IconData icon}) info = _describe(frame.action);
+    final bool open = _expanded.contains(frame.messageId);
+    final String raw =
+        const JsonEncoder.withIndent('  ').convert(frame.payload);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        children: <Widget>[
+          ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: palette.accent.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
               ),
-              const Spacer(),
-              Text(
-                '${frame.timestamp.hour.toString().padLeft(2, '0')}:${frame.timestamp.minute.toString().padLeft(2, '0')}:${frame.timestamp.second.toString().padLeft(2, '0')}',
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              child: Icon(info.icon, color: palette.accent, size: 20),
+            ),
+            title: Text(
+              AppStrings.get(info.key),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: palette.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: jsonStr));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Raw JSON copied to clipboard'),
-                      duration: Duration(seconds: 1),
+            ),
+            subtitle: Text(
+              _clock(frame.timestamp),
+              style: TextStyle(color: palette.inkMuted, fontSize: 12),
+            ),
+            trailing: Icon(
+              open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              color: palette.inkMuted,
+            ),
+            onTap: () => setState(() {
+              if (!_expanded.remove(frame.messageId)) {
+                _expanded.add(frame.messageId);
+              }
+            }),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          '${AppStrings.get('activity_details')} · ${frame.action ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: palette.inkMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Copy',
+                        icon: Icon(Icons.copy_rounded,
+                            size: 16, color: palette.inkMuted),
+                        onPressed: () =>
+                            Clipboard.setData(ClipboardData(text: raw)),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: palette.panel,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                },
-                child: const Icon(Icons.copy_rounded, color: Colors.white54, size: 16),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF09170F),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SelectableText(
-                jsonStr,
-                style: const TextStyle(
-                  color: Color(0xFFA9DC76),
-                  fontFamily: 'monospace',
-                  fontSize: 11.5,
-                  height: 1.4,
-                ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Text(
+                        raw,
+                        style: TextStyle(
+                          color: palette.onPanel.withValues(alpha: 0.85),
+                          fontFamily: 'Menlo',
+                          fontFamilyFallback: const <String>['monospace'],
+                          fontSize: 11,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
         ],
       ),
     );

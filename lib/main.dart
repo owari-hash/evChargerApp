@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
@@ -76,29 +74,26 @@ class _MainAppFrameState extends State<MainAppFrame> {
     if (mounted) {
       setState(() {
         _bootstrapping = false;
-        final String tab = Platform.environment['SCREENSHOT_TAB'] ?? '';
-        final int? index = int.tryParse(tab);
-        if (index != null && index >= 0 && index <= 4) _activeTabIndex = index;
+        if (shotTab >= 0 && shotTab <= 4) _activeTabIndex = shotTab;
       });
     }
   }
 
   /// TEMPORARY screenshot scaffolding — remove before shipping.
   ///
-  /// Signs in from `SIMCTL_CHILD_SCREENSHOT_EMAIL` / `_PASSWORD` so App Store
-  /// captures can be automated without driving the keyboard.
+  /// `Platform.environment` is empty on iOS, so these come in as compile-time
+  /// defines instead: `--dart-define=SCREENSHOT_EMAIL=... SCREENSHOT_TAB=2`.
+  static const String _shotEmail = String.fromEnvironment('SCREENSHOT_EMAIL');
+  static const String _shotPassword = String.fromEnvironment(
+    'SCREENSHOT_PASSWORD',
+  );
+  static const int shotTab = int.fromEnvironment('SCREENSHOT_TAB', defaultValue: -1);
+
   Future<void> _screenshotSignIn() async {
     if (_auth.isSignedIn) return;
-    final String email = Platform.environment['SCREENSHOT_EMAIL'] ?? '';
-    final String password = Platform.environment['SCREENSHOT_PASSWORD'] ?? '';
-    debugPrint('SCREENSHOT env email="$email" pwlen=${password.length}');
-    if (email.isEmpty || password.isEmpty) {
-      debugPrint('SCREENSHOT: no credentials in environment');
-      return;
-    }
+    if (_shotEmail.isEmpty || _shotPassword.isEmpty) return;
     try {
-      await _auth.signIn(identifier: email, password: password);
-      debugPrint('SCREENSHOT: signed in ok=${_auth.isSignedIn}');
+      await _auth.signIn(identifier: _shotEmail, password: _shotPassword);
     } catch (e) {
       debugPrint('SCREENSHOT: sign-in failed: $e');
     }

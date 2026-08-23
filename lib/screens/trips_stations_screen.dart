@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import '../models/station.dart';
 import '../services/ocpp_mock_service.dart';
@@ -102,7 +100,7 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               // TEMPORARY: suppressed during App Store capture. Remove.
               if (_stations.isFallback &&
                   !_stations.loading.value &&
-                  Platform.environment['SCREENSHOT_TAB'] == null)
+                  !bool.fromEnvironment('SCREENSHOT_MODE'))
                 _buildOfflineNotice(context),
 
               ..._service.nearbyStations.map(

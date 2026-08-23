@@ -13,8 +13,9 @@ Future<void> _pumpFrames(WidgetTester tester, [int frames = 5]) async {
 void main() {
   setUp(() => OcppMockService.enablePeriodicTimer = false);
 
-  testWidgets('map opens as a page whose back button clears the status bar',
-      (WidgetTester tester) async {
+  testWidgets('map opens as a page whose back button clears the status bar', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1179, 2556);
     tester.view.devicePixelRatio = 3.0;
     // Simulate a notched device: 59pt of top inset.
@@ -24,10 +25,12 @@ void main() {
       tester.view.resetPadding();
     });
 
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.lightTheme,
-      home: const QuickControlsScreen(),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: const QuickControlsScreen(),
+      ),
+    );
     await _pumpFrames(tester);
 
     await tester.tap(find.byIcon(Icons.open_in_full_rounded));
@@ -41,7 +44,8 @@ void main() {
 
     // Regression: as a modal sheet the header sat under the notch, so the back
     // button was unreachable. It must now sit fully below the status bar.
-    final double topInset = tester.view.padding.top / tester.view.devicePixelRatio;
+    final double topInset =
+        tester.view.padding.top / tester.view.devicePixelRatio;
     expect(tester.getTopLeft(back).dy, greaterThanOrEqualTo(topInset));
 
     // And it actually dismisses the page.

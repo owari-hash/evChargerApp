@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 
 class ChargeLimitSelector extends StatelessWidget {
   final double targetLimitPct;
@@ -117,29 +118,29 @@ class ChargeLimitSelector extends StatelessWidget {
             children: [
               Expanded(
                 child: _buildEstimateItem(
-                context,
-                icon: Icons.timer_outlined,
-                label: AppStrings.get('time_remaining'),
-                value: '$estimatedMinutes мин',
-              ),
-              ),
-              Container(width: 1, height: 28, color: context.palette.border),
-              Expanded(
-                child: _buildEstimateItem(
-                context,
-                icon: Icons.add_road_rounded,
-                label: AppStrings.get('added_range'),
-                value: '$estimatedRangeKm км',
-              ),
+                  context,
+                  icon: Icons.timer_outlined,
+                  label: AppStrings.get('time_remaining'),
+                  value: '$estimatedMinutes мин',
+                ),
               ),
               Container(width: 1, height: 28, color: context.palette.border),
               Expanded(
                 child: _buildEstimateItem(
-                context,
-                icon: Icons.payments_outlined,
-                label: AppStrings.get('estimated_total'),
-                value: '₮$estimatedCostMnt',
+                  context,
+                  icon: Icons.add_road_rounded,
+                  label: AppStrings.get('added_range'),
+                  value: '$estimatedRangeKm км',
+                ),
               ),
+              Container(width: 1, height: 28, color: context.palette.border),
+              Expanded(
+                child: _buildEstimateItem(
+                  context,
+                  icon: Icons.payments_outlined,
+                  label: AppStrings.get('estimated_total'),
+                  value: formatMntLeading(estimatedCostMnt),
+                ),
               ),
             ],
           ),

@@ -4,10 +4,15 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/connector_types.dart';
+import '../models/station.dart';
 import '../services/ocpp_mock_service.dart';
+import '../services/stations_service.dart';
 import '../services/route_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
+import '../widgets/station_filter_sheet.dart';
 
 /// Whether an incoming GPS fix is allowed to write the driver's position.
 ///
@@ -94,6 +99,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
 
   String _searchQuery = '';
   String? _selectedStationId;
+  StationFilter _filter = StationFilter.none;
 
   /// Destination the running route is actually driving to.
   LatLng? _navDestination;
@@ -102,10 +108,71 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   bool _routeLoading = false;
   String? _routeError;
 
+  final StationsService _stations = StationsService.instance;
+
   @override
   void initState() {
     super.initState();
+    _stations.stations.addListener(_onStationsChanged);
+    _stations.loading.addListener(_onStationsChanged);
     _initUserGpsLocation();
+    // Draw the fallback immediately, then swap in the live network. Waiting for
+    // the fetch would open the map on empty tiles.
+    _stations.load();
+  }
+
+  void _onStationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Shown when the network could not be reached and there is nothing to map.
+  Widget _buildEmptyState(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      color: palette.bg,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.ev_station_outlined,
+                size: 56,
+                color: palette.inkMuted,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                AppStrings.get('stations_empty_title'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: palette.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _stations.error.value ?? AppStrings.get('stations_empty_body'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: palette.inkMuted),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _stations.loading.value
+                    ? null
+                    : () => _stations.load(force: true),
+                child: Text(
+                  _stations.loading.value
+                      ? AppStrings.get('loading')
+                      : AppStrings.get('retry'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _initUserGpsLocation() async {
@@ -121,11 +188,23 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
 
         // Get current initial GPS position
         final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
         );
         setState(() {
           _userPosition = LatLng(pos.latitude, pos.longitude);
         });
+
+        // Refetch from where the driver actually is, so the list comes back
+        // distance-sorted rather than in the server's default order.
+        unawaited(
+          _stations.load(
+            latitude: _userPosition.latitude,
+            longitude: _userPosition.longitude,
+            force: true,
+          ),
+        );
 
         // Listen to live continuous real-time GPS updates
         _positionStreamSub =
@@ -140,6 +219,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                 _userPosition = LatLng(pos.latitude, pos.longitude);
                 _userSpeedKmH = (pos.speed * 3.6).clamp(0.0, 200.0);
               });
+              _stations.reprojectDistances(
+                latitude: _userPosition.latitude,
+                longitude: _userPosition.longitude,
+              );
 
               if (_isNavigatingRoute) {
                 // Follow the driver rather than driving the map ourselves.
@@ -260,6 +343,91 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
     });
   }
 
+  /// Stations matching the search box and [filter], in map order.
+  List<ChargingStationLocation> _stationsMatching(StationFilter filter) {
+    final String query = _searchQuery.trim().toLowerCase();
+    return _service.nearbyStations.where((ChargingStationLocation st) {
+      if (!filter.matches(st.connectorTypes)) return false;
+      if (query.isEmpty) return true;
+      return st.name.toLowerCase().contains(query) ||
+          st.address.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  /// Straight-line kilometres from the driver to a station.
+  double _distanceKmTo(ChargingStationLocation station) {
+    return const Distance().as(
+          LengthUnit.Meter,
+          _userPosition,
+          LatLng(station.latitude, station.longitude),
+        ) /
+        1000.0;
+  }
+
+  /// Opens the filter sheet, then jumps to the closest station that matches.
+  Future<void> _openFilterSheet() async {
+    final StationFilter before = _filter;
+    final StationFilter? applied = await showModalBottomSheet<StationFilter>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) => StationFilterSheet(
+        initial: _filter,
+        matchCount: (StationFilter candidate) =>
+            _stationsMatching(candidate).length,
+        // Keep the map behind the sheet in step with what is being chosen.
+        onChanged: (StationFilter live) => setState(() => _filter = live),
+      ),
+    );
+
+    if (!mounted) return;
+    if (applied == null) {
+      // Dismissed rather than applied. The live preview is rolled back, so
+      // backing out can never strand the driver on an empty map.
+      setState(() => _filter = before);
+      return;
+    }
+    setState(() => _filter = applied);
+    _goToNearestMatch();
+  }
+
+  /// Selects and centres the nearest station passing the current filter.
+  void _goToNearestMatch() {
+    final List<ChargingStationLocation> matches = _stationsMatching(_filter);
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.get('filter_none_match'))),
+      );
+      return;
+    }
+
+    matches.sort(
+      (ChargingStationLocation a, ChargingStationLocation b) =>
+          _distanceKmTo(a).compareTo(_distanceKmTo(b)),
+    );
+    final ChargingStationLocation nearest = matches.first;
+    final LatLng pos = LatLng(nearest.latitude, nearest.longitude);
+
+    setState(() {
+      _selectedStationId = nearest.id;
+      if (_isNavigatingRoute) _navDestination = pos;
+    });
+    _mapController.move(pos, 14.5);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          AppStrings.get('filter_nearest_found')
+              .replaceFirst('{name}', nearest.name)
+              .replaceFirst(
+                '{distance}',
+                _distanceKmTo(nearest).toStringAsFixed(1),
+              ),
+        ),
+      ),
+    );
+  }
+
   void _zoomIn() {
     final double currentZoom = _mapController.camera.zoom;
     _mapController.move(_mapController.camera.center, currentZoom + 0.5);
@@ -297,21 +465,25 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   @override
   void dispose() {
     _positionStreamSub?.cancel();
+    _stations.stations.removeListener(_onStationsChanged);
+    _stations.loading.removeListener(_onStationsChanged);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final stations = _service.nearbyStations.where((st) {
-      if (_searchQuery.isEmpty) return true;
-      return st.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          st.address.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    final List<ChargingStationLocation> all = _service.nearbyStations;
 
-    final activeStation = stations.firstWhere(
+    // Nothing to centre on, select or navigate to. Every readout below reads
+    // off a station, so bail out to an explicit empty state rather than
+    // indexing into an empty list.
+    if (all.isEmpty) return _buildEmptyState(context);
+
+    final stations = _stationsMatching(_filter);
+
+    final ChargingStationLocation activeStation = stations.firstWhere(
       (st) => st.id == _selectedStationId,
-      orElse: () =>
-          stations.isNotEmpty ? stations.first : _service.nearbyStations.first,
+      orElse: () => stations.isNotEmpty ? stations.first : all.first,
     );
 
     final LatLng destinationPos = LatLng(
@@ -336,11 +508,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
     // that too rather than pretending the bearing line is a road route.
     final String navInstruction = _routeLoading
         ? AppStrings.get('route_loading')
-        : (_routeError ??
-            _navigationInstruction(
-              _userPosition,
-              routeTarget,
-            ));
+        : (_routeError ?? _navigationInstruction(_userPosition, routeTarget));
 
     return Scaffold(
       backgroundColor: context.palette.bg,
@@ -388,35 +556,39 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               // Markers Layer (Live Driver Position & Ulaanbaatar Stations)
               MarkerLayer(
                 markers: [
-                  // Live User Real GPS Vehicle Position Marker
-                  Marker(
-                    point: _userPosition,
-                    width: 50,
-                    height: 50,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: context.palette.panel,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.sageGreen.withValues(alpha: 0.6),
-                            blurRadius: 12,
-                            spreadRadius: 3,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.navigation_rounded,
-                        color: AppTheme.sageGreen,
-                        size: 26,
+                  // Live driver position — drawn only once GPS has actually
+                  // reported. Without permission `_userPosition` is just the
+                  // Ulaanbaatar default, and pinning the driver to the city
+                  // centre is worse than showing no pin at all.
+                  if (_isGpsPermissionGranted)
+                    Marker(
+                      point: _userPosition,
+                      width: 50,
+                      height: 50,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.palette.panel,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.sageGreen.withValues(alpha: 0.6),
+                              blurRadius: 12,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.navigation_rounded,
+                          color: AppTheme.sageGreen,
+                          size: 26,
+                        ),
                       ),
                     ),
-                  ),
 
                   // Real Station Pin Markers in Ulaanbaatar
-                  ...List.generate(_service.nearbyStations.length, (index) {
-                    final station = _service.nearbyStations[index];
+                  ...List.generate(stations.length, (index) {
+                    final station = stations[index];
                     final LatLng pos = LatLng(
                       station.latitude,
                       station.longitude,
@@ -685,6 +857,13 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                   tooltip: 'My Location',
                   onTap: _centerDriverLocation,
                 ),
+                const SizedBox(height: 8),
+                _buildMapControlBtn(
+                  icon: Icons.tune_rounded,
+                  tooltip: AppStrings.get('filter_title'),
+                  onTap: _openFilterSheet,
+                  badge: _filter.activeCount,
+                ),
               ],
             ),
           ),
@@ -798,7 +977,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '₮${activeStation.pricePerKwh.toInt()}/кВт.ц',
+                            '${formatMntLeading(activeStation.pricePerKwh)}/кВт.ц',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
@@ -890,24 +1069,64 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
+    int badge = 0,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: context.palette.card,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 2),
+    final AppPalette palette = context.palette;
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: badge > 0 ? palette.panel : palette.card,
+                shape: BoxShape.circle,
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: badge > 0 ? palette.onPanel : palette.ink,
+                size: 20,
+              ),
             ),
+            // How many plugs the map is narrowed to, so an active filter is
+            // obvious without opening the sheet.
+            if (badge > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  width: 17,
+                  height: 17,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: palette.accent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: palette.card, width: 1.5),
+                  ),
+                  child: Text(
+                    '$badge',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
-        child: Icon(icon, color: context.palette.ink, size: 20),
       ),
     );
   }

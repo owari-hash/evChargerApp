@@ -128,8 +128,9 @@ extension AppPaletteContext on BuildContext {
 class ThemeController {
   ThemeController._();
 
-  static final ValueNotifier<ThemeMode> mode =
-      ValueNotifier<ThemeMode>(ThemeMode.light);
+  static final ValueNotifier<ThemeMode> mode = ValueNotifier<ThemeMode>(
+    ThemeMode.light,
+  );
 
   static bool get isDark => mode.value == ThemeMode.dark;
 
@@ -201,9 +202,7 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: p.card,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         titleTextStyle: TextStyle(
           color: p.ink,
           fontSize: 18,
@@ -236,10 +235,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(

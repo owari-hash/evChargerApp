@@ -84,8 +84,10 @@ class _ParticleMatrixPainter extends CustomPainter {
       final double baseX = random.nextDouble() * size.width;
       final double baseY = random.nextDouble() * size.height;
 
-      final double currentX = (baseX + progress * size.width * 0.4) % size.width;
-      final double currentY = (baseY + sin(progress * 2 * pi + i) * 8) % size.height;
+      final double currentX =
+          (baseX + progress * size.width * 0.4) % size.width;
+      final double currentY =
+          (baseY + sin(progress * 2 * pi + i) * 8) % size.height;
       final double radius = 2.0 + (i % 3);
 
       canvas.drawCircle(Offset(currentX, currentY), radius + 2, glowPaint);

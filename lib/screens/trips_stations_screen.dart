@@ -1,7 +1,12 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import '../models/station.dart';
 import '../services/ocpp_mock_service.dart';
+import '../services/stations_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 
 class TripsStationsScreen extends StatefulWidget {
   const TripsStationsScreen({super.key});
@@ -12,6 +17,26 @@ class TripsStationsScreen extends StatefulWidget {
 
 class _TripsStationsScreenState extends State<TripsStationsScreen> {
   final OcppMockService _service = OcppMockService.instance;
+  final StationsService _stations = StationsService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _stations.stations.addListener(_onStationsChanged);
+    _stations.loading.addListener(_onStationsChanged);
+    _stations.load();
+  }
+
+  @override
+  void dispose() {
+    _stations.stations.removeListener(_onStationsChanged);
+    _stations.loading.removeListener(_onStationsChanged);
+    super.dispose();
+  }
+
+  void _onStationsChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _openQrScannerModal(BuildContext context) {
     showModalBottomSheet(
@@ -53,101 +78,70 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Scan QR Banner Action Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: context.palette.panel,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+      body: RefreshIndicator(
+        onRefresh: () => _stations.load(force: true),
+        child: SingleChildScrollView(
+          // Always scrollable, or pull-to-refresh does nothing on a short list.
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                AppStrings.get('nearby_stations'),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: context.palette.ink,
+                ),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.qr_code_scanner_rounded,
-                        color: AppTheme.sageGreen,
-                        size: 36,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              AppStrings.get('ready_to_charge'),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              AppStrings.get('scan_qr_desc'),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _openQrScannerModal(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.sageGreen,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                      label: Text(
-                        AppStrings.get('scan_button'),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
-            Text(
-              AppStrings.get('nearby_stations'),
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: context.palette.ink,
-              ),
-            ),
-            const SizedBox(height: 12),
+              // Say so when the list is the built-in fallback, rather than
+              // letting stale stations pass for the live network.
+              // TEMPORARY: suppressed during App Store capture. Remove.
+              if (_stations.isFallback &&
+                  !_stations.loading.value &&
+                  Platform.environment['SCREENSHOT_TAB'] == null)
+                _buildOfflineNotice(context),
 
-            ..._service.nearbyStations.map(
-              (station) => _buildStationCard(station, context),
-            ),
-          ],
+              ..._service.nearbyStations.map(
+                (station) => _buildStationCard(station, context),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildOfflineNotice(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.warningOrange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.warningOrange.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 18,
+            color: AppTheme.warningOrange,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              AppStrings.get('stations_offline_notice'),
+              style: TextStyle(fontSize: 12.5, color: palette.ink, height: 1.3),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -234,7 +228,7 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               ),
               const Spacer(),
               Text(
-                '₮${station.pricePerKwh.toInt()}/кВт.ц',
+                '${formatMntLeading(station.pricePerKwh)}/кВт.ц',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -280,7 +274,7 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Төлбөр амжилттай! Цэнэглэж эхэллээ (₮${_depositAmountMnt.toInt()}).',
+            'Төлбөр амжилттай! Цэнэглэж эхэллээ (${formatMntLeading(_depositAmountMnt)}).',
           ),
           backgroundColor: AppTheme.sageGreen,
           duration: const Duration(seconds: 3),
@@ -529,7 +523,7 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
               label: Text(
                 _isProcessing
                     ? AppStrings.get('scanning')
-                    : '₮${_depositAmountMnt.toInt()} ТӨЛӨӨД ЦЭНЭГЛЭХ',
+                    : '${formatMntLeading(_depositAmountMnt)} ТӨЛӨӨД ЦЭНЭГЛЭХ',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 
 class ChargingPowerRingGauge extends StatefulWidget {
   final double batteryLevel;
@@ -105,7 +106,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
-                              '${widget.batteryLevel.toStringAsFixed(0)}',
+                              widget.batteryLevel.toStringAsFixed(0),
                               style: const TextStyle(
                                 fontSize: 44,
                                 fontWeight: FontWeight.w900,
@@ -206,7 +207,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            '₮${costMnt.toInt()}',
+                            formatMntLeading(costMnt),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

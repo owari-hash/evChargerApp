@@ -80,31 +80,40 @@ class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
             child: StreamBuilder<List<OcppFrame>>(
               stream: _service.logStream,
               initialData: _service.logs,
-              builder: (BuildContext context,
-                  AsyncSnapshot<List<OcppFrame>> snapshot) {
-                // Requests carry the meaning; results would double every row.
-                final List<OcppFrame> events = (snapshot.data ?? <OcppFrame>[])
-                    .where((OcppFrame f) =>
-                        f.messageTypeId == OcppMessageType.call)
-                    .toList();
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<List<OcppFrame>> snapshot,
+                  ) {
+                    // Requests carry the meaning; results would double every row.
+                    final List<OcppFrame> events =
+                        (snapshot.data ?? <OcppFrame>[])
+                            .where(
+                              (OcppFrame f) =>
+                                  f.messageTypeId == OcppMessageType.call,
+                            )
+                            .toList();
 
-                if (events.isEmpty) {
-                  return Center(
-                    child: Text(
-                      AppStrings.get('activity_empty'),
-                      style: TextStyle(color: palette.inkMuted, fontSize: 14),
-                    ),
-                  );
-                }
+                    if (events.isEmpty) {
+                      return Center(
+                        child: Text(
+                          AppStrings.get('activity_empty'),
+                          style: TextStyle(
+                            color: palette.inkMuted,
+                            fontSize: 14,
+                          ),
+                        ),
+                      );
+                    }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                  itemCount: events.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (BuildContext context, int index) =>
-                      _buildEventTile(palette, events[index]),
-                );
-              },
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                      itemCount: events.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (BuildContext context, int index) =>
+                          _buildEventTile(palette, events[index]),
+                    );
+                  },
             ),
           ),
         ],
@@ -178,8 +187,9 @@ class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
   Widget _buildEventTile(AppPalette palette, OcppFrame frame) {
     final ({String key, IconData icon}) info = _describe(frame.action);
     final bool open = _expanded.contains(frame.messageId);
-    final String raw =
-        const JsonEncoder.withIndent('  ').convert(frame.payload);
+    final String raw = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(frame.payload);
 
     return Container(
       decoration: BoxDecoration(
@@ -190,8 +200,10 @@ class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
       child: Column(
         children: <Widget>[
           ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 4,
+            ),
             leading: Container(
               width: 40,
               height: 40,
@@ -249,8 +261,11 @@ class _OcppJsonLoggerSheetState extends State<OcppJsonLoggerSheet> {
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: 'Copy',
-                        icon: Icon(Icons.copy_rounded,
-                            size: 16, color: palette.inkMuted),
+                        icon: Icon(
+                          Icons.copy_rounded,
+                          size: 16,
+                          color: palette.inkMuted,
+                        ),
                         onPressed: () =>
                             Clipboard.setData(ClipboardData(text: raw)),
                       ),

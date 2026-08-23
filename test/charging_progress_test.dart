@@ -18,7 +18,8 @@ void main() {
   void tick() {
     if (service.connectorStatuses[1] == ConnectorStatus.charging) {
       if (service.batteryLevel < service.targetLimitPct) {
-        service.batteryLevel = service.batteryLevel + 0.15 > service.targetLimitPct
+        service.batteryLevel =
+            service.batteryLevel + 0.15 > service.targetLimitPct
             ? service.targetLimitPct
             : service.batteryLevel + 0.15;
         service.remainingKm = service.batteryLevel * 1.58;

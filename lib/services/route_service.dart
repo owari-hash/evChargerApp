@@ -39,10 +39,10 @@ class DrivingRoute {
     return DrivingRoute(
       // GeoJSON is [longitude, latitude] - the reverse of LatLng.
       points: coords
-          .map((dynamic c) => LatLng(
-                (c[1] as num).toDouble(),
-                (c[0] as num).toDouble(),
-              ))
+          .map(
+            (dynamic c) =>
+                LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+          )
           .toList(growable: false),
       distanceMeters: (first['distance'] as num?)?.toDouble() ?? 0,
       duration: Duration(seconds: ((first['duration'] as num?) ?? 0).round()),
@@ -69,10 +69,10 @@ class RouteService {
   static const Duration _timeout = Duration(seconds: 15);
 
   static Uri buildOsrmUri(LatLng from, LatLng to) => Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/'
-        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
-        '?overview=full&geometries=geojson',
-      );
+    'https://router.project-osrm.org/route/v1/driving/'
+    '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
+    '?overview=full&geometries=geojson',
+  );
 
   static Future<DrivingRoute> fetchDrivingRoute(LatLng from, LatLng to) async {
     final http.Response response;

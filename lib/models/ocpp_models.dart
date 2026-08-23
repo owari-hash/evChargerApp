@@ -2,11 +2,23 @@ import 'dart:convert';
 
 /// OCPP 1.6 Feature Profiles
 enum OcppProfile {
-  core('Core', 'Core operations: boot, status, authorize, transactions, config'),
-  firmware('Firmware Management', 'Firmware download, update status, diagnostics'),
-  localAuthList('Local Auth List', 'Local whitelist management and list versioning'),
+  core(
+    'Core',
+    'Core operations: boot, status, authorize, transactions, config',
+  ),
+  firmware(
+    'Firmware Management',
+    'Firmware download, update status, diagnostics',
+  ),
+  localAuthList(
+    'Local Auth List',
+    'Local whitelist management and list versioning',
+  ),
   reservation('Reservation', 'Reserve connector & cancel reservation'),
-  smartCharging('Smart Charging', 'Set/clear charging profiles & composite schedules'),
+  smartCharging(
+    'Smart Charging',
+    'Set/clear charging profiles & composite schedules',
+  ),
   remoteTrigger('Remote Trigger', 'Trigger specific CP messages on-demand');
 
   final String title;
@@ -20,7 +32,10 @@ enum ConnectorStatus {
   preparing('Preparing', 'Occupied, authenticating or waiting for cable plug'),
   charging('Charging', 'Energy actively transferring to EV'),
   suspendedEV('SuspendedEV', 'EV requested pause in charging'),
-  suspendedEVSE('SuspendedEVSE', 'Station paused charging (smart charging limit)'),
+  suspendedEVSE(
+    'SuspendedEVSE',
+    'Station paused charging (smart charging limit)',
+  ),
   finishing('Finishing', 'Session stopped, awaiting cable disconnect'),
   reserved('Reserved', 'Connector reserved for specific user ID'),
   unavailable('Unavailable', 'Set to inoperative'),
@@ -152,7 +167,8 @@ class OcppFrame {
         action: defaultAction,
         errorCode: list[2].toString(),
         errorDescription: list[3].toString(),
-        errorDetails: (list.length > 4 ? list[4] as Map<String, dynamic>? : {}) ?? {},
+        errorDetails:
+            (list.length > 4 ? list[4] as Map<String, dynamic>? : {}) ?? {},
       );
     }
   }
@@ -188,24 +204,29 @@ class OcppProtocolRegistry {
       summary: 'Validate an idTag before starting a transaction.',
       sampleRequestPayload: {'idTag': 'RFID_TAG_99812'},
       sampleResponsePayload: {
-        'idTagInfo': {'status': 'Accepted', 'expiryDate': '2026-12-31T23:59:59Z', 'parentIdTag': 'PARENT_ACCOUNT_1'}
+        'idTagInfo': {
+          'status': 'Accepted',
+          'expiryDate': '2026-12-31T23:59:59Z',
+          'parentIdTag': 'PARENT_ACCOUNT_1',
+        },
       },
     ),
     OcppMessageInfo(
       action: 'BootNotification',
       profile: OcppProfile.core,
       direction: 'CP->CS',
-      summary: 'Sent on charge point boot. CS responds with status and heartbeat interval.',
+      summary:
+          'Sent on charge point boot. CS responds with status and heartbeat interval.',
       sampleRequestPayload: {
         'chargePointVendor': 'EVTech Pro',
         'chargePointModel': 'UltraCharge X500',
         'chargePointSerialNumber': 'EV-SN-2026-88',
-        'firmwareVersion': 'v2.4.12-release'
+        'firmwareVersion': 'v2.4.12-release',
       },
       sampleResponsePayload: {
         'status': 'Accepted',
         'currentTime': '2026-08-13T20:53:00Z',
-        'interval': 300
+        'interval': 300,
       },
     ),
     OcppMessageInfo(
@@ -237,22 +258,35 @@ class OcppProtocolRegistry {
       profile: OcppProfile.core,
       direction: 'Both',
       summary: 'Vendor-specific data exchange.',
-      sampleRequestPayload: {'vendorId': 'com.evtech', 'messageId': 'GetTelemetry', 'data': 'raw_custom_payload'},
-      sampleResponsePayload: {'status': 'Accepted', 'data': 'response_telemetry_data'},
+      sampleRequestPayload: {
+        'vendorId': 'com.evtech',
+        'messageId': 'GetTelemetry',
+        'data': 'raw_custom_payload',
+      },
+      sampleResponsePayload: {
+        'status': 'Accepted',
+        'data': 'response_telemetry_data',
+      },
     ),
     OcppMessageInfo(
       action: 'GetConfiguration',
       profile: OcppProfile.core,
       direction: 'CS->CP',
       summary: 'Read configuration keys from the Charge Point.',
-      sampleRequestPayload: {'key': ['HeartbeatInterval', 'ConnectionTimeOut', 'MeterValueSampleInterval']},
+      sampleRequestPayload: {
+        'key': [
+          'HeartbeatInterval',
+          'ConnectionTimeOut',
+          'MeterValueSampleInterval',
+        ],
+      },
       sampleResponsePayload: {
         'configurationKey': [
           {'key': 'HeartbeatInterval', 'readonly': false, 'value': '300'},
           {'key': 'ConnectionTimeOut', 'readonly': false, 'value': '60'},
-          {'key': 'MeterValueSampleInterval', 'readonly': false, 'value': '30'}
+          {'key': 'MeterValueSampleInterval', 'readonly': false, 'value': '30'},
         ],
-        'unknownKey': []
+        'unknownKey': [],
       },
     ),
     OcppMessageInfo(
@@ -275,12 +309,30 @@ class OcppProtocolRegistry {
           {
             'timestamp': '2026-08-13T20:55:10Z',
             'sampledValue': [
-              {'value': '18500', 'context': 'Sample.Periodic', 'format': 'Raw', 'measurand': 'Energy.Active.Import.Register', 'unit': 'Wh'},
-              {'value': '230.5', 'context': 'Sample.Periodic', 'format': 'Raw', 'measurand': 'Voltage', 'unit': 'V'},
-              {'value': '32.0', 'context': 'Sample.Periodic', 'format': 'Raw', 'measurand': 'Current.Import', 'unit': 'A'}
-            ]
-          }
-        ]
+              {
+                'value': '18500',
+                'context': 'Sample.Periodic',
+                'format': 'Raw',
+                'measurand': 'Energy.Active.Import.Register',
+                'unit': 'Wh',
+              },
+              {
+                'value': '230.5',
+                'context': 'Sample.Periodic',
+                'format': 'Raw',
+                'measurand': 'Voltage',
+                'unit': 'V',
+              },
+              {
+                'value': '32.0',
+                'context': 'Sample.Periodic',
+                'format': 'Raw',
+                'measurand': 'Current.Import',
+                'unit': 'A',
+              },
+            ],
+          },
+        ],
       },
       sampleResponsePayload: {},
     ),
@@ -299,9 +351,11 @@ class OcppProtocolRegistry {
           'chargingProfileKind': 'Absolute',
           'chargingSchedule': {
             'chargingRateUnit': 'W',
-            'chargingSchedulePeriod': [{'startPeriod': 0, 'limit': 22000}]
-          }
-        }
+            'chargingSchedulePeriod': [
+              {'startPeriod': 0, 'limit': 22000},
+            ],
+          },
+        },
       },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
@@ -330,11 +384,14 @@ class OcppProtocolRegistry {
         'connectorId': 1,
         'idTag': 'RFID_TAG_99812',
         'meterStart': 12400,
-        'timestamp': '2026-08-13T20:50:00Z'
+        'timestamp': '2026-08-13T20:50:00Z',
       },
       sampleResponsePayload: {
         'transactionId': 10042,
-        'idTagInfo': {'status': 'Accepted', 'expiryDate': '2026-12-31T23:59:59Z'}
+        'idTagInfo': {
+          'status': 'Accepted',
+          'expiryDate': '2026-12-31T23:59:59Z',
+        },
       },
     ),
     OcppMessageInfo(
@@ -347,7 +404,7 @@ class OcppProtocolRegistry {
         'errorCode': 'NoError',
         'status': 'Charging',
         'timestamp': '2026-08-13T20:50:05Z',
-        'info': 'Normal charging operation'
+        'info': 'Normal charging operation',
       },
       sampleResponsePayload: {},
     ),
@@ -361,10 +418,10 @@ class OcppProtocolRegistry {
         'idTag': 'RFID_TAG_99812',
         'meterStop': 18500,
         'timestamp': '2026-08-13T21:30:00Z',
-        'reason': 'Local'
+        'reason': 'Local',
       },
       sampleResponsePayload: {
-        'idTagInfo': {'status': 'Accepted'}
+        'idTagInfo': {'status': 'Accepted'},
       },
     ),
     OcppMessageInfo(
@@ -385,7 +442,7 @@ class OcppProtocolRegistry {
       sampleRequestPayload: {
         'location': 'ftp://upload.evtech.com/logs/',
         'retries': 3,
-        'retryInterval': 60
+        'retryInterval': 60,
       },
       sampleResponsePayload: {'fileName': 'log_EV-SN-2026-88_20260813.txt'},
     ),
@@ -406,7 +463,7 @@ class OcppProtocolRegistry {
         'location': 'https://firmware.evtech.com/bin/v2.5.0.bin',
         'retrieveDate': '2026-08-14T02:00:00Z',
         'retries': 3,
-        'retryInterval': 300
+        'retryInterval': 300,
       },
       sampleResponsePayload: {},
     ),
@@ -431,13 +488,16 @@ class OcppProtocolRegistry {
         'localAuthorizationList': [
           {
             'idTag': 'LOCAL_CARD_1',
-            'idTagInfo': {'status': 'Accepted', 'expiryDate': '2027-01-01T00:00:00Z'}
+            'idTagInfo': {
+              'status': 'Accepted',
+              'expiryDate': '2027-01-01T00:00:00Z',
+            },
           },
           {
             'idTag': 'LOCAL_CARD_2',
-            'idTagInfo': {'status': 'Blocked'}
-          }
-        ]
+            'idTagInfo': {'status': 'Blocked'},
+          },
+        ],
       },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
@@ -460,7 +520,7 @@ class OcppProtocolRegistry {
         'connectorId': 1,
         'expiryDate': '2026-08-13T22:00:00Z',
         'idTag': 'RESERVE_USR_55',
-        'reservationId': 501
+        'reservationId': 501,
       },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
@@ -492,10 +552,10 @@ class OcppProtocolRegistry {
             'chargingSchedulePeriod': [
               {'startPeriod': 0, 'limit': 32.0},
               {'startPeriod': 28800, 'limit': 16.0},
-              {'startPeriod': 72000, 'limit': 32.0}
-            ]
-          }
-        }
+              {'startPeriod': 72000, 'limit': 32.0},
+            ],
+          },
+        },
       },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
@@ -507,7 +567,7 @@ class OcppProtocolRegistry {
       sampleRequestPayload: {
         'id': 12,
         'connectorId': 1,
-        'chargingProfilePurpose': 'TxDefaultProfile'
+        'chargingProfilePurpose': 'TxDefaultProfile',
       },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
@@ -516,7 +576,11 @@ class OcppProtocolRegistry {
       profile: OcppProfile.smartCharging,
       direction: 'CS->CP',
       summary: 'Request effective calculated combined schedule for connector.',
-      sampleRequestPayload: {'connectorId': 1, 'duration': 86400, 'chargingRateUnit': 'A'},
+      sampleRequestPayload: {
+        'connectorId': 1,
+        'duration': 86400,
+        'chargingRateUnit': 'A',
+      },
       sampleResponsePayload: {
         'status': 'Accepted',
         'connectorId': 1,
@@ -525,9 +589,9 @@ class OcppProtocolRegistry {
           'chargingRateUnit': 'A',
           'chargingSchedulePeriod': [
             {'startPeriod': 0, 'limit': 32.0},
-            {'startPeriod': 28800, 'limit': 16.0}
-          ]
-        }
+            {'startPeriod': 28800, 'limit': 16.0},
+          ],
+        },
       },
     ),
 
@@ -537,7 +601,10 @@ class OcppProtocolRegistry {
       profile: OcppProfile.remoteTrigger,
       direction: 'CS->CP',
       summary: 'Ask Charge Point to emit a specific message.',
-      sampleRequestPayload: {'requestedMessage': 'BootNotification', 'connectorId': 0},
+      sampleRequestPayload: {
+        'requestedMessage': 'BootNotification',
+        'connectorId': 0,
+      },
       sampleResponsePayload: {'status': 'Accepted'},
     ),
   ];

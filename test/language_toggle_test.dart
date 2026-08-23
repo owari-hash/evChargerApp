@@ -6,6 +6,8 @@ import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 
+import 'support/fake_auth.dart';
+
 Future<void> _pumpFrames(WidgetTester tester, [int frames = 6]) async {
   for (int i = 0; i < frames; i++) {
     await tester.pump(const Duration(milliseconds: 120));
@@ -13,12 +15,12 @@ Future<void> _pumpFrames(WidgetTester tester, [int frames = 6]) async {
 }
 
 Future<void> _login(WidgetTester tester) async {
-  await tester.pumpWidget(const EvChargerApp());
+  await tester.pumpWidget(EvChargerApp(authService: fakeAuthService()));
   await tester.pump();
-  final Finder btn = find.text(AppStrings.get('login')).last;
-  await tester.ensureVisible(btn);
+  // Let the saved-session check settle before the sign-in screen is expected.
   await tester.pump();
-  await tester.tap(btn);
+
+  await signInThroughUi(tester);
   await _pumpFrames(tester);
 }
 
@@ -51,8 +53,9 @@ void main() {
     expect(navigationInstruction(10, 90), 'You have arrived');
   });
 
-  testWidgets('MN/EN toggle sits in the app bar and retitles the menus',
-      (WidgetTester tester) async {
+  testWidgets('MN/EN toggle sits in the app bar and retitles the menus', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1179, 2556);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -62,14 +65,15 @@ void main() {
     // Menu label starts in Mongolian.
     expect(find.text('Нүүр'), findsOneWidget);
 
-    await tester.tap(find.text('EN'));
+    // The switcher shows flags rather than language codes.
+    await tester.tap(find.text(AppLanguage.en.flag));
     await _pumpFrames(tester);
 
     // The whole app rebuilt, not just the screen that owns the switch.
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Нүүр'), findsNothing);
 
-    await tester.tap(find.text('MN'));
+    await tester.tap(find.text(AppLanguage.mn.flag));
     await _pumpFrames(tester);
     expect(find.text('Нүүр'), findsOneWidget);
   });

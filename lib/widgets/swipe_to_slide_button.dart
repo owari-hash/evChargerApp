@@ -83,11 +83,12 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
   }
 
   void _settleTo(double target, Curve curve) {
-    _settleAnimation = Tween<double>(begin: _drag, end: target).animate(
-      CurvedAnimation(parent: _settle, curve: curve),
-    )..addListener(() {
-        setState(() => _drag = _settleAnimation!.value);
-      });
+    _settleAnimation =
+        Tween<double>(begin: _drag, end: target).animate(
+          CurvedAnimation(parent: _settle, curve: curve),
+        )..addListener(() {
+          setState(() => _drag = _settleAnimation!.value);
+        });
     _settle.forward(from: 0.0);
   }
 
@@ -131,10 +132,13 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double maxDrag =
-            math.max(0.0, constraints.maxWidth - _trackHeight);
-        final double progress =
-            maxDrag <= 0 ? 0.0 : (_drag / maxDrag).clamp(0.0, 1.0);
+        final double maxDrag = math.max(
+          0.0,
+          constraints.maxWidth - _trackHeight,
+        );
+        final double progress = maxDrag <= 0
+            ? 0.0
+            : (_drag / maxDrag).clamp(0.0, 1.0);
 
         return GestureDetector(
           onHorizontalDragUpdate: (DragUpdateDetails d) =>
@@ -168,8 +172,9 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
                     width: _knobInset + _drag + _knobSize,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: palette.accent
-                            .withValues(alpha: 0.14 + (progress * 0.16)),
+                        color: palette.accent.withValues(
+                          alpha: 0.14 + (progress * 0.16),
+                        ),
                         borderRadius: BorderRadius.circular(_knobSize / 2),
                       ),
                     ),
@@ -225,10 +230,12 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: List<Widget>.generate(3, (int i) {
-                final double wave =
-                    math.sin((_hint.value - (i * 0.14)) * 2 * math.pi);
-                final double opacity =
-                    _hintEnabled ? 0.3 + (0.7 * math.max(0.0, wave)) : 0.55;
+                final double wave = math.sin(
+                  (_hint.value - (i * 0.14)) * 2 * math.pi,
+                );
+                final double opacity = _hintEnabled
+                    ? 0.3 + (0.7 * math.max(0.0, wave))
+                    : 0.55;
                 return SizedBox(
                   width: 10,
                   child: Opacity(
@@ -259,7 +266,8 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
         boxShadow: [
           BoxShadow(
             color: palette.accent.withValues(
-                alpha: _isDragging || _passedThreshold ? 0.42 : 0.24),
+              alpha: _isDragging || _passedThreshold ? 0.42 : 0.24,
+            ),
             blurRadius: _isDragging ? 14 : 8,
             spreadRadius: 0,
           ),

@@ -42,18 +42,26 @@ void main() {
       expect(route.points.last.latitude, closeTo(47.9530, 0.0001));
     });
 
-    test('the route has real intermediate points, not just a straight line', () {
-      final DrivingRoute route = DrivingRoute.fromOsrmJson(ok)!;
-      expect(route.points.length, greaterThan(2));
-    });
+    test(
+      'the route has real intermediate points, not just a straight line',
+      () {
+        final DrivingRoute route = DrivingRoute.fromOsrmJson(ok)!;
+        expect(route.points.length, greaterThan(2));
+      },
+    );
 
     test('rejects error and empty responses', () {
-      expect(DrivingRoute.fromOsrmJson(<String, dynamic>{'code': 'NoRoute'}),
-          isNull);
       expect(
-          DrivingRoute.fromOsrmJson(
-              <String, dynamic>{'code': 'Ok', 'routes': <dynamic>[]}),
-          isNull);
+        DrivingRoute.fromOsrmJson(<String, dynamic>{'code': 'NoRoute'}),
+        isNull,
+      );
+      expect(
+        DrivingRoute.fromOsrmJson(<String, dynamic>{
+          'code': 'Ok',
+          'routes': <dynamic>[],
+        }),
+        isNull,
+      );
     });
 
     test('request URL puts longitude before latitude, as OSRM expects', () {

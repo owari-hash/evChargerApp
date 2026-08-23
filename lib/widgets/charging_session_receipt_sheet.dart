@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 
 class ChargingSessionReceiptSheet extends StatelessWidget {
   final String stationName;
@@ -18,7 +19,8 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String txRef = 'UB-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    final String txRef =
+        'UB-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -36,7 +38,11 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
               color: context.palette.accent.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_rounded, color: AppTheme.sageGreen, size: 48),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: AppTheme.sageGreen,
+              size: 48,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -67,11 +73,14 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
               children: [
                 Text(
                   AppStrings.get('total_paid'),
-                  style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.palette.inkMuted,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '₮${totalCostMnt.toInt()}',
+                  formatMntLeading(totalCostMnt),
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
@@ -84,13 +93,29 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Breakdown List
-          _buildReceiptRow(context, AppStrings.get('charging_station'), stationName),
+          _buildReceiptRow(
+            context,
+            AppStrings.get('charging_station'),
+            stationName,
+          ),
           Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(context, AppStrings.get('connector_speed'), '${activePowerKw.toInt()} кВт CCS2 Fast'),
+          _buildReceiptRow(
+            context,
+            AppStrings.get('connector_speed'),
+            '${activePowerKw.toInt()} кВт CCS2 Fast',
+          ),
           Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(context, AppStrings.get('energy_delivered'), '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц'),
+          _buildReceiptRow(
+            context,
+            AppStrings.get('energy_delivered'),
+            '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц',
+          ),
           Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(context, AppStrings.get('unit_price'), '₮450 / кВт.ц'),
+          _buildReceiptRow(
+            context,
+            AppStrings.get('unit_price'),
+            '₮450 / кВт.ц',
+          ),
           Divider(height: 20, color: context.palette.border),
           _buildReceiptRow(context, 'Төлбөрийн хэрэгсэл', 'QPay (Амжилттай)'),
           const SizedBox(height: 28),
@@ -164,8 +189,7 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptRow(
-      BuildContext context, String label, String value) {
+  Widget _buildReceiptRow(BuildContext context, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [

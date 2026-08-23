@@ -2,6 +2,17 @@ import 'package:flutter/foundation.dart';
 
 enum AppLanguage { mn, en }
 
+/// How a language is shown in a switcher.
+///
+/// The flag stands in for the two-letter code: it reads at a glance and needs
+/// no translating. The [label] is what screen readers announce, since a flag
+/// emoji on its own says nothing useful.
+extension AppLanguagePresentation on AppLanguage {
+  String get flag => this == AppLanguage.mn ? '🇲🇳' : '🇬🇧';
+
+  String get label => this == AppLanguage.mn ? 'Монгол' : 'English';
+}
+
 /// App-wide language selection.
 ///
 /// This is a [ValueNotifier] so switching it rebuilds the whole app. It used to
@@ -160,6 +171,203 @@ class AppStrings {
       'payment_method': 'Төлбөрийн хэрэгсэл:',
       'qpay': 'QPay (Үндэсний цахим төлбөр)',
       'card': 'Банкны карт (Голомт, Хаан)',
+      // ---- Sign in / sign up ----
+      'auth_login_headline': 'Дахин тавтай морил',
+      'auth_login_sub': 'Цэнэглэхийн тулд бүртгэлдээ нэвтэрнэ үү',
+      'auth_register_headline': 'Бүртгэл үүсгэх',
+      'auth_register_sub': 'Хэдхэн алхмаар цэнэглэж эхэлнэ',
+      'auth_name': 'Таны нэр',
+      'auth_email': 'И-мэйл хаяг',
+      'auth_phone': 'Утасны дугаар (заавал биш)',
+      'auth_confirm_password': 'Нууц үгээ давтана уу',
+      'auth_password_hint': 'Дор хаяж 8 тэмдэгт, үсэг ба тоо орсон байна',
+      'auth_terms':
+          'Бүртгүүлснээр Үйлчилгээний нөхцөл, Нууцлалын бодлогыг зөвшөөрч байна',
+      'link_open_failed': 'Холбоосыг нээж чадсангүй.',
+      'auth_terms_prefix': 'Бүртгүүлснээр ',
+      'auth_terms_terms': 'Үйлчилгээний нөхцөл',
+      'auth_terms_middle': ', ',
+      'auth_terms_privacy': 'Нууцлалын бодлого',
+      'auth_terms_suffix': '-ыг зөвшөөрч байна',
+      'auth_signing_in': 'Нэвтэрч байна',
+      'auth_creating': 'Бүртгэж байна',
+      'auth_ready': 'бэлэн',
+      'auth_charge_label': 'БҮРТГЭЛИЙН ТҮВШИН',
+      'auth_verification_sent': 'Баталгаажуулах холбоосыг {dest} руу илгээлээ',
+      'auth_verification_failed':
+          'Бүртгэл үүслээ. Баталгаажуулах и-мэйл илгээгдсэнгүй — дараа дахин илгээж болно.',
+      'auth_forgot_title': 'Нууц үг сэргээх',
+      'auth_forgot_body':
+          'Бүртгэлтэй утас эсвэл и-мэйлээ оруулна уу. Сэргээх зааврыг илгээнэ.',
+      'auth_forgot_send': 'Илгээх',
+      'auth_required': 'Энэ талбарыг бөглөнө үү',
+      'auth_bad_identifier': 'Зөв утасны дугаар эсвэл и-мэйл оруулна уу',
+      'auth_bad_email': 'Зөв и-мэйл хаяг оруулна уу',
+      'auth_bad_phone': 'Зөв утасны дугаар оруулна уу',
+      'auth_password_mismatch': 'Нууц үг таарахгүй байна',
+      'auth_check_fields': 'Тэмдэглэсэн талбаруудаа шалгана уу',
+      'auth_show_password': 'Нууц үг харуулах',
+      'auth_hide_password': 'Нууц үг нуух',
+      // ---- Account hub ----
+      'nav_account': 'Бүртгэл',
+      'filter_title': 'Станц шүүх',
+      'filter_subtitle': 'Машиндаа тохирох цэнэглэгчийг олоорой',
+      'filter_brand': 'Машины марк',
+      'filter_brand_hint':
+          'Маркаа сонгоход тохирох холбогч нь өөрөө сонгогдоно',
+      'filter_connector': 'Холбогчийн төрөл',
+      'filter_any_connector': 'Бүх холбогч',
+      'filter_nearest': 'Хамгийн ойрыг олох',
+      'filter_clear': 'Цэвэрлэх',
+      'filter_apply': 'Хэрэглэх',
+      'filter_none_match': 'Тохирох станц олдсонгүй. Шүүлтүүрээ өөрчилнө үү.',
+      'loading': 'Ачаалж байна...',
+      'stations_empty_title': 'Станцын мэдээлэл ачаалагдсангүй',
+      'stations_empty_body':
+          'Сүлжээгээ шалгаад дахин оролдоно уу. Холболт сэргэмэгц станцууд харагдана.',
+      'stations_offline_notice':
+          'Сүлжээ холбогдсонгүй — станцын мэдээлэл хуучирсан байж болно.',
+      'filter_nearest_found': '{name} · {distance} км зайд',
+      'filter_active': '{count} шүүлтүүр',
+      'filter_showing': '{shown}/{total} станц',
+      'acct_title': 'Миний бүртгэл',
+      'acct_signed_in_as': '{email}-ээр нэвтэрсэн',
+      'acct_status': 'Бүртгэлийн төлөв',
+      'acct_verified': 'Баталгаажсан',
+      'acct_not_verified': 'Баталгаажаагүй',
+      'acct_email_label': 'И-мэйл хаяг',
+      'acct_mobile_label': 'Гар утасны дугаар',
+      'acct_no_number': 'Дугаар оруулаагүй байна',
+      'acct_profile_title': 'Таны мэдээлэл',
+      'acct_name_label': 'Нэр',
+      'acct_save': 'Хадгалах',
+      'acct_saved': 'Таны мэдээлэл хадгалагдлаа',
+      'acct_nav_wallet': 'Хэтэвч',
+      'acct_nav_wallet_sub': 'Үлдэгдэл, цэнэглэлт, хөдөлгөөн',
+      'acct_nav_security': 'Аюулгүй байдал',
+      'acct_nav_security_sub': 'Нууц үг, и-мэйл, утас баталгаажуулах',
+      'acct_nav_sessions': 'Цэнэглэлтийн түүх',
+      'acct_nav_sessions_sub': 'Өмнөх цэнэглэлт, баримт',
+      'acct_idtags_title': 'Цэнэглэх картууд',
+      'acct_idtags_body':
+          'Цэнэглэх карт гэдэг нь цэнэглэгч таныг таних RFID карт эсвэл аппын код юм. Кодыг карт дээр хэвлэсэн байдаг.',
+      'acct_idtags_none': 'Одоогоор холбосон карт алга байна.',
+      'acct_idtags_add': 'Цэнэглэх карт нэмэх',
+      'acct_idtags_hint':
+          'Карт дээр хэвлэгдсэн кодыг яг байгаагаар нь оруулна уу.',
+      'acct_idtags_submit': 'Карт холбох',
+      'acct_idtags_unlink': 'Салгах',
+      'acct_idtags_unlink_confirm': 'Энэ картыг салгах уу?',
+      'acct_idtags_unlink_yes': 'Тийм, салгая',
+      'acct_idtags_linked': '{tag} карт таны бүртгэлд холбогдлоо.',
+      'acct_idtags_unlinked': '{tag} картын холбоос салгагдлаа.',
+
+      // ---- Wallet ----
+      'wallet_title': 'Хэтэвч',
+      'wallet_subtitle':
+          'QPay-ээр үлдэгдлээ цэнэглээд цэнэглэлтийн төлбөрөө автоматаар төлөөрэй.',
+      'wallet_balance': 'Үлдэгдэл',
+      'wallet_balance_hint': 'Цэнэглэлтэд зарцуулах боломжтой',
+      'wallet_debt': 'Төлөх дүн',
+      'wallet_debt_hint':
+          'Цэнэглэлтийн төлбөр үлдэгдлээс давсан байна. Цэнэглэж төлнө үү.',
+      'wallet_frozen': 'Энэ хэтэвч түр хаагдсан байна. Операторт хандана уу.',
+      'wallet_topped_up': 'Нийт цэнэглэсэн',
+      'wallet_spent': 'Нийт зарцуулсан',
+      'wallet_linked_tags': 'Энэ үлдэгдлийг ашиглах картууд',
+      'wallet_no_linked_tags':
+          'Холбосон карт алга байна. Бүртгэл хэсгээс картаа холбоно уу.',
+      'wallet_low_balance':
+          'Таны үлдэгдэл {amount}-өөс бага байна. Цэнэглэхийн өмнө хэтэвчээ цэнэглэнэ үү.',
+      'wallet_unavailable':
+          'Хэтэвчийн үйлчилгээ түр боломжгүй байна. Хэсэг хугацааны дараа дахин оролдоно уу.',
+      'wallet_history': 'Хэтэвчийн хөдөлгөөн',
+      'wallet_history_empty': 'Одоогоор хөдөлгөөн алга байна.',
+      'wallet_entry_topup': 'Цэнэглэлт',
+      'wallet_entry_charge': 'Цэнэглэлтийн төлбөр',
+      'wallet_entry_refund': 'Буцаалт',
+      'wallet_entry_adjustment': 'Тохируулга',
+      'wallet_entry_bonus': 'Урамшуулал',
+      'wallet_balance_after': 'Үлдэгдэл: {balance}',
+      'topup_title': 'Цэнэглэх',
+      'topup_choose': 'Дүнгээ сонгоно уу',
+      'topup_custom': 'Эсвэл дүнгээ оруулна уу',
+      'topup_amount_label': 'Дүн (₮)',
+      'topup_range': '{min} – {max} хооронд',
+      'topup_submit': 'Цэнэглэх',
+      'topup_submitting': 'Нэхэмжлэх үүсгэж байна…',
+      'topup_invalid': 'Дүнгээ оруулна уу',
+      'topup_disabled': 'Цэнэглэх үйлчилгээ түр боломжгүй байна.',
+      'invoice_title': 'Уншуулж төлнө үү',
+      'invoice_amount': 'Төлөх дүн',
+      'invoice_instruction':
+          'QR кодыг банкны аппаараа уншуулах эсвэл доороос банкаа сонгоно уу.',
+      'invoice_open_bank': 'Банкны апп нээх',
+      'invoice_waiting': 'Төлбөр хүлээж байна…',
+      'invoice_check': 'Төлбөрөө хийсэн',
+      'invoice_checking': 'Шалгаж байна…',
+      'invoice_paid': '{amount} таны хэтэвчид нэмэгдлээ.',
+      'invoice_expired':
+          'Энэ нэхэмжлэхийн хугацаа дууссан байна. Дахин эхлүүлнэ үү.',
+      'invoice_not_paid':
+          'Төлбөр хараахан ирээгүй байна. Түр хүлээгээд дахин шалгана уу.',
+      'invoice_canceled': 'Энэ нэхэмжлэх цуцлагдсан байна.',
+      'invoice_start_over': 'Өөр дүнгээр цэнэглэх',
+      'invoice_timed_out':
+          'Төлбөрийг удаан хүлээлээ. Төлсөн бол «Төлбөрөө хийсэн» товчийг дарна уу.',
+      'invoice_open_link': 'Төлбөрийн холбоос нээх',
+
+      // ---- Charging history ----
+      'sess_title': 'Цэнэглэлтийн түүх',
+      'sess_empty':
+          'Бүртгэлдээ цэнэглэх карт холбож, цэнэглэгч дээр ашигласны дараа цэнэглэлтийн түүх энд харагдана.',
+      'sess_unavailable':
+          'Цэнэглэх сүлжээтэй одоохондоо холбогдож чадсангүй тул таны цэнэглэлтүүд харагдахгүй байна.',
+      'sess_count': '{count} цэнэглэлт',
+      'sess_connector': '{id}-р холбогч',
+      'sess_started': 'Эхэлсэн',
+      'sess_duration': 'Үргэлжлэх хугацаа',
+      'sess_energy': 'Эрчим хүч',
+      'sess_cost': 'Төлбөр',
+      'sess_in_progress': 'Үргэлжилж байна',
+      'sess_completed': 'Дууссан',
+      'sess_rejected': 'Татгалзсан',
+      'sess_stop': 'Зогсоох',
+      'sess_stopping': 'Зогсоож байна…',
+      'sess_stop_confirm': 'Энэ цэнэглэлтийг зогсоох уу?',
+      'sess_stop_yes': 'Тийм, зогсооё',
+      'sess_keep': 'Үргэлжлүүлэх',
+      'sess_stop_accepted':
+          'Зогсоох хүсэлтийг хүлээн авлаа. Цэнэглэгч цэнэглэлтийг дуусгаж байна.',
+      'sess_stop_replied': 'Цэнэглэгч «{status}» гэж хариулав.',
+
+      // ---- Security ----
+      'sec_title': 'Аюулгүй байдал',
+      'sec_password_title': 'Нууц үг',
+      'sec_current': 'Одоогийн нууц үг',
+      'sec_new': 'Шинэ нууц үг',
+      'sec_confirm': 'Шинэ нууц үгээ давтах',
+      'sec_change': 'Нууц үг солих',
+      'sec_changed': 'Нууц үг тань солигдлоо. Бусад төхөөрөмжөөс гарсан байна.',
+      'sec_email_title': 'И-мэйл хаяг',
+      'sec_email_confirmed':
+          '{email} баталгаажсан байна. Үүгээр цэнэглэлтийн баримт илгээнэ.',
+      'sec_email_pending':
+          '{email} хаягаа баталгаажуулна уу. Илгээх холбоос 24 цагийн турш хүчинтэй.',
+      'sec_resend_email': 'Баталгаажуулах и-мэйл дахин илгээх',
+      'sec_sent_to': '{dest} руу илгээлээ',
+      'sec_phone_title': 'Гар утасны дугаар',
+      'sec_phone_confirmed': '{phone} баталгаажсан байна.',
+      'sec_phone_pending':
+          'Дугаараа баталгаажуулбал цэнэглэлтийн мэдэгдэл, нууц үг сэргээх код авах боломжтой.',
+      'sec_send_code': 'Код илгээх',
+      'sec_code_label': '6 оронтой код',
+      'sec_verify': 'Баталгаажуулах',
+      'sec_phone_done': 'Утасны дугаар баталгаажлаа.',
+
+      // ---- Shared ----
+      'retry': 'Дахин оролдох',
+      'save': 'Хадгалах',
     },
     'en': {
       'appName': 'Zev Charger',
@@ -291,6 +499,198 @@ class AppStrings {
       'payment_method': 'Payment Method:',
       'qpay': 'QPay (National Mobile Pay)',
       'card': 'Bank Card (Golomt / Khan Bank)',
+      // ---- Sign in / sign up ----
+      'auth_login_headline': 'Welcome back',
+      'auth_login_sub': 'Sign in to start charging',
+      'auth_register_headline': 'Create your account',
+      'auth_register_sub': 'A few details and you are ready to charge',
+      'auth_name': 'Your name',
+      'auth_email': 'Email address',
+      'auth_phone': 'Phone number (optional)',
+      'auth_confirm_password': 'Repeat your password',
+      'auth_password_hint': 'At least 8 characters, with a letter and a number',
+      'auth_terms':
+          'By registering you accept the Terms of Service and Privacy Policy',
+      'link_open_failed': 'Could not open the link.',
+      'auth_terms_prefix': 'By registering you accept the ',
+      'auth_terms_terms': 'Terms of Service',
+      'auth_terms_middle': ' and ',
+      'auth_terms_privacy': 'Privacy Policy',
+      'auth_terms_suffix': '',
+      'auth_signing_in': 'Signing in',
+      'auth_creating': 'Creating account',
+      'auth_ready': 'ready',
+      'auth_charge_label': 'PROFILE CHARGE',
+      'auth_verification_sent': 'Verification link sent to {dest}',
+      'auth_verification_failed':
+          'Account created. The verification email did not go out — you can resend it later.',
+      'auth_forgot_title': 'Reset your password',
+      'auth_forgot_body':
+          'Enter the phone or email on your account and we will send instructions.',
+      'auth_forgot_send': 'Send',
+      'auth_required': 'Fill in this field',
+      'auth_bad_identifier': 'Enter a valid phone number or email',
+      'auth_bad_email': 'Enter a valid email address',
+      'auth_bad_phone': 'Enter a valid phone number',
+      'auth_password_mismatch': 'Passwords do not match',
+      'auth_check_fields': 'Check the highlighted fields',
+      'auth_show_password': 'Show password',
+      'auth_hide_password': 'Hide password',
+      // ---- Account hub ----
+      'nav_account': 'Account',
+      'filter_title': 'Filter stations',
+      'filter_subtitle': 'Find a charger that fits your car',
+      'filter_brand': 'Car brand',
+      'filter_brand_hint': 'Picking a brand selects the plugs it charges on',
+      'filter_connector': 'Connector type',
+      'filter_any_connector': 'All connectors',
+      'filter_nearest': 'Find nearest',
+      'filter_clear': 'Clear',
+      'filter_apply': 'Apply',
+      'filter_none_match': 'No station matches. Try changing the filter.',
+      'loading': 'Loading...',
+      'stations_empty_title': 'Stations could not be loaded',
+      'stations_empty_body':
+          'Check your connection and try again. Stations appear as soon as the network is reachable.',
+      'stations_offline_notice': 'Offline — these stations may be out of date.',
+      'filter_nearest_found': '{name} · {distance} km away',
+      'filter_active': '{count} filters',
+      'filter_showing': '{shown}/{total} stations',
+      'acct_title': 'My account',
+      'acct_signed_in_as': 'Signed in as {email}',
+      'acct_status': 'Account status',
+      'acct_verified': 'Verified',
+      'acct_not_verified': 'Not verified',
+      'acct_email_label': 'Email address',
+      'acct_mobile_label': 'Mobile number',
+      'acct_no_number': 'No number yet',
+      'acct_profile_title': 'Your details',
+      'acct_name_label': 'Name',
+      'acct_save': 'Save changes',
+      'acct_saved': 'Your details are saved',
+      'acct_nav_wallet': 'Wallet',
+      'acct_nav_wallet_sub': 'Balance, top-ups and activity',
+      'acct_nav_security': 'Security',
+      'acct_nav_security_sub': 'Password, email and phone',
+      'acct_nav_sessions': 'Charging history',
+      'acct_nav_sessions_sub': 'Past sessions and receipts',
+      'acct_idtags_title': 'Charge tags',
+      'acct_idtags_body':
+          'A charge tag is the RFID card or app code a charger uses to recognise you. The operator issues it and prints the code on the card.',
+      'acct_idtags_none': 'No charge tag linked yet.',
+      'acct_idtags_add': 'Add a charge tag',
+      'acct_idtags_hint': 'Enter the code exactly as printed on the card.',
+      'acct_idtags_submit': 'Link tag',
+      'acct_idtags_unlink': 'Unlink',
+      'acct_idtags_unlink_confirm': 'Unlink this tag?',
+      'acct_idtags_unlink_yes': 'Yes, unlink',
+      'acct_idtags_linked': 'Charge tag {tag} is linked to your account.',
+      'acct_idtags_unlinked': 'Charge tag {tag} is no longer linked.',
+
+      // ---- Wallet ----
+      'wallet_title': 'Wallet',
+      'wallet_subtitle':
+          'Top up with QPay and each session is paid from your balance automatically.',
+      'wallet_balance': 'Balance',
+      'wallet_balance_hint': 'Available to spend on charging',
+      'wallet_debt': 'Amount owed',
+      'wallet_debt_hint':
+          'A session cost more than your balance. Top up to settle it.',
+      'wallet_frozen': 'This wallet is frozen. Please contact the operator.',
+      'wallet_topped_up': 'Topped up',
+      'wallet_spent': 'Spent',
+      'wallet_linked_tags': 'Tags that spend this balance',
+      'wallet_no_linked_tags': 'No tag linked. Link one from your account.',
+      'wallet_low_balance':
+          'Your balance is under {amount}. Top up before you charge.',
+      'wallet_unavailable':
+          'The wallet service is not available right now. Please try again shortly.',
+      'wallet_history': 'Wallet activity',
+      'wallet_history_empty': 'No wallet activity yet.',
+      'wallet_entry_topup': 'Top-up',
+      'wallet_entry_charge': 'Charging',
+      'wallet_entry_refund': 'Refund',
+      'wallet_entry_adjustment': 'Adjustment',
+      'wallet_entry_bonus': 'Bonus',
+      'wallet_balance_after': 'Balance: {balance}',
+      'topup_title': 'Top up',
+      'topup_choose': 'Choose an amount',
+      'topup_custom': 'Or enter your own',
+      'topup_amount_label': 'Amount (₮)',
+      'topup_range': 'Between {min} and {max}',
+      'topup_submit': 'Top up',
+      'topup_submitting': 'Creating invoice…',
+      'topup_invalid': 'Enter an amount',
+      'topup_disabled': 'Top-ups are unavailable right now.',
+      'invoice_title': 'Scan to pay',
+      'invoice_amount': 'Amount due',
+      'invoice_instruction':
+          'Scan the QR with your banking app, or pick your bank below.',
+      'invoice_open_bank': 'Open bank app',
+      'invoice_waiting': 'Waiting for payment…',
+      'invoice_check': "I've paid",
+      'invoice_checking': 'Checking…',
+      'invoice_paid': '{amount} has been added to your wallet.',
+      'invoice_expired': 'This invoice has expired. Start again.',
+      'invoice_not_paid': 'No payment yet. Wait a moment and check again.',
+      'invoice_canceled': 'This invoice was cancelled.',
+      'invoice_start_over': 'Top up a different amount',
+      'invoice_timed_out':
+          'We stopped waiting for payment. If you have paid, tap "I\'ve paid".',
+      'invoice_open_link': 'Open payment link',
+
+      // ---- Charging history ----
+      'sess_title': 'Charging history',
+      'sess_empty':
+          'Your charging history appears here once a charge tag is linked to your account and used at a charger.',
+      'sess_unavailable':
+          'We could not reach the charging network just now, so your sessions are not shown.',
+      'sess_count': '{count} sessions',
+      'sess_connector': 'Connector {id}',
+      'sess_started': 'Started',
+      'sess_duration': 'Duration',
+      'sess_energy': 'Energy',
+      'sess_cost': 'Cost',
+      'sess_in_progress': 'In progress',
+      'sess_completed': 'Completed',
+      'sess_rejected': 'Rejected',
+      'sess_stop': 'Stop',
+      'sess_stopping': 'Stopping…',
+      'sess_stop_confirm': 'Stop this charging session?',
+      'sess_stop_yes': 'Yes, stop it',
+      'sess_keep': 'Keep charging',
+      'sess_stop_accepted':
+          'Stop request accepted. The charger is ending the session.',
+      'sess_stop_replied': 'The charger replied "{status}".',
+
+      // ---- Security ----
+      'sec_title': 'Security',
+      'sec_password_title': 'Password',
+      'sec_current': 'Current password',
+      'sec_new': 'New password',
+      'sec_confirm': 'Repeat the new password',
+      'sec_change': 'Change password',
+      'sec_changed':
+          'Your password is changed. Other devices have been signed out.',
+      'sec_email_title': 'Email address',
+      'sec_email_confirmed':
+          '{email} is confirmed. We send charging receipts there.',
+      'sec_email_pending':
+          'Confirm {email}. The link we email is valid for 24 hours.',
+      'sec_resend_email': 'Resend the confirmation email',
+      'sec_sent_to': 'Sent to {dest}',
+      'sec_phone_title': 'Mobile number',
+      'sec_phone_confirmed': '{phone} is confirmed.',
+      'sec_phone_pending':
+          'Confirm your number to get charging notices and password reset codes.',
+      'sec_send_code': 'Send code',
+      'sec_code_label': '6-digit code',
+      'sec_verify': 'Confirm',
+      'sec_phone_done': 'Your number is confirmed.',
+
+      // ---- Shared ----
+      'retry': 'Try again',
+      'save': 'Save',
     },
   };
 

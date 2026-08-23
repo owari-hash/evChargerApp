@@ -1,9 +1,13 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/login_register_screen.dart';
 import 'screens/mongolia_map_screen.dart';
 import 'screens/quick_controls_screen.dart';
 import 'screens/trips_stations_screen.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_strings.dart';
 
@@ -12,7 +16,10 @@ void main() {
 }
 
 class EvChargerApp extends StatelessWidget {
-  const EvChargerApp({super.key});
+  const EvChargerApp({super.key, this.authService});
+
+  /// Injectable so tests can run the app against a stubbed driver API.
+  final AuthService? authService;
 
   @override
   Widget build(BuildContext context) {
@@ -21,14 +28,14 @@ class EvChargerApp extends StatelessWidget {
       builder: (BuildContext context, ThemeMode mode, Widget? _) {
         return ValueListenableBuilder<AppLanguage>(
           valueListenable: LanguageController.language,
-          builder: (BuildContext context, AppLanguage _, Widget? __) {
+          builder: (BuildContext context, AppLanguage _, Widget? _) {
             return MaterialApp(
               title: 'Zev Charger',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: mode,
-              home: const MainAppFrame(),
+              home: MainAppFrame(authService: authService),
             );
           },
         );
@@ -38,16 +45,64 @@ class EvChargerApp extends StatelessWidget {
 }
 
 class MainAppFrame extends StatefulWidget {
-  const MainAppFrame({super.key});
+  const MainAppFrame({super.key, this.authService});
+
+  final AuthService? authService;
 
   @override
   State<MainAppFrame> createState() => _MainAppFrameState();
 }
 
 class _MainAppFrameState extends State<MainAppFrame> {
-  bool _isLoggedIn = false;
+  AuthService get _auth => widget.authService ?? AuthService.instance;
+
+  /// True until a session saved on a previous launch has been checked, so the
+  /// app does not flash the sign-in screen at a driver who is already signed in.
+  bool _bootstrapping = true;
   int _activeTabIndex =
-      0; // 0: Home, 1: Mongolia Map, 2: Quick Controls, 3: Stations
+      0; // 0: Home, 1: Map, 2: Quick Controls, 3: Stations, 4: Account
+
+  bool get _isLoggedIn => _auth.isSignedIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    await _auth.restoreSession();
+    await _screenshotSignIn();
+    if (mounted) {
+      setState(() {
+        _bootstrapping = false;
+        final String tab = Platform.environment['SCREENSHOT_TAB'] ?? '';
+        final int? index = int.tryParse(tab);
+        if (index != null && index >= 0 && index <= 4) _activeTabIndex = index;
+      });
+    }
+  }
+
+  /// TEMPORARY screenshot scaffolding — remove before shipping.
+  ///
+  /// Signs in from `SIMCTL_CHILD_SCREENSHOT_EMAIL` / `_PASSWORD` so App Store
+  /// captures can be automated without driving the keyboard.
+  Future<void> _screenshotSignIn() async {
+    if (_auth.isSignedIn) return;
+    final String email = Platform.environment['SCREENSHOT_EMAIL'] ?? '';
+    final String password = Platform.environment['SCREENSHOT_PASSWORD'] ?? '';
+    debugPrint('SCREENSHOT env email="$email" pwlen=${password.length}');
+    if (email.isEmpty || password.isEmpty) {
+      debugPrint('SCREENSHOT: no credentials in environment');
+      return;
+    }
+    try {
+      await _auth.signIn(identifier: email, password: password);
+      debugPrint('SCREENSHOT: signed in ok=${_auth.isSignedIn}');
+    } catch (e) {
+      debugPrint('SCREENSHOT: sign-in failed: $e');
+    }
+  }
 
   void _openQrScannerModal(BuildContext context) {
     showModalBottomSheet(
@@ -96,25 +151,22 @@ class _MainAppFrameState extends State<MainAppFrame> {
       },
     );
 
-    if (shouldLogOut == true && mounted) {
-      setState(() {
-        _isLoggedIn = false;
-        _activeTabIndex = 0;
-      });
-    }
+    if (shouldLogOut != true) return;
+
+    await _auth.signOut();
+    if (mounted) setState(() => _activeTabIndex = 0);
   }
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
 
+    if (_bootstrapping) return const _BootSplash();
+
     if (!_isLoggedIn) {
       return LoginRegisterScreen(
-        onLoginSuccess: () {
-          setState(() {
-            _isLoggedIn = true;
-          });
-        },
+        authService: widget.authService,
+        onLoginSuccess: () => setState(() {}),
       );
     }
 
@@ -127,6 +179,7 @@ class _MainAppFrameState extends State<MainAppFrame> {
       MongoliaMapScreen(onOpenQrScanner: () => _openQrScannerModal(context)),
       const QuickControlsScreen(),
       const TripsStationsScreen(),
+      AccountScreen(authService: widget.authService),
     ];
 
     return Scaffold(
@@ -233,6 +286,11 @@ class _MainAppFrameState extends State<MainAppFrame> {
                   Icons.ev_station_rounded,
                   AppStrings.get('nav_stations'),
                 ),
+                _buildBottomNavItem(
+                  4,
+                  Icons.person_rounded,
+                  AppStrings.get('nav_account'),
+                ),
               ],
             ),
           ),
@@ -328,23 +386,19 @@ class _LanguageAction extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          _segment(context, 'MN', isMn, AppLanguage.mn),
-          _segment(context, 'EN', !isMn, AppLanguage.en),
+          _segment(context, AppLanguage.mn, isMn),
+          _segment(context, AppLanguage.en, !isMn),
         ],
       ),
     );
   }
 
-  Widget _segment(
-    BuildContext context,
-    String label,
-    bool active,
-    AppLanguage lang,
-  ) {
+  Widget _segment(BuildContext context, AppLanguage lang, bool active) {
     final AppPalette palette = context.palette;
     return Semantics(
       button: true,
       selected: active,
+      label: lang.label,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
@@ -353,18 +407,16 @@ class _LanguageAction extends StatelessWidget {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             color: active ? palette.panel : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: active ? palette.onPanel : palette.inkMuted,
-            ),
+          // The inactive flag is dimmed rather than greyed out: an emoji
+          // carries its own colour, so opacity is the only lever.
+          child: Opacity(
+            opacity: active ? 1.0 : 0.45,
+            child: Text(lang.flag, style: const TextStyle(fontSize: 17)),
           ),
         ),
       ),
@@ -399,6 +451,32 @@ class _AppBarAction extends StatelessWidget {
         onPressed: onPressed,
         tooltip: tooltip,
         visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+}
+
+/// Shown for the moment it takes to check for a saved session.
+class _BootSplash extends StatelessWidget {
+  const _BootSplash();
+
+  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, and the
+  /// backdrop the badge artwork was feathered onto. Handing over from the
+  /// native launch screen to Flutter is meant to be invisible; using the theme
+  /// palette here instead made the app blink from one splash to another.
+  static const Color launchBackground = Color(0xFF1A2028);
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: launchBackground,
+      child: Center(
+        child: Image(
+          image: AssetImage('assets/images/logo_badge.png'),
+          width: 180,
+          height: 180,
+          filterQuality: FilterQuality.medium,
+        ),
       ),
     );
   }

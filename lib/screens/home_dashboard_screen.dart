@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../models/charging_session.dart';
 import '../models/ocpp_models.dart';
+import '../services/api_client.dart';
 import '../services/ocpp_mock_service.dart';
+import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/charge_limit_selector.dart';
@@ -26,6 +29,59 @@ const String _vehicleName = 'BMW X5 xDrive50e';
 
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final OcppMockService _service = OcppMockService.instance;
+  final SessionsService _sessions = SessionsService.instance;
+
+  /// The transaction id of a real session, when the API reports one running.
+  /// Null means anything on screen is local demo state.
+  int? _remoteTransactionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncWithDriverApi();
+  }
+
+  /// Asks the driver API what is actually charging right now.
+  ///
+  /// Without this the dashboard showed whatever the local mock service held,
+  /// which greeted every driver with a charge in progress they had not started.
+  Future<void> _syncWithDriverApi() async {
+    try {
+      final List<ChargingSession> sessions = await _sessions.list(limit: 20);
+      ChargingSession? active;
+      for (final ChargingSession session in sessions) {
+        if (session.isActive) {
+          active = session;
+          break;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (active == null) {
+          _remoteTransactionId = null;
+          _service.clearRemoteSession();
+          return;
+        }
+        _remoteTransactionId = active.transactionId;
+        _service.adoptRemoteSession(
+          transactionId: active.transactionId,
+          stationName: active.displayLocation,
+          energyKwh: active.energyKwh.toDouble(),
+          powerKw: (active.lastPowerW ?? 0) / 1000.0,
+          socPercent: active.lastSocPercent?.toDouble(),
+        );
+      });
+    } on ApiException {
+      // Offline, or the session list is unavailable. Showing nothing is right;
+      // inventing a charge is not.
+      if (!mounted) return;
+      setState(() {
+        _remoteTransactionId = null;
+        _service.clearRemoteSession();
+      });
+    }
+  }
 
   void _handleStartChargingSession() async {
     await _service.startSessionFromQrCode('EV-UB-SHANGRILA', 25000.0);
@@ -38,6 +94,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final double cost = energy * 450.0;
     final String station =
         _service.activeStationName ?? 'Шангри-Ла Молл Цэнэглэгч';
+
+    final int? remote = _remoteTransactionId;
+    if (remote != null) {
+      try {
+        await _sessions.stop(remote);
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+        return;
+      }
+      _remoteTransactionId = null;
+    }
 
     await _service.stopUserChargingSession();
 
@@ -72,7 +142,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // Hero View: Hero Car Banner with Particle Matrix FX during Charging
                 VehicleChargingMatrix(
                   isCharging: isCharging,
@@ -141,7 +210,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                       child: Text(
                                         isCharging
                                             ? 'ЦЭНЭГЛЭЖ БАЙНА • ${_service.activePowerKw.toInt()} кВт'
-                                            : '$_vehicleName • ₮0/кВт.ц',
+                                            // The tariff belongs to a station,
+                                            // and no session means no station —
+                                            // this used to read a hardcoded ₮0.
+                                            : '$_vehicleName • ${AppStrings.get('idle')}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(

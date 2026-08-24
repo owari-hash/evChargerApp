@@ -3,15 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('formatMnt', () {
-    test('groups thousands and appends the tugrik sign', () {
-      expect(formatMnt(0), '0₮');
-      expect(formatMnt(999), '999₮');
-      expect(formatMnt(15800), '15,800₮');
-      expect(formatMnt(5000000), '5,000,000₮');
+    test('groups thousands, appends the sign and carries two decimals', () {
+      expect(formatMnt(0), '0.00₮');
+      expect(formatMnt(999), '999.00₮');
+      expect(formatMnt(15800), '15,800.00₮');
+      expect(formatMnt(5000000), '5,000,000.00₮');
     });
 
     test('keeps the sign on a wallet in debt', () {
-      expect(formatMnt(-9200), '-9,200₮');
+      expect(formatMnt(-9200), '-9,200.00₮');
     });
   });
 

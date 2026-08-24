@@ -187,8 +187,11 @@ class AppStrings {
       'auth_terms_prefix': 'Бүртгүүлснээр ',
       'auth_terms_terms': 'Үйлчилгээний нөхцөл',
       'auth_terms_middle': ', ',
-      'auth_terms_privacy': 'Нууцлалын бодлого',
-      'auth_terms_suffix': '-ыг зөвшөөрч байна',
+      // The accusative rides on the noun — `бодлого` + `ыг` is `бодлогыг`, not
+      // `бодлого-ыг`. Keeping it inside the link also stops the line breaking
+      // between a document's name and its case ending.
+      'auth_terms_privacy': 'Нууцлалын бодлогыг',
+      'auth_terms_suffix': ' зөвшөөрч байна',
       'auth_signing_in': 'Нэвтэрч байна',
       'auth_creating': 'Бүртгэж байна',
       'auth_ready': 'бэлэн',

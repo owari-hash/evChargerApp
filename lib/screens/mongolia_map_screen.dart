@@ -943,8 +943,16 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
+                      // A Wrap rather than a Row: the power badge and the price
+                      // together already fill a 393pt card, and once the price
+                      // carries decimals they no longer fit on one line. Every
+                      // item here is information a driver is choosing on, so
+                      // the line breaks rather than any of them ellipsising.
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -963,19 +971,13 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              '${activeStation.availableConnectors}/${activeStation.totalConnectors} ${AppStrings.get('available')}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: context.palette.inkMuted,
-                              ),
+                          Text(
+                            '${activeStation.availableConnectors}/${activeStation.totalConnectors} ${AppStrings.get('available')}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.palette.inkMuted,
                             ),
                           ),
-                          const Spacer(),
                           Text(
                             '${formatMntLeading(activeStation.pricePerKwh)}/кВт.ц',
                             style: TextStyle(

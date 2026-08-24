@@ -80,7 +80,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('12,500₮'), findsOneWidget);
+    expect(find.text('12,500.00₮'), findsOneWidget);
 
     // The ledger sits below the fold in a lazy list.
     await tester.scrollUntilVisible(

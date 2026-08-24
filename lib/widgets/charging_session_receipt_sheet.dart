@@ -114,7 +114,7 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           _buildReceiptRow(
             context,
             AppStrings.get('unit_price'),
-            '₮450 / кВт.ц',
+            '${formatMntLeading(450)} / кВт.ц',
           ),
           Divider(height: 20, color: context.palette.border),
           _buildReceiptRow(context, 'Төлбөрийн хэрэгсэл', 'QPay (Амжилттай)'),

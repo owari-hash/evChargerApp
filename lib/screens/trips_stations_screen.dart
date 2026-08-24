@@ -387,18 +387,18 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
               color: Colors.white12,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Row(
-              children: [
-                Icon(
+            child: Row(
+              children: <Widget>[
+                const Icon(
                   Icons.ev_station_rounded,
                   color: AppTheme.sageGreen,
                   size: 32,
                 ),
-                SizedBox(width: 14),
+                const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                  children: <Widget>[
+                    const Text(
                       'Шангри-Ла Молл Цэнэглэгч',
                       style: TextStyle(
                         color: Colors.white,
@@ -407,8 +407,8 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
                       ),
                     ),
                     Text(
-                      'Загуур #1 (CCS2 Fast 180kW) • ₮450/кВт.ц',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      'Загуур #1 (CCS2 Fast 180kW) • ${formatMntLeading(450)}/кВт.ц',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),

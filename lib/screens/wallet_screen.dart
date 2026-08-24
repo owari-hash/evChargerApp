@@ -538,9 +538,11 @@ class _TopUpFormState extends State<_TopUpForm> {
                       _amount.clear();
                     } else {
                       _selectedPreset = preset;
-                      _amount.text = preset.toString();
+                      _amount.text = formatAmount(preset);
+                      // Caret before the decorative decimals, where typing
+                      // actually changes the amount.
                       _amount.selection = TextSelection.collapsed(
-                        offset: _amount.text.length,
+                        offset: _amount.text.indexOf('.'),
                       );
                     }
                     _error = null;
@@ -578,11 +580,12 @@ class _TopUpFormState extends State<_TopUpForm> {
           icon: Icons.payments_outlined,
           keyboardType: TextInputType.number,
           enabled: !_creating,
+          inputFormatters: const <TextInputFormatter>[MntInputFormatter()],
           onChanged: (String value) {
-            final int? typed = int.tryParse(
-              value.replaceAll(RegExp(r'[^\d]'), ''),
-            );
-            if (typed != _selectedPreset) {
+            // `amountOf`, not a digit sweep: the trailing `.00` the formatter
+            // holds is decoration, and counting it would read 12,500.00 as
+            // 1,250,000 and unselect a preset the driver had just tapped.
+            if (amountOf(value) != _selectedPreset) {
               setState(() => _selectedPreset = null);
             }
           },

@@ -1376,34 +1376,48 @@ class _TermsNoticeState extends State<_TermsNotice> {
     final AppPalette palette = widget.palette;
     final TextStyle base = TextStyle(
       color: palette.inkMuted,
-      fontSize: 11.5,
-      height: 1.45,
+      fontSize: 12,
+      height: 1.5,
+      letterSpacing: 0.1,
     );
+    // Accent, weight and a rule are three ways of saying the same thing. The
+    // rule is the one a colourblind driver still sees, so it stays and the
+    // weight drops back — the line reads as a sentence with two links in it,
+    // not as two buttons with words around them.
     final TextStyle link = base.copyWith(
       color: palette.accent,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       decoration: TextDecoration.underline,
-      decorationColor: palette.accent,
+      decorationColor: palette.accent.withValues(alpha: 0.45),
+      decorationThickness: 1.2,
     );
 
-    return Text.rich(
-      TextSpan(
-        style: base,
-        children: <InlineSpan>[
-          TextSpan(text: AppStrings.get('auth_terms_prefix')),
+    return Center(
+      child: ConstrainedBox(
+        // Holds the measure near 40 characters, so the sentence breaks on a
+        // phrase boundary instead of wrapping one stray word onto line two.
+        constraints: const BoxConstraints(maxWidth: 300),
+        child: Text.rich(
           TextSpan(
-            text: AppStrings.get('auth_terms_terms'),
-            style: link,
-            recognizer: _termsTap,
+            style: base,
+            children: <InlineSpan>[
+              TextSpan(text: AppStrings.get('auth_terms_prefix')),
+              TextSpan(
+                text: AppStrings.get('auth_terms_terms'),
+                style: link,
+                recognizer: _termsTap,
+              ),
+              TextSpan(text: AppStrings.get('auth_terms_middle')),
+              TextSpan(
+                text: AppStrings.get('auth_terms_privacy'),
+                style: link,
+                recognizer: _privacyTap,
+              ),
+              TextSpan(text: AppStrings.get('auth_terms_suffix')),
+            ],
           ),
-          TextSpan(text: AppStrings.get('auth_terms_middle')),
-          TextSpan(
-            text: AppStrings.get('auth_terms_privacy'),
-            style: link,
-            recognizer: _privacyTap,
-          ),
-          TextSpan(text: AppStrings.get('auth_terms_suffix')),
-        ],
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }

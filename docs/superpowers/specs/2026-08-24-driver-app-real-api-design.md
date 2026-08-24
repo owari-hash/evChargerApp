@@ -26,8 +26,11 @@ live driver API at `/app-api/...`. Three things do not:
 In: replacing the charging mock with real remote start/stop and real telemetry;
 a station detail screen; completing the two auth flows.
 
-Out: deep links (manual token entry instead — see Decisions); any change to
-`evChargerKiosk` or `evChargerBack`; the wallet, which is already correct.
+Also in: one line in `evChargerKiosk` exposing `remoteStartEnabled` on the
+station detail response (see Decisions).
+
+Out: deep links (manual token entry instead — see Decisions); any other change
+to `evChargerKiosk`; any change to `evChargerBack`.
 
 ## Decisions
 
@@ -37,6 +40,8 @@ Out: deep links (manual token entry instead — see Decisions); any change to
 | OCPP JSON logger sheet | Delete | It exists only to display frames the mock invents. The driver API exposes no OCPP frames, so there is nothing real to put in it. |
 | Charge-limit slider, plug lock | Delete both | Neither has a driver-API endpoint; `SetChargingProfile` and `UnlockConnector` are operator-only on the CSMS. A control that visibly does nothing to the car is worse than no control. |
 | Email/reset links | Manual token entry | No new dependency, no `eplug.mn` platform config, no device-only test path. Deep links are a clean follow-up once the endpoints are proven. |
+| Remote-start availability | Expose the flag | `/app-api/stations/:id` gains `remoteStartEnabled` in `evChargerKiosk` — one line, reading the `serverEnv.enableRemoteStart()` the page already calls. A button that always 403s is worse than an absent one. |
+| Remaining range | Dropped | The mock's `batteryLevel * 1.58` was invented and there is no real figure for the reference vehicle. The dashboard shows state of charge and energy, both measured. A number nobody can source does not belong on a charging screen. |
 
 ## Architecture
 
@@ -74,17 +79,18 @@ traffic. `AuthService.currentUser` drives start/stop of the poll loop.
 `lastSocPercent` → battery. Chargers that do not report SoC send no
 `lastSocPercent`; the UI must render "—", never a guess.
 
-**Derived range.** `remainingKm = socPercent * kmPerSocPoint`, with
-`kmPerSocPoint` a named constant in one place, documented as a nominal figure
-for the reference vehicle rather than a reading from the car. Shown only when
-`lastSocPercent` is present.
+**No derived range.** The mock showed remaining kilometres from an invented
+constant. Nothing in the API knows the car's battery capacity or efficiency, so
+the figure cannot be honest; the dashboard shows state of charge and delivered
+energy instead, and says nothing about range.
 
 **Start gating.** `POST /app-api/stations/:id/start` fails in three server-side
 ways the app must surface verbatim rather than translate:
-- `403` when `ENABLE_REMOTE_START` is off in that deployment. **The driver API
-  does not expose this flag to clients** — the kiosk reads it server-side. The
-  app therefore cannot pre-disable the button; it attempts the start and shows
-  the returned message.
+- `403` when `ENABLE_REMOTE_START` is off in that deployment. The station
+  detail response now carries `remoteStartEnabled`, so the app explains that
+  charging begins at the station instead of offering a button that cannot work.
+  The 403 is still handled: an older kiosk omits the field, and the flag can
+  change between the read and the start.
 - `400` with `fields.idTag` when the account has no linked RFID tag. The app
   *can* pre-empt this: `AuthUser.idTags` is already on the session.
 - Rate limit, 10/hour per user.
@@ -101,6 +107,8 @@ final List<StationConnector> connectors;  // empty from the list endpoint
 final StationAvailability availability;   // available | busy | offline | unknown
 final String? description, vendor, model, lastSeenAt;
 final List<String> tags;
+/// Null from an older kiosk that does not send it; treated as "try and see".
+final bool? remoteStartEnabled;
 ```
 
 New `StationConnector` in the same file: `connectorId`, `status`
@@ -122,8 +130,9 @@ New `lib/screens/station_detail_screen.dart`:
   id, plug type, kW, a status badge, and — only when the status is `Charging`,
   `SuspendedEV`, `SuspendedEVSE` or `Finishing` — live power and an SoC bar. A
   `Faulted` connector shows its `errorCode` unless that is `NoError`.
-- Start card, reproducing the kiosk's gates in order: signed out → sign in; no
-  linked `idTag` → link one in Account; no connector with
+- Start card, reproducing the kiosk's gates in order: remote start disabled →
+  say so; signed out → sign in; no linked `idTag` → link one in Account; no
+  connector with
   `status == Available && availability == Operative` → all busy; otherwise a
   picker over the free connectors and a start button.
 - A `demo: true` response is labelled as sample data, matching the kiosk.
@@ -233,8 +242,9 @@ assert `/stations/:id` answers for the first station the list returns.
 ## Risks
 
 - **Remote start may be off in production.** If `ENABLE_REMOTE_START` is false
-  on the deployed kiosk, the start button will always return 403. The feature is
-  still correct; verify the flag before judging it broken.
+  on the deployed kiosk the app now says so rather than offering a dead button,
+  but no driver can start a charge from the app until the flag is on. Verify it
+  before judging the feature broken.
 - **Sessions need a linked `idTag`.** An account with no tag has no history and
   cannot remote-start. This is existing API behaviour, now visible rather than
   hidden behind a mock that always "worked".
@@ -248,3 +258,13 @@ assert `/stations/:id` answers for the first station the list returns.
 3. `ChargingController` + tests; dashboard, map and stations screens repointed.
 4. Delete the mock, the logger sheet, the charge-limit selector, the dead tests.
 5. Auth: `verifyEmail`, `resetPassword`, the reset screen, the verify field.
+6. `evChargerKiosk`: add `remoteStartEnabled` to the station detail response.
+
+## Already done
+
+Money formatting landed ahead of this plan, on 2026-08-24: every ₮ figure now
+carries two decimals (`15,800.00₮`) and the top-up field formats as the driver
+types. The decimals are presentation only — both servers validate an amount with
+`z.number().int()`, so `amountOf` reads a field back as whole tugriks. The map's
+station card became a `Wrap`, because the power badge and the longer price no
+longer fit one line on a 393pt screen. See `lib/utils/money.dart`.

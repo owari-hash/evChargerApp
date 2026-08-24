@@ -42,7 +42,7 @@ class AppStrings {
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'mn': {
-      'appName': 'Zev Charger',
+      'appName': 'E-Plug',
       'tagline': 'Монголын Анхны Сүлжээ Цэнэглэгч',
       'slideshow1_title': 'Улаанбаатар хотын EV Цэнэглэгч',
       'slideshow1_sub': 'Хамгийн хурдан 200 кВт хүртэлх супер цэнэглэгч',
@@ -373,7 +373,7 @@ class AppStrings {
       'save': 'Хадгалах',
     },
     'en': {
-      'appName': 'Zev Charger',
+      'appName': 'E-Plug',
       'tagline': 'Mongolia\'s Premier EV Charging Network',
       'slideshow1_title': 'Ulaanbaatar Fast Chargers',
       'slideshow1_sub': 'Ultra-fast chargers up to 200 kW in UB',

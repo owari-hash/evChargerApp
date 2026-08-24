@@ -28,7 +28,7 @@ class EvChargerApp extends StatelessWidget {
           valueListenable: LanguageController.language,
           builder: (BuildContext context, AppLanguage _, Widget? _) {
             return MaterialApp(
-              title: 'Zev Charger',
+              title: 'E-Plug',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
@@ -194,9 +194,19 @@ class _MainAppFrameState extends State<MainAppFrame> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'assets/images/ev logo.png',
+                  width: 30,
+                  height: 30,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'ZEV CHARGER',
+                  'E-PLUG',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

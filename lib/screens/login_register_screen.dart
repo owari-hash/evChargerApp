@@ -825,17 +825,13 @@ class _BrandRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
       child: Row(
         children: <Widget>[
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppTheme.sageGreen,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.bolt_rounded,
-              size: 20,
-              color: Colors.white,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/ev logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 10),

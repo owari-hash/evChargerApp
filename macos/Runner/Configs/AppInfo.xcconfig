@@ -11,4 +11,4 @@ PRODUCT_NAME = evchargerapp
 PRODUCT_BUNDLE_IDENTIFIER = mn.zevcharger.app
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 Zev Charger. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Ev Plug. All rights reserved.

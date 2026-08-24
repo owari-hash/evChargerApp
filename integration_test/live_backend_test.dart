@@ -54,7 +54,7 @@ void main() {
     await _settle(tester, 24);
 
     // The real API answered and the app moved on to the dashboard.
-    expect(find.text('ZEV CHARGER'), findsOneWidget);
+    expect(find.text('E-PLUG'), findsOneWidget);
     expect(AuthService.instance.currentUser.value?.email, 'bat@example.com');
 
     // Account tab, then the wallet. The nav shows a label only on the selected

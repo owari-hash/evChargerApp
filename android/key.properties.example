@@ -1,0 +1,7 @@
+# Copy to android/key.properties and fill in with your real values.
+# NEVER commit key.properties or the .jks file — both are gitignored.
+storePassword=<the keystore password you chose>
+keyPassword=<the key password you chose (usually the same)>
+keyAlias=upload
+# Absolute path, or relative to the android/ folder.
+storeFile=C:/Users/user/keys/zevcharger-upload-keystore.jks

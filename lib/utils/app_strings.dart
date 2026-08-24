@@ -367,6 +367,12 @@ class AppStrings {
       'sec_code_label': '6 оронтой код',
       'sec_verify': 'Баталгаажуулах',
       'sec_phone_done': 'Утасны дугаар баталгаажлаа.',
+      'sec_delete_title': 'Акаунт болон мэдээлэл устгах',
+      'sec_delete_body': 'Та акаунтоо устгаснаар өөрийн профайл, холбосон RFID карт болон хувийн мэдээллээ бүрмөсөн устгах болно.',
+      'sec_delete_btn': 'Акаунт устгах',
+      'sec_delete_confirm_title': 'Акаунт устгах уу?',
+      'sec_delete_confirm_body': 'Энэ үйлдэл буцах боломжгүй бөгөөд таны E-Plug акаунт ба холбогдох хувийн мэдээлэл бүрмөсөн устгагдана.',
+      'sec_delete_success': 'Таны акаунт амжилттай устгагдлаа.',
 
       // ---- Shared ----
       'retry': 'Дахин оролдох',
@@ -690,6 +696,12 @@ class AppStrings {
       'sec_code_label': '6-digit code',
       'sec_verify': 'Confirm',
       'sec_phone_done': 'Your number is confirmed.',
+      'sec_delete_title': 'Delete Account & Data',
+      'sec_delete_body': 'Deleting your account will permanently remove your profile, linked RFID tags, and personal data.',
+      'sec_delete_btn': 'Delete Account',
+      'sec_delete_confirm_title': 'Delete account?',
+      'sec_delete_confirm_body': 'This action cannot be undone. Your E-Plug account and all associated personal data will be permanently removed.',
+      'sec_delete_success': 'Your account has been deleted successfully.',
 
       // ---- Shared ----
       'retry': 'Try again',

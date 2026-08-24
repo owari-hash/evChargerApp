@@ -35,6 +35,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   bool _sendingCode = false;
   bool _verifyingCode = false;
   bool _codeSent = false;
+  bool _deletingAccount = false;
   String? _passwordError;
   Map<String, String> _passwordFields = const <String, String>{};
   String? _codeError;
@@ -168,6 +169,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
               _phoneCard(palette, user),
               const SizedBox(height: 12),
               _passwordCard(palette),
+              const SizedBox(height: 12),
+              _deleteAccountCard(palette),
             ],
           );
         },
@@ -341,5 +344,84 @@ class _SecurityScreenState extends State<SecurityScreen> {
         ],
       ),
     );
+  }
+
+  Widget _deleteAccountCard(AppPalette palette) {
+    return SectionCard(
+      title: AppStrings.get('sec_delete_title'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            AppStrings.get('sec_delete_body'),
+            style: TextStyle(
+              color: palette.inkMuted,
+              fontSize: 12.5,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _deletingAccount ? null : _confirmDeleteAccount,
+            icon: _deletingAccount
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(AppStrings.get('sec_delete_btn')),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.errorRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(AppStrings.get('sec_delete_confirm_title')),
+        content: Text(AppStrings.get('sec_delete_confirm_body')),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.get('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.errorRed,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(AppStrings.get('sec_delete_btn')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingAccount = true);
+    try {
+      await _account.deleteAccount();
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      showSnack(context, AppStrings.get('sec_delete_success'));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deletingAccount = false);
+      showSnack(context, AppStrings.get('sec_delete_success'));
+    }
   }
 }

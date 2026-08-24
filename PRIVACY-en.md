@@ -157,11 +157,14 @@ Under the Law of Mongolia on Personal Data Protection you have the right to:
 5. **withdraw consent** — to withdraw consent previously given at any time (this does not affect the lawfulness of processing carried out before withdrawal);
 6. **lodge a complaint** — if you are dissatisfied with our decision, to complain to the National Human Rights Commission of Mongolia or to the competent state inspector.
 
-To exercise your rights, contact us at [privacy@zevtabs.mn]. We will respond **within 30 days** of receiving your request. We may require additional verification in order to confirm your identity.
+To exercise your rights, contact us at [privacy@eplug.mn]. We will respond **within 30 days** of receiving your request. We may require additional verification in order to confirm your identity.
 
 ## 10. Deleting your account and data
 
-To have your account and associated data deleted, send a request to [privacy@zevtabs.mn] with the subject line "Account deletion request", stating the email address or phone number registered to the account.
+You can delete your account and associated personal data at any time:
+1. **In-App:** Open the E-Plug app -> Account -> Security -> Delete Account.
+2. **Online Web Request:** Visit [https://eplug.mn/delete-account](https://eplug.mn/delete-account) to submit an online deletion request.
+3. **Email:** Send a request to [privacy@eplug.mn] with the subject line "Account deletion request", stating the email address or phone number registered to the account.
 
 Once the request is verified, your account and associated data will be deleted within 30 days. Payment records that accounting and tax legislation requires us to keep will be retained until the statutory period expires.
 

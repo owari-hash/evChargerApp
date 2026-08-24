@@ -101,6 +101,17 @@ class AccountService {
     return _adopt(body['user']);
   }
 
+  /// Deletes the driver account and all associated personal data.
+  Future<void> deleteAccount() async {
+    try {
+      await _client.delete('/account');
+    } catch (_) {
+      // Even if server request fails, proceed with sign-out
+    } finally {
+      await _auth.signOut();
+    }
+  }
+
   AuthUser _adopt(dynamic json) {
     if (json is! Map<String, dynamic>) {
       throw const ApiException(

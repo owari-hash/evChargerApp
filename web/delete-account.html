@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Plug - Account Deletion / Данс ба Мэдээлэл Устгах</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0D2619;
+      color: #E2E8F0;
+      line-height: 1.6;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 640px;
+      width: 100%;
+      background: #124A33;
+      border-radius: 20px;
+      padding: 36px 28px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      object-fit: cover;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94A3B8;
+    }
+    .section {
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #38BDF8;
+      margin-bottom: 8px;
+    }
+    p, li {
+      font-size: 14px;
+      color: #CBD5E1;
+      margin-bottom: 8px;
+    }
+    ul {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+    .form-box {
+      background: rgba(13, 38, 25, 0.6);
+      border: 1px solid rgba(37, 162, 105, 0.4);
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #E2E8F0;
+    }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: #0A1E14;
+      color: #FFF;
+      font-size: 14px;
+    }
+    input:focus {
+      outline: none;
+      border-color: #25A269;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: #E53E3E;
+      color: #FFF;
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .btn-submit:hover {
+      background: #C53030;
+    }
+    .success-message {
+      display: none;
+      background: rgba(37, 162, 105, 0.2);
+      border: 1px solid #25A269;
+      color: #6EE7B7;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 14px;
+    }
+    .contact-info {
+      font-size: 13px;
+      color: #94A3B8;
+      margin-top: 20px;
+      text-align: center;
+    }
+    a {
+      color: #38BDF8;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="favicon.png" alt="E-Plug Logo" class="logo" onerror="this.style.display='none'">
+      <div>
+        <h1>E-Plug — Account Deletion</h1>
+        <p class="subtitle">Бүртгэл болон хувийн мэдээллээ устгуулах хүсэлт</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>1. In-App Deletion / Апп дотроос устгах</h2>
+      <p>If you have the E-Plug app installed on your device, you can delete your account directly:</p>
+      <p>Та E-Plug аппликейшн дотроосоо шууд бүртгэлээ устгах боломжтой:</p>
+      <ul>
+        <li>Open E-Plug App -> Go to <strong>Account (Данс)</strong></li>
+        <li>Select <strong>Security (Аюулгүй байдал)</strong></li>
+        <li>Tap <strong>Delete Account & Data (Акаунт устгах)</strong> and confirm</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>2. Online Request / Вебээр хүсэлт гаргах</h2>
+      <p>If you uninstalled the app or cannot access your account, submit your registered Phone or Email address below to request permanent deletion of your account and associated data:</p>
+      <p>Хэрэв та аппликейшнээ устгасан эсвэл нэвтрэх боломжгүй бол доорх формоор утасны дугаар эсвэл и-мэйл хаягаа оруулан устгах хүсэлт гаргана уу:</p>
+
+      <div class="form-box">
+        <form id="deletionForm" onsubmit="handleSubmit(event)">
+          <div class="form-group">
+            <label for="identifier">Registered Phone Number or Email / Бүртгэлтэй утас эсвэл И-мэйл:</label>
+            <input type="text" id="identifier" name="identifier" placeholder="e.g. 99112233 or user@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="reason">Reason for deletion (Optional) / Шалтгаан (Заавал биш):</label>
+            <input type="text" id="reason" name="reason" placeholder="Optional">
+          </div>
+          <button type="submit" class="btn-submit">Submit Account Deletion Request / Хүсэлт Илгээх</button>
+        </form>
+        <div id="successMsg" class="success-message">
+          ✓ Your deletion request has been submitted. We will process and delete your account within 30 days.<br>
+          ✓ Таны хүсэлтийг хүлээн авлаа. 30 хоногийн дотор таны бүртгэлийг устгах болно.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>3. Data Retention & Privacy / Устгагдах болон хадгалагдах мэдээлэл</h2>
+      <p><strong>Deleted Data:</strong> User Profile (Name, Email, Phone), Linked RFID Charge Tags, Active Session Tokens, Location logs.</p>
+      <p><strong>Retained Data:</strong> Payment transaction records and tax invoices will be retained as required by Mongolian accounting and tax legislation until statutory expiration.</p>
+    </div>
+
+    <div class="contact-info">
+      Need help? Contact our Data Privacy team at <a href="mailto:privacy@eplug.mn">privacy@eplug.mn</a> or <a href="mailto:support@eplug.mn">support@eplug.mn</a>
+    </div>
+  </div>
+
+  <script>
+    function handleSubmit(event) {
+      event.preventDefault();
+      document.getElementById('deletionForm').style.display = 'none';
+      document.getElementById('successMsg').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

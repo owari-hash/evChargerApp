@@ -1,5 +1,6 @@
 import 'package:evchargerapp/models/auth_user.dart';
 import 'package:evchargerapp/screens/account_screen.dart';
+import 'package:evchargerapp/screens/security_screen.dart';
 import 'package:evchargerapp/screens/sessions_screen.dart';
 import 'package:evchargerapp/screens/wallet_screen.dart';
 import 'package:evchargerapp/services/account_service.dart';
@@ -113,6 +114,38 @@ void main() {
     expect(find.text('Сүхбаатарын талбай'), findsOneWidget);
     expect(find.text('18.40 кВт·ц'), findsOneWidget);
     expect(find.text(AppStrings.get('sess_completed')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('security screen renders delete account card', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final ApiClient client = fakeApiClient(startSignedIn: true);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: SecurityScreen(
+          authService: _signedIn(client),
+          accountService: AccountService(client: client),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.scrollUntilVisible(
+      find.text(AppStrings.get('sec_delete_title')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(find.text(AppStrings.get('sec_delete_title')), findsOneWidget);
+    expect(find.text(AppStrings.get('sec_delete_btn')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

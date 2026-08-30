@@ -28,7 +28,7 @@ class EvChargerApp extends StatelessWidget {
           valueListenable: LanguageController.language,
           builder: (BuildContext context, AppLanguage _, Widget? _) {
             return MaterialApp(
-              title: 'E-Plug',
+              title: 'Eplug',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
@@ -206,7 +206,7 @@ class _MainAppFrameState extends State<MainAppFrame> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'E-PLUG',
+                  'EPLUG',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

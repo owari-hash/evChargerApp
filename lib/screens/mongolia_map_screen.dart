@@ -528,7 +528,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 tileProvider: NetworkTileProvider(
                   headers: {
-                    'User-Agent': 'ZevChargerApp/1.0 (contact@zevcharger.mn)',
+                    'User-Agent': 'EplugApp/1.0 (contact@eplug.mn)',
                   },
                 ),
               ),

@@ -1,6 +1,6 @@
 # Google Play store listing — Mongolian
 
-App: Zev Charger (`mn.zevcharger.app`)
+App: Eplug (`mn.zevcharger.app`)
 
 ---
 
@@ -27,7 +27,7 @@ EV цэнэглэх станцын зураг, чиглэл, шууд навиг
 ## Full description (~980 of 4000 chars)
 
 ```
-Zev Charger — Улаанбаатар хотын цахилгаан автомашины цэнэглэх станцуудыг олж, тэдгээрт хүрэх хялбар арга.
+Eplug — Улаанбаатар хотын цахилгаан автомашины цэнэглэх станцуудыг олж, тэдгээрт хүрэх хялбар арга.
 
 ▍ ГОЛ БОЛОМЖУУД
 

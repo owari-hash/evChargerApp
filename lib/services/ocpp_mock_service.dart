@@ -12,7 +12,7 @@ class OcppMockService {
 
   // System State Variables
   bool isConnected = true;
-  String chargePointId = 'CP-UB-ZEV-001';
+  String chargePointId = 'CP-UB-EPLUG-001';
   int activeTransactionId = 10042;
   double batteryLevel = 62.0; // %
   double remainingKm = 98.0; // km

@@ -1,4 +1,4 @@
-"""Generate Google Play store assets for Zev Charger.
+"""Generate Google Play store assets for Eplug.
 
 Palette comes from lib/theme/app_theme.dart:
     darkForest   #0D2619   textDark #0A1E14
@@ -35,7 +35,7 @@ FONT_SEMI = r"C:\Windows\Fonts\seguisb.ttf"
 # ---------------------------------------------------------------------------
 # Brand copy -- edit these three lines and re-run.
 # ---------------------------------------------------------------------------
-BRAND   = "E-Plug"
+BRAND   = "Eplug"
 TAGLINE = "EV цэнэглэх станцаа хурдан ол"
 DOMAIN  = "eplug.mn"
 

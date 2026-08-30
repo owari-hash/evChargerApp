@@ -1,11 +1,11 @@
 {
-    "name": "Ev Plug",
-    "short_name": "Ev Plug",
+    "name": "Eplug",
+    "short_name": "Eplug",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0D2619",
     "theme_color": "#25A269",
-    "description": "Ev Plug - Mongolia's Premier EV Charging Network",
+    "description": "Eplug - Mongolia's Premier EV Charging Network",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

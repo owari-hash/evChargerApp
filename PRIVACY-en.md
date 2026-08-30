@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Application:** Zev Charger (`mn.zevcharger.app`)
+**Application:** Eplug (`mn.zevcharger.app`)
 **Data controller:** ZEVTABS LLC
 **Platform:** https://eplug.mn
 **Effective date:** 20 August 2026
@@ -10,9 +10,9 @@
 
 ## 1. Introduction
 
-ZEVTABS LLC ("we", "us", "the Company") develops and operates the Zev Charger mobile application for electric vehicle charging stations, together with the eplug.mn platform.
+ZEVTABS LLC ("we", "us", "the Company") develops and operates the Eplug mobile application for electric vehicle charging stations, together with the eplug.mn platform.
 
-This policy explains what information we collect when you use the Zev Charger app, for what purposes we process it, who we share it with, how we protect it, and what rights you have.
+This policy explains what information we collect when you use the Eplug app, for what purposes we process it, who we share it with, how we protect it, and what rights you have.
 
 By downloading and using the application you accept the terms of this policy. If you do not agree with them, please do not use the application.
 
@@ -23,7 +23,7 @@ By downloading and using the application you accept the terms of this policy. If
 | Legal entity | ZEVTABS LLC |
 | Address | Khan-Uul district, Ulaanbaatar, Mongolia |
 | Website | https://eplug.mn |
-| Privacy contact | [privacy@zevtabs.mn] |
+| Privacy contact | [privacy@eplug.mn] |
 | Phone | [+976 XXXX XXXX] |
 
 ## 3. What information we collect
@@ -162,7 +162,7 @@ To exercise your rights, contact us at [privacy@eplug.mn]. We will respond **wit
 ## 10. Deleting your account and data
 
 You can delete your account and associated personal data at any time:
-1. **In-App:** Open the E-Plug app -> Account -> Security -> Delete Account.
+1. **In-App:** Open the Eplug app -> Account -> Security -> Delete Account.
 2. **Online Web Request:** Visit [https://eplug.mn/delete-account](https://eplug.mn/delete-account) to submit an online deletion request.
 3. **Email:** Send a request to [privacy@eplug.mn] with the subject line "Account deletion request", stating the email address or phone number registered to the account.
 
@@ -188,6 +188,6 @@ Questions, requests and complaints relating to personal data can be addressed to
 
 **ZEVTABS LLC**
 Khan-Uul district, Ulaanbaatar, Mongolia
-Email: [privacy@zevtabs.mn]
+Email: [privacy@eplug.mn]
 Phone: [+976 XXXX XXXX]
 Website: https://eplug.mn

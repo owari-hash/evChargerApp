@@ -42,7 +42,7 @@ class AppStrings {
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'mn': {
-      'appName': 'E-Plug',
+      'appName': 'Eplug',
       'tagline': 'Монголын Анхны Сүлжээ Цэнэглэгч',
       'slideshow1_title': 'Улаанбаатар хотын EV Цэнэглэгч',
       'slideshow1_sub': 'Хамгийн хурдан 200 кВт хүртэлх супер цэнэглэгч',
@@ -371,7 +371,7 @@ class AppStrings {
       'sec_delete_body': 'Та акаунтоо устгаснаар өөрийн профайл, холбосон RFID карт болон хувийн мэдээллээ бүрмөсөн устгах болно.',
       'sec_delete_btn': 'Акаунт устгах',
       'sec_delete_confirm_title': 'Акаунт устгах уу?',
-      'sec_delete_confirm_body': 'Энэ үйлдэл буцах боломжгүй бөгөөд таны E-Plug акаунт ба холбогдох хувийн мэдээлэл бүрмөсөн устгагдана.',
+      'sec_delete_confirm_body': 'Энэ үйлдэл буцах боломжгүй бөгөөд таны Eplug акаунт ба холбогдох хувийн мэдээлэл бүрмөсөн устгагдана.',
       'sec_delete_success': 'Таны акаунт амжилттай устгагдлаа.',
 
       // ---- Shared ----
@@ -379,7 +379,7 @@ class AppStrings {
       'save': 'Хадгалах',
     },
     'en': {
-      'appName': 'E-Plug',
+      'appName': 'Eplug',
       'tagline': 'Mongolia\'s Premier EV Charging Network',
       'slideshow1_title': 'Ulaanbaatar Fast Chargers',
       'slideshow1_sub': 'Ultra-fast chargers up to 200 kW in UB',
@@ -700,7 +700,7 @@ class AppStrings {
       'sec_delete_body': 'Deleting your account will permanently remove your profile, linked RFID tags, and personal data.',
       'sec_delete_btn': 'Delete Account',
       'sec_delete_confirm_title': 'Delete account?',
-      'sec_delete_confirm_body': 'This action cannot be undone. Your E-Plug account and all associated personal data will be permanently removed.',
+      'sec_delete_confirm_body': 'This action cannot be undone. Your Eplug account and all associated personal data will be permanently removed.',
       'sec_delete_success': 'Your account has been deleted successfully.',
 
       // ---- Shared ----

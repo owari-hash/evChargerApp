@@ -206,7 +206,7 @@ class _MainAppFrameState extends State<MainAppFrame> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'EPLUG',
+                  'Eplug',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

@@ -29,7 +29,7 @@ void main() {
       await signInThroughUi(tester);
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('EPLUG'), findsOneWidget);
+      expect(find.text('Eplug'), findsOneWidget);
       expect(find.text('Нүүр'), findsOneWidget);
     },
   );
@@ -59,7 +59,7 @@ void main() {
       find.text('И-мэйл/утасны дугаар эсвэл нууц үг буруу байна'),
       findsOneWidget,
     );
-    expect(find.text('EPLUG'), findsNothing);
+    expect(find.text('Eplug'), findsNothing);
   });
 
   testWidgets('a saved session skips the sign-in screen', (
@@ -76,6 +76,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('EPLUG'), findsOneWidget);
+    expect(find.text('Eplug'), findsOneWidget);
   });
 }

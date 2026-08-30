@@ -28,6 +28,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Eplug needs your location to display nearby charging stations in Ulaanbaatar and provide turn-by-turn navigation.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Eplug needs your location to display nearby charging stations in Ulaanbaatar and provide turn-by-turn navigation.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Eplug needs your location to display nearby charging stations in Ulaanbaatar and provide turn-by-turn navigation.</string>
 	<key>UIApplicationSceneManifest</key>

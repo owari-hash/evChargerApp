@@ -23,9 +23,31 @@ class LoginRegisterScreen extends StatefulWidget {
     super.key,
     required this.onLoginSuccess,
     AuthService? authService,
-  }) : _authService = authService;
+  }) : _authService = authService,
+       sheetReason = null;
+
+  /// Sign-in raised over whatever the driver was already doing, because they
+  /// reached for something that needs an account.
+  ///
+  /// Pops `true` once they are signed in so the caller can carry on with the
+  /// action it interrupted — the driver taps "start charging" once, not twice.
+  const LoginRegisterScreen.sheet({
+    super.key,
+    required String reason,
+    AuthService? authService,
+  }) : _authService = authService,
+       sheetReason = reason,
+       onLoginSuccess = _ignored;
+
+  static void _ignored() {}
 
   final VoidCallback onLoginSuccess;
+
+  /// Why the driver is being asked. Null for the full-screen presentation.
+  final String? sheetReason;
+
+  /// True when this is the modal presentation rather than the full screen.
+  bool get isSheet => sheetReason != null;
 
   /// Injectable so tests can drive the screen without a network.
   final AuthService? _authService;
@@ -250,6 +272,9 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
           SnackBar(content: Text(notice), duration: const Duration(seconds: 5)),
         );
       }
+      if (widget.isSheet && Navigator.canPop(context)) {
+        Navigator.pop(context, true);
+      }
       widget.onLoginSuccess();
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -371,6 +396,8 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     final AppPalette palette = context.palette;
     final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
+    if (widget.isSheet) return _sheetBody(palette);
+
     return Scaffold(
       // The image runs edge to edge behind everything, so there is no second
       // surface for the scaffold colour to show through at the card's corners.
@@ -403,7 +430,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                   children: <Widget>[
                     SizedBox(
                       height: brandRowHeight,
-                      child: _BrandRow(onToggleLanguage: _toggleLanguage),
+                      child: const _BrandRow(),
                     ),
                     // Takes every point the card does not, which is what keeps
                     // the card on the bottom edge. Scrollable so it tolerates
@@ -448,9 +475,56 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     );
   }
 
-  void _toggleLanguage() {
-    LanguageController.toggle();
-    setState(() {});
+  /// The modal presentation: the same form card, without the hero screen
+  /// around it. Capped at 90% of the viewport so the taller sign-up stack
+  /// scrolls inside the card instead of running off the top of the sheet.
+  Widget _sheetBody(AppPalette palette) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+              child: Text(
+                widget.sheetReason!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  shadows: <Shadow>[
+                    Shadow(color: Colors.black54, blurRadius: 12),
+                  ],
+                ),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: _formCard(palette),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Full-bleed slideshow under a scrim heavy enough to keep white text legible
@@ -815,9 +889,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
 /// The wordmark and the language switcher, over the backdrop.
 class _BrandRow extends StatelessWidget {
-  const _BrandRow({required this.onToggleLanguage});
-
-  final VoidCallback onToggleLanguage;
+  const _BrandRow();
 
   @override
   Widget build(BuildContext context) {
@@ -863,40 +935,7 @@ class _BrandRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          _LanguageChip(onPressed: onToggleLanguage),
         ],
-      ),
-    );
-  }
-}
-
-class _LanguageChip extends StatelessWidget {
-  const _LanguageChip({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLanguage current = AppStrings.currentLanguage;
-
-    return Semantics(
-      button: true,
-      label: current.label,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 40,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-          ),
-          child: Text(current.flag, style: const TextStyle(fontSize: 17)),
-        ),
       ),
     );
   }

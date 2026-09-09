@@ -87,7 +87,7 @@ void main() {
     expect(find.byType(IndexedStack), findsOneWidget);
   });
 
-  testWidgets('confirming logout returns to the login screen', (
+  testWidgets('confirming logout drops back to browsing as a guest', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1170, 2532);
@@ -103,7 +103,11 @@ void main() {
     );
     await _pumpFrames(tester);
 
-    expect(find.byType(IndexedStack), findsNothing);
+    // The app is still browsable — there is no sign-in wall to return to.
+    // What changes is that the app bar now offers a way back in.
+    expect(find.byType(IndexedStack), findsOneWidget);
+    expect(find.byTooltip(AppStrings.get('login')), findsOneWidget);
+    expect(find.byTooltip(AppStrings.get('logout')), findsNothing);
   });
 
   testWidgets('dashboard survives a small screen in both themes', (

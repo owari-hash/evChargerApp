@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/main.dart';
+import 'package:evchargerapp/screens/login_register_screen.dart';
 import 'package:evchargerapp/services/ocpp_mock_service.dart';
+import 'package:evchargerapp/utils/app_strings.dart';
 
 import 'support/fake_auth.dart';
 
@@ -10,31 +12,34 @@ void main() {
     OcppMockService.enablePeriodicTimer = false;
   });
 
-  testWidgets(
-    'sign-in screen renders and a valid credential lands on the dashboard',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
+  testWidgets('a guest lands on the map, and signing in keeps them there', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(EvChargerApp(authService: fakeAuthService()));
-      // Two pumps: one for the frame, one for the session check to settle.
-      await tester.pump();
-      await tester.pump();
+    await tester.pumpWidget(EvChargerApp(authService: fakeAuthService()));
+    // Two pumps: one for the frame, one for the session check to settle.
+    await tester.pump();
+    await tester.pump();
 
-      // The sign-in screen, with its wordmark and its single submit button.
-      expect(find.text('Eplug'), findsOneWidget);
-      expect(find.byType(ElevatedButton), findsOneWidget);
+    // No wall: the guest is inside the app with the tab bar under them.
+    expect(find.text('Eplug'), findsOneWidget);
+    expect(find.byType(LoginRegisterScreen).hitTestable(), findsNothing);
 
-      await signInThroughUi(tester);
-      await tester.pump(const Duration(milliseconds: 300));
+    // The map is the landing tab, so its label is the one showing.
+    expect(find.text(AppStrings.get('map')), findsOneWidget);
 
-      expect(find.text('Eplug'), findsOneWidget);
-      expect(find.text('Нүүр'), findsOneWidget);
-    },
-  );
+    await signInThroughUi(tester);
+    await tester.pump(const Duration(milliseconds: 300));
 
-  testWidgets('a rejected credential keeps the driver on the sign-in screen', (
+    // Signing in on the account tab returns the driver to the map.
+    expect(find.text('Eplug'), findsOneWidget);
+    expect(find.text(AppStrings.get('map')), findsOneWidget);
+  });
+
+  testWidgets('a rejected credential keeps the driver on the sign-in form', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1200);
@@ -45,12 +50,25 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.enterText(find.byType(TextField).at(0), kTestIdentifier);
-    await tester.enterText(find.byType(TextField).at(1), 'WrongPass1');
+    // The sign-in form lives on the account tab now.
+    await tester.tap(find.byKey(const ValueKey<String>('nav-tab-4')));
+    await tester.pump();
+    await tester.pump();
+
+    final Finder form = find.byType(LoginRegisterScreen);
+    final Finder fields = find.descendant(
+      of: form,
+      matching: find.byType(TextField),
+    );
+
+    await tester.enterText(fields.at(0), kTestIdentifier);
+    await tester.enterText(fields.at(1), 'WrongPass1');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
 
-    await tester.tap(find.byType(ElevatedButton));
+    await tester.tap(
+      find.descendant(of: form, matching: find.byType(ElevatedButton)),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -59,10 +77,10 @@ void main() {
       find.text('И-мэйл/утасны дугаар эсвэл нууц үг буруу байна'),
       findsOneWidget,
     );
-    expect(find.text('Eplug'), findsNothing);
+    expect(find.text(AppStrings.get('map')), findsNothing);
   });
 
-  testWidgets('a saved session skips the sign-in screen', (
+  testWidgets('a saved session opens straight on the map', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1200);
@@ -77,5 +95,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Eplug'), findsOneWidget);
+    expect(find.text(AppStrings.get('map')), findsOneWidget);
   });
 }

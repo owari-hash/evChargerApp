@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
-import 'screens/login_register_screen.dart';
 import 'screens/mongolia_map_screen.dart';
 import 'screens/quick_controls_screen.dart';
 import 'screens/trips_stations_screen.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_strings.dart';
+import 'widgets/auth_gate.dart';
 
 void main() {
   runApp(const EvChargerApp());
@@ -57,46 +57,54 @@ class _MainAppFrameState extends State<MainAppFrame> {
   /// True until a session saved on a previous launch has been checked, so the
   /// app does not flash the sign-in screen at a driver who is already signed in.
   bool _bootstrapping = true;
-  int _activeTabIndex =
-      0; // 0: Home, 1: Map, 2: Quick Controls, 3: Stations, 4: Account
+  /// 0: Home, 1: Map, 2: Quick Controls, 3: Stations, 4: Account.
+  ///
+  /// The map is where the app opens, for a guest and a signed-in driver alike:
+  /// finding a charger is the reason the app gets opened, and it is the part
+  /// that needs no account.
+  int _activeTabIndex = _mapTab;
+
+  static const int _mapTab = 1;
+  static const int _accountTab = 4;
 
   bool get _isLoggedIn => _auth.isSignedIn;
 
   @override
   void initState() {
     super.initState();
+    _auth.currentUser.addListener(_onAuthChanged);
     _restoreSession();
+  }
+
+  @override
+  void dispose() {
+    _auth.currentUser.removeListener(_onAuthChanged);
+    super.dispose();
   }
 
   Future<void> _restoreSession() async {
     await _auth.restoreSession();
-    await _screenshotSignIn();
     if (mounted) {
       setState(() {
         _bootstrapping = false;
-        if (shotTab >= 0 && shotTab <= 4) _activeTabIndex = shotTab;
+        _activeTabIndex = _mapTab;
       });
     }
   }
 
-  /// TEMPORARY screenshot scaffolding — remove before shipping.
-  ///
-  /// `Platform.environment` is empty on iOS, so these come in as compile-time
-  /// defines instead: `--dart-define=SCREENSHOT_EMAIL=... SCREENSHOT_TAB=2`.
-  static const String _shotEmail = String.fromEnvironment('SCREENSHOT_EMAIL');
-  static const String _shotPassword = String.fromEnvironment(
-    'SCREENSHOT_PASSWORD',
-  );
-  static const int shotTab = int.fromEnvironment('SCREENSHOT_TAB', defaultValue: -1);
-
-  Future<void> _screenshotSignIn() async {
-    if (_auth.isSignedIn) return;
-    if (_shotEmail.isEmpty || _shotPassword.isEmpty) return;
-    try {
-      await _auth.signIn(identifier: _shotEmail, password: _shotPassword);
-    } catch (e) {
-      debugPrint('SCREENSHOT: sign-in failed: $e');
-    }
+  /// Signing in from a gated action swaps the tabs from their guest state to
+  /// the real thing, so the frame rebuilds whenever the session changes.
+  void _onAuthChanged() {
+    if (!mounted) return;
+    setState(() {
+      // Signing in on the account tab lands the driver back on the map rather
+      // than leaving them looking at the profile form they just filled in.
+      // A sign-in raised over a gated action is left alone: that one resumes
+      // whatever the driver was already doing.
+      if (_isLoggedIn && _activeTabIndex == _accountTab) {
+        _activeTabIndex = _mapTab;
+      }
+    });
   }
 
   void _openQrScannerModal(BuildContext context) {
@@ -149,7 +157,7 @@ class _MainAppFrameState extends State<MainAppFrame> {
     if (shouldLogOut != true) return;
 
     await _auth.signOut();
-    if (mounted) setState(() => _activeTabIndex = 0);
+    if (mounted) setState(() => _activeTabIndex = _mapTab);
   }
 
   @override
@@ -158,22 +166,20 @@ class _MainAppFrameState extends State<MainAppFrame> {
 
     if (_bootstrapping) return const _BootSplash();
 
-    if (!_isLoggedIn) {
-      return LoginRegisterScreen(
-        authService: widget.authService,
-        onLoginSuccess: () => setState(() {}),
-      );
-    }
-
+    // No sign-in wall. Every tab is reachable signed out; the ones that show a
+    // driver's own vehicle, money or history say so and offer to sign them in.
+    // App Store guideline 5.1.1(v): an app may not require an account to reach
+    // features that are not account based, and finding a charger is not.
     final List<Widget> pages = [
       HomeDashboardScreen(
+        authService: widget.authService,
         onNavigateToQuickControls: () {
           setState(() => _activeTabIndex = 2);
         },
       ),
       MongoliaMapScreen(onOpenQrScanner: () => _openQrScannerModal(context)),
-      const QuickControlsScreen(),
-      const TripsStationsScreen(),
+      QuickControlsScreen(authService: widget.authService),
+      TripsStationsScreen(),
       AccountScreen(authService: widget.authService),
     ];
 
@@ -232,11 +238,22 @@ class _MainAppFrameState extends State<MainAppFrame> {
                 onPressed: _toggleTheme,
               ),
               const SizedBox(width: 10),
-              _AppBarAction(
-                icon: Icons.logout_rounded,
-                tooltip: AppStrings.get('logout'),
-                onPressed: _confirmLogout,
-              ),
+              // Guests get the way in; drivers get the way out.
+              _isLoggedIn
+                  ? _AppBarAction(
+                      icon: Icons.logout_rounded,
+                      tooltip: AppStrings.get('logout'),
+                      onPressed: _confirmLogout,
+                    )
+                  : _AppBarAction(
+                      icon: Icons.login_rounded,
+                      tooltip: AppStrings.get('login'),
+                      onPressed: () => AuthGate.require(
+                        context,
+                        reason: AppStrings.get('signin_required_account'),
+                        authService: widget.authService,
+                      ),
+                    ),
             ],
           ),
         ),
@@ -312,6 +329,9 @@ class _MainAppFrameState extends State<MainAppFrame> {
     // label is never clipped.
     return Expanded(
       flex: isSelected ? 2 : 1,
+      // Keyed so tests can address a tab without matching an icon that also
+      // appears inside the tab's own content.
+      key: ValueKey<String>('nav-tab-$index'),
       child: GestureDetector(
         onTap: () => setState(() => _activeTabIndex = index),
         behavior: HitTestBehavior.opaque,

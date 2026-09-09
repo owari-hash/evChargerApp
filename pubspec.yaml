@@ -29,3 +29,24 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+  # Geist is what the kiosk website sets as its --font-sans, so the app and the
+  # site read as one product. Instanced from the upstream variable font at the
+  # weights the UI actually uses; Flutter picks the nearest declared weight
+  # rather than interpolating a wght axis. Geist has no tugrik sign (U+20AE),
+  # so ₮ falls back to the platform face — the website does the same.
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Geist-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Geist-Black.ttf
+          weight: 900

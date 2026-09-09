@@ -178,7 +178,10 @@ class AppTheme {
         error: errorRed,
         onError: Colors.white,
       ),
-      fontFamily: 'Roboto',
+      // Matches the kiosk website's --font-sans.
+      fontFamily: 'Geist',
+      // ₮ and any glyph Geist lacks come from the platform face.
+      fontFamilyFallback: const <String>['SF Pro Text', 'Roboto'],
       appBarTheme: AppBarTheme(
         backgroundColor: p.bg,
         foregroundColor: p.ink,

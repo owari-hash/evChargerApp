@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/screens/quick_controls_screen.dart';
 import 'package:evchargerapp/services/ocpp_mock_service.dart';
+import 'package:evchargerapp/services/auth_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
+
+import 'support/fake_auth.dart';
 
 Future<void> _pumpFrames(WidgetTester tester, [int frames = 5]) async {
   for (int i = 0; i < frames; i++) {
@@ -25,10 +28,15 @@ void main() {
       tester.view.resetPadding();
     });
 
+    // The controls are account-based, so the screen needs a signed-in driver
+    // before it shows anything to open the map from.
+    final AuthService auth = fakeAuthService(startSignedIn: true);
+    await auth.restoreSession();
+
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: const QuickControlsScreen(),
+        home: QuickControlsScreen(authService: auth),
       ),
     );
     await _pumpFrames(tester);

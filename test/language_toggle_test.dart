@@ -62,19 +62,19 @@ void main() {
 
     await _login(tester);
 
-    // Menu label starts in Mongolian.
-    expect(find.text('Нүүр'), findsOneWidget);
+    // Menu label starts in Mongolian. The map is the landing tab.
+    expect(find.text('Газрын зураг'), findsOneWidget);
 
     // The switcher shows flags rather than language codes.
     await tester.tap(find.text(AppLanguage.en.flag));
     await _pumpFrames(tester);
 
     // The whole app rebuilt, not just the screen that owns the switch.
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Нүүр'), findsNothing);
+    expect(find.text('Map'), findsOneWidget);
+    expect(find.text('Газрын зураг'), findsNothing);
 
     await tester.tap(find.text(AppLanguage.mn.flag));
     await _pumpFrames(tester);
-    expect(find.text('Нүүр'), findsOneWidget);
+    expect(find.text('Газрын зураг'), findsOneWidget);
   });
 }

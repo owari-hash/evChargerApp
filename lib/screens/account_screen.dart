@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import 'login_register_screen.dart';
 import 'security_screen.dart';
 import 'sessions_screen.dart';
 import 'wallet_screen.dart';
@@ -148,7 +149,15 @@ class _AccountScreenState extends State<AccountScreen> {
     return ValueListenableBuilder<AuthUser?>(
       valueListenable: _auth.currentUser,
       builder: (BuildContext context, AuthUser? user, Widget? _) {
-        if (user == null) return const SizedBox.shrink();
+        // The account tab is where a guest signs in, so it shows the sign-in
+        // screen itself rather than an empty pane. Every other tab stays
+        // reachable behind it — this is a tab, not a wall.
+        if (user == null) {
+          return LoginRegisterScreen(
+            authService: widget.authService,
+            onLoginSuccess: () {},
+          );
+        }
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(18, 4, 18, 120),

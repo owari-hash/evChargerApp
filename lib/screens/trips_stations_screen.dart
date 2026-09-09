@@ -5,6 +5,7 @@ import '../services/stations_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import '../widgets/auth_gate.dart';
 
 class TripsStationsScreen extends StatefulWidget {
   const TripsStationsScreen({super.key});
@@ -85,16 +86,6 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                AppStrings.get('nearby_stations'),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: context.palette.ink,
-                ),
-              ),
-              const SizedBox(height: 12),
-
               // Say so when the list is the built-in fallback, rather than
               // letting stale stations pass for the live network.
               // TEMPORARY: suppressed during App Store capture. Remove.
@@ -201,30 +192,44 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
           const SizedBox(height: 14),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: context.palette.accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${station.kwSpeed.toInt()} кВт Супер',
-                  style: const TextStyle(
-                    color: AppTheme.sageGreen,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.palette.accent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${station.kwSpeed.toInt()} кВт Супер',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.sageGreen,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '${station.availableConnectors}/${station.totalConnectors} Сул байна',
-                style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
+              // Takes the slack and ellipsises rather than pushing the price
+              // off the card: a Spacer cannot shrink, so on a narrow phone the
+              // Mongolian label used to overflow the row.
+              Expanded(
+                child: Text(
+                  '${station.availableConnectors}/${station.totalConnectors} Сул байна',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.palette.inkMuted,
+                  ),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text(
                 '${formatMntLeading(station.pricePerKwh)}/кВт.ц',
                 style: TextStyle(
@@ -263,6 +268,15 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
   }
 
   void _onPayAndStart() async {
+    // Paying for a charge is the account-based half of the app, so this is
+    // where an account is finally asked for. Signing in returns here and the
+    // charge goes ahead — the driver taps once, not twice.
+    final bool signedIn = await AuthGate.require(
+      context,
+      reason: AppStrings.get('signin_required_charge'),
+    );
+    if (!signedIn || !mounted) return;
+
     setState(() => _isProcessing = true);
 
     await _service.startSessionFromQrCode('EV-UB-SHANGRILA', _depositAmountMnt);

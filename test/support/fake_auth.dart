@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:evchargerapp/screens/login_register_screen.dart';
 import 'package:evchargerapp/services/api_client.dart';
 import 'package:evchargerapp/services/auth_service.dart';
 import 'package:evchargerapp/services/session_store.dart';
@@ -165,12 +166,37 @@ MockClient _stubClient() {
 /// Focus is dropped before the tap on purpose: `enterText` leaves a text
 /// selection handle in the overlay, which on a tall phone lands on top of the
 /// pinned submit button and swallows the tap.
+/// Signs a driver in through the UI, from wherever the app currently is.
+///
+/// There is no sign-in wall any more — a guest lands in the tab frame — so
+/// this opens the account tab first when the form is not already on screen.
+/// Every finder is scoped to the sign-in screen because the tab frame keeps
+/// all five tabs alive in an [IndexedStack], and the map and station tabs have
+/// text fields and buttons of their own.
 Future<void> signInThroughUi(WidgetTester tester) async {
-  await tester.enterText(find.byType(TextField).at(0), kTestIdentifier);
-  await tester.enterText(find.byType(TextField).at(1), kTestPassword);
+  final Finder form = find.byType(LoginRegisterScreen);
+
+  // The tab frame keeps every tab built, so the sign-in screen exists in the
+  // widget tree even while another tab is showing. Ask whether it is actually
+  // on screen, not merely whether it was built.
+  if (form.hitTestable().evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey<String>('nav-tab-4')));
+    await tester.pump();
+    await tester.pump();
+  }
+
+  final Finder fields = find.descendant(
+    of: form,
+    matching: find.byType(TextField),
+  );
+
+  await tester.enterText(fields.at(0), kTestIdentifier);
+  await tester.enterText(fields.at(1), kTestPassword);
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pump();
 
-  await tester.tap(find.byType(ElevatedButton));
+  await tester.tap(
+    find.descendant(of: form, matching: find.byType(ElevatedButton)),
+  );
   await tester.pump();
 }

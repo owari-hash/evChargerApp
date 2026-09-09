@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../services/ocpp_mock_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/ocpp_json_logger_sheet.dart';
+import '../widgets/signed_out_panel.dart';
 import 'mongolia_map_screen.dart';
 
 class QuickControlsScreen extends StatefulWidget {
-  const QuickControlsScreen({super.key});
+  const QuickControlsScreen({super.key, this.authService});
+
+  /// Injectable so tests can drive the screen without the real session.
+  final AuthService? authService;
 
   @override
   State<QuickControlsScreen> createState() => _QuickControlsScreenState();
@@ -14,6 +19,8 @@ class QuickControlsScreen extends StatefulWidget {
 
 class _QuickControlsScreenState extends State<QuickControlsScreen> {
   final OcppMockService _service = OcppMockService.instance;
+
+  AuthService get _auth => widget.authService ?? AuthService.instance;
   double _climateTemp = 17.0;
   bool _isPlayingMedia = true;
 
@@ -48,6 +55,21 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Controls act on the driver's own charge, so there is nothing here for a
+    // guest to operate.
+    if (!_auth.isSignedIn) {
+      return Scaffold(
+        backgroundColor: context.palette.bg,
+        body: SignedOutPanel(
+          icon: Icons.tune_rounded,
+          title: AppStrings.get('guest_controls_title'),
+          body: AppStrings.get('guest_controls_body'),
+          reason: AppStrings.get('signin_required_controls'),
+          onSignedIn: () => setState(() {}),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: context.palette.bg,
       appBar: AppBar(

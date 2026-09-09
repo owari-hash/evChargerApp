@@ -89,6 +89,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   final OcppMockService _service = OcppMockService.instance;
   final MapController _mapController = MapController();
 
+  /// Where the map opens before GPS reports in. Same coordinates the kiosk
+  /// website defaults to.
+  static const LatLng _ulaanbaatarCenter = LatLng(47.9184, 106.9177);
+
   StreamSubscription<Position>? _positionStreamSub;
   LatLng _userPosition = const LatLng(
     47.9130,
@@ -518,8 +522,11 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: destinationPos,
-              initialZoom: 14.0,
+              // Matches the website's default view (NEXT_PUBLIC_MAP_CENTER_*
+              // / _ZOOM in evChargerKiosk), so the app and the site open on
+              // the same place instead of wherever a route happened to point.
+              initialCenter: _ulaanbaatarCenter,
+              initialZoom: 12.0,
               minZoom: 5.0,
               maxZoom: 18.0,
             ),
@@ -648,9 +655,13 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                               duration: const Duration(milliseconds: 200),
                               padding: EdgeInsets.all(isSelected ? 8 : 6),
                               decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppTheme.sageGreen
-                                    : context.palette.panel,
+                                // Coloured by whether the driver can actually
+                                // plug in, the way the website's pins are:
+                                // green free, amber full, grey offline. The
+                                // pin used to be green whatever the state,
+                                // which told a driver nothing until they
+                                // tapped it.
+                                color: station.availability.tone,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: Colors.white,
@@ -659,7 +670,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                                 boxShadow: [
                                   BoxShadow(
                                     color: isSelected
-                                        ? AppTheme.sageGreen.withValues(
+                                        ? station.availability.tone.withValues(
                                             alpha: 0.5,
                                           )
                                         : Colors.black26,
@@ -789,43 +800,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
                           contentPadding: const EdgeInsets.symmetric(
                             vertical: 14,
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        AppStrings.currentLanguage =
-                            AppStrings.currentLanguage == AppLanguage.mn
-                            ? AppLanguage.en
-                            : AppLanguage.mn;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(18),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        AppStrings.currentLanguage == AppLanguage.mn
-                            ? 'МН'
-                            : 'EN',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: context.palette.ink,
-                          letterSpacing: 0.5,
                         ),
                       ),
                     ),

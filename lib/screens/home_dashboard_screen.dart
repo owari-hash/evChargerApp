@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/charging_session.dart';
 import '../models/ocpp_models.dart';
 import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import '../services/ocpp_mock_service.dart';
 import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/charge_limit_selector.dart';
+import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_power_ring_gauge.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/swipe_to_slide_button.dart';
@@ -18,7 +20,11 @@ class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({
     super.key,
     required this.onNavigateToQuickControls,
+    this.authService,
   });
+
+  /// Injectable so tests can drive the screen without the real session.
+  final AuthService? authService;
 
   @override
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
@@ -29,6 +35,8 @@ const String _vehicleName = 'BMW X5 xDrive50e';
 
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final OcppMockService _service = OcppMockService.instance;
+
+  AuthService get _auth => widget.authService ?? AuthService.instance;
   final SessionsService _sessions = SessionsService.instance;
 
   /// The transaction id of a real session, when the API reports one running.
@@ -46,6 +54,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   /// Without this the dashboard showed whatever the local mock service held,
   /// which greeted every driver with a charge in progress they had not started.
   Future<void> _syncWithDriverApi() async {
+    if (!_auth.isSignedIn) return;
     try {
       final List<ChargingSession> sessions = await _sessions.list(limit: 20);
       ChargingSession? active;
@@ -129,6 +138,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The dashboard is the driver's own car — battery, lock, charge in
+    // progress. There is nothing to show a guest, so offer the way in instead.
+    if (!_auth.isSignedIn) {
+      return Scaffold(
+        backgroundColor: context.palette.bg,
+        body: SignedOutPanel(
+          icon: Icons.electric_car_rounded,
+          title: AppStrings.get('guest_vehicle_title'),
+          body: AppStrings.get('guest_vehicle_body'),
+          reason: AppStrings.get('signin_required_vehicle'),
+          onSignedIn: _syncWithDriverApi,
+        ),
+      );
+    }
+
     return StreamBuilder<Map<String, dynamic>>(
       stream: _service.telemetryStream,
       builder: (context, snapshot) {

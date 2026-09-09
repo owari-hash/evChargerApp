@@ -1,3 +1,26 @@
+import 'package:flutter/material.dart' show Color;
+
+/// Whether a station can be charged at right now.
+///
+/// The same three states the kiosk website shows, derived the same way, so a
+/// pin that is amber in the browser is amber in the app.
+enum StationAvailability {
+  /// At least one connector is free.
+  available(Color(0xFF10B981)),
+
+  /// Online, but every connector is in use.
+  busy(Color(0xFFF59E0B)),
+
+  /// The charge point is not talking to the CSMS.
+  offline(Color(0xFF94A3B8));
+
+  const StationAvailability(this.tone);
+
+  /// Matches `availabilityTone()` in evChargerKiosk (Tailwind emerald-500,
+  /// amber-500, slate-400).
+  final Color tone;
+}
+
 /// A charge point as the driver sees it on the map and in the stations list.
 ///
 /// This mirrors the `Station` shape that `/app-api/stations` returns, which the
@@ -49,6 +72,15 @@ class ChargingStationLocation {
   /// station still belongs on the map — a driver heading for one deserves to
   /// know it is dark rather than to find out on arrival.
   final bool isOnline;
+
+  /// How this station reads on the map: offline first — a charge point that is
+  /// not connected cannot be charged at whatever its last connector counts
+  /// said — then free connectors, then busy.
+  StationAvailability get availability {
+    if (!isOnline) return StationAvailability.offline;
+    if (availableConnectors > 0) return StationAvailability.available;
+    return StationAvailability.busy;
+  }
 
   /// Bounding box the network operates in: Mongolia plus a wide margin over
   /// its neighbours, so a border site or a slightly-off survey still maps.

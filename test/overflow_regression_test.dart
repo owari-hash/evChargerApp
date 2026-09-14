@@ -143,12 +143,13 @@ void main() {
         );
         await _pumpFrames(tester);
 
-        // Switch to the taller stack: five fields plus the terms line.
+        // Step one of sign-up: the phone number and the terms line.
         await tester.tap(find.text(AppStrings.get('register')));
         await _pumpFrames(tester);
 
         expect(tester.takeException(), isNull);
-        expect(find.byType(TextField), findsNWidgets(5));
+        expect(find.byType(TextField), findsOneWidget);
+        expect(find.byType(Checkbox), findsOneWidget);
 
         // The button stays pinned below the scrolling fields.
         final Finder submit = find.byType(ElevatedButton);

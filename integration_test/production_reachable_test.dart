@@ -7,12 +7,15 @@ import 'package:integration_test/integration_test.dart';
 /// Proves the default build really reaches the live driver API at eplug.mn and
 /// that the login body it sends is one that server accepts.
 ///
-/// Deliberately uses credentials that cannot exist, so nothing is created or
-/// changed on the production system:
+/// Deliberately uses a number that is not registered, so nothing is created,
+/// changed or locked on the production system:
 ///
 /// ```sh
 /// flutter test integration_test/production_reachable_test.dart -d <simulator-id>
 /// ```
+///
+/// Needs the PIN sign-in kiosk deployed: an older server rejects a body without
+/// `email` with a 400.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -28,10 +31,7 @@ void main() {
 
     ApiException? failure;
     try {
-      await auth.signIn(
-        identifier: 'definitely-not-a-real-account@example.invalid',
-        password: 'not-a-real-password',
-      );
+      await auth.signIn(phone: '80000000', pin: '0000');
     } on ApiException catch (error) {
       failure = error;
     }
@@ -39,8 +39,7 @@ void main() {
     expect(failure, isNotNull, reason: 'a bogus account must not sign in');
 
     // 401 is the answer we want: the server understood the body and rejected
-    // the credentials. A 400 would mean it could not parse what the app sent —
-    // which is exactly what happened while the app posted `identifier` alone.
+    // the credentials. A 400 would mean it could not parse what the app sent.
     expect(
       failure!.statusCode,
       401,

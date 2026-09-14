@@ -3,35 +3,31 @@ import 'package:flutter/foundation.dart';
 import '../models/auth_user.dart';
 import 'api_client.dart';
 
-/// What `/auth/register` reports back about the verification email it sent.
-class VerificationNotice {
-  const VerificationNotice({required this.sent, required this.destination});
+/// What the API reports after texting a code.
+class CodeSent {
+  const CodeSent({required this.destination, this.devCode});
 
-  /// False when the account was created but the mail could not be delivered.
-  /// The address can still be confirmed later from the account screen, so this
-  /// is a notice rather than a failure.
-  final bool sent;
-
-  /// Masked address the link went to, e.g. `d••••r@example.com`.
+  /// Masked number the code went to, e.g. `********8844`.
   final String destination;
 
-  factory VerificationNotice.fromJson(Map<String, dynamic> json) {
-    return VerificationNotice(
-      sent: json['sent'] == true,
+  /// Only from a development server with no SMS provider, which echoes the
+  /// code back instead of texting it.
+  final String? devCode;
+
+  factory CodeSent.fromJson(Map<String, dynamic> json) {
+    final String code = (json['devCode'] ?? '').toString();
+    return CodeSent(
       destination: (json['destination'] ?? '').toString(),
+      devCode: code.isEmpty ? null : code,
     );
   }
 }
 
-/// Result of a successful sign-up.
-class RegisterResult {
-  const RegisterResult({required this.user, this.verification});
-
-  final AuthUser user;
-  final VerificationNotice? verification;
-}
-
-/// Driver accounts: sign in, sign up, restore and end a session.
+/// Driver accounts: sign in with a phone number and PIN, sign up, reset a
+/// forgotten PIN, restore and end a session.
+///
+/// Sign-up and a PIN reset are the same three steps — text a code, check it,
+/// set a PIN — and both end with the driver signed in.
 ///
 /// Talks to the `/app-api/auth/*` routes in `evChargerKiosk`.
 class AuthService {
@@ -48,77 +44,91 @@ class AuthService {
 
   bool get isSignedIn => currentUser.value != null;
 
-  /// Signs in with a phone number **or** an email address; the API decides
-  /// which it was given.
-  Future<AuthUser> signIn({
-    required String identifier,
-    required String password,
-  }) async {
-    final String id = identifier.trim();
-    final bool looksLikeEmail = id.contains('@');
-
-    try {
-      final Map<String, dynamic> body = await _client.post(
-        '/auth/login',
-        body: <String, dynamic>{
-          'identifier': id,
-          // Deployments that predate phone login only understand `email` and
-          // reject a body without it. Sending both keys means one build works
-          // against an old server and a new one alike; the new server prefers
-          // `identifier`, the old one ignores the key it does not know.
-          if (looksLikeEmail) 'email': id,
-          'password': password,
-          'remember': true,
-        },
-      );
-      return _adopt(body['user']);
-    } on ApiException catch (error) {
-      // A phone number sent to a server that still requires an address comes
-      // back as a validation failure on `email`, which would otherwise surface
-      // as an unhelpful "check the marked fields".
-      if (!looksLikeEmail &&
-          error.statusCode == 400 &&
-          error.fields.containsKey('email')) {
-        throw const ApiException(
-          statusCode: 400,
-          message:
-              'Энэ сервер утсаар нэвтрэхийг дэмжихгүй байна. И-мэйл хаягаараа нэвтэрнэ үү.',
-          fields: <String, String>{'identifier': 'И-мэйл хаягаа оруулна уу'},
-        );
-      }
-      rethrow;
-    }
+  /// The API normalises the number, so local input like `9911 8844` is fine.
+  Future<AuthUser> signIn({required String phone, required String pin}) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/login',
+      body: <String, dynamic>{'phone': phone.trim(), 'pin': pin},
+    );
+    return _adopt(body['user']);
   }
 
-  /// Creates an account and signs the new driver straight in — the API sets the
-  /// session cookie on the register response, so there is no second round trip.
-  Future<RegisterResult> register({
-    required String name,
-    required String email,
+  /// Sign-up, step 1. Only called once the driver has accepted the terms.
+  Future<CodeSent> sendSignupCode(String phone) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/signup/send-code',
+      body: <String, dynamic>{'phone': phone.trim(), 'acceptTerms': true},
+    );
+    return CodeSent.fromJson(body);
+  }
+
+  /// Sign-up, step 2. Returns the ticket step 3 needs; no account exists yet.
+  Future<String> verifySignupCode({
     required String phone,
-    required String password,
-    required String confirmPassword,
+    required String code,
   }) async {
     final Map<String, dynamic> body = await _client.post(
-      '/auth/register',
+      '/auth/signup/verify',
+      body: <String, dynamic>{'phone': phone.trim(), 'code': code.trim()},
+    );
+    return _ticket(body['signupTicket']);
+  }
+
+  /// Sign-up, step 3: creates the account and signs the driver straight in —
+  /// the API sets the session cookie on this response.
+  Future<AuthUser> completeSignup({
+    required String ticket,
+    required String pin,
+    required String confirmPin,
+  }) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/signup/complete',
       body: <String, dynamic>{
-        'name': name.trim(),
-        'email': email.trim(),
-        'phone': phone.trim(),
-        'password': password,
-        'confirmPassword': confirmPassword,
-        'acceptTerms': true,
+        'signupTicket': ticket,
+        'pin': pin,
+        'confirmPin': confirmPin,
       },
     );
+    return _adopt(body['user']);
+  }
 
-    final AuthUser user = _adopt(body['user']);
-    final dynamic verification = body['verification'];
-    return RegisterResult(
-      user: user,
-      verification: verification is Map<String, dynamic>
-          ? VerificationNotice.fromJson(verification)
-          : null,
+  /// PIN reset, step 1: texts a code to a registered number.
+  Future<CodeSent> sendPinResetCode(String phone) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/pin/forgot',
+      body: <String, dynamic>{'phone': phone.trim()},
     );
+    return CodeSent.fromJson(body);
+  }
+
+  /// PIN reset, step 2. Returns the ticket step 3 needs.
+  Future<String> verifyPinResetCode({
+    required String phone,
+    required String code,
+  }) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/pin/verify',
+      body: <String, dynamic>{'phone': phone.trim(), 'code': code.trim()},
+    );
+    return _ticket(body['resetTicket']);
+  }
+
+  /// PIN reset, step 3: saves the new PIN, signs out every other device and
+  /// signs this one in.
+  Future<AuthUser> resetPin({
+    required String ticket,
+    required String pin,
+    required String confirmPin,
+  }) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/pin/reset',
+      body: <String, dynamic>{
+        'resetTicket': ticket,
+        'pin': pin,
+        'confirmPin': confirmPin,
+      },
+    );
+    return _adopt(body['user']);
   }
 
   /// Re-establishes a session saved on a previous launch.
@@ -153,17 +163,12 @@ class AuthService {
     }
   }
 
-  /// Sends a reset link or SMS code. The API answers the same way whether or
-  /// not an account matched, so this never reveals who is registered.
-  Future<String> requestPasswordReset(String identifier) async {
-    final Map<String, dynamic> body = await _client.post(
-      '/auth/forgot-password',
-      body: <String, dynamic>{
-        'identifier': identifier.trim(),
-        'channel': 'auto',
-      },
+  static String _ticket(dynamic value) {
+    if (value is String && value.isNotEmpty) return value;
+    throw const ApiException(
+      statusCode: 0,
+      message: 'Сервер санамсаргүй хариу буцаалаа.',
     );
-    return (body['message'] ?? '').toString();
   }
 
   AuthUser _adopt(dynamic json) {

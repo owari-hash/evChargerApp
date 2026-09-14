@@ -36,21 +36,23 @@ class AccountService {
     return _adopt(body['user']);
   }
 
-  /// Changes the password. The API signs every *other* device out and re-issues
-  /// this device's cookie, so the driver stays signed in here.
-  Future<void> changePassword({
-    required String currentPassword,
-    required String password,
-    required String confirmPassword,
+  /// Changes the sign-in PIN, or sets the first one when [currentPin] is null
+  /// on an account that has none. The API signs every *other* device out and
+  /// re-issues this device's cookie, so the driver stays signed in here.
+  Future<AuthUser> changePin({
+    String? currentPin,
+    required String pin,
+    required String confirmPin,
   }) async {
-    await _client.post(
-      '/account/password',
+    final Map<String, dynamic> body = await _client.post(
+      '/account/pin',
       body: <String, dynamic>{
-        'currentPassword': currentPassword,
-        'password': password,
-        'confirmPassword': confirmPassword,
+        'currentPin': ?currentPin,
+        'pin': pin,
+        'confirmPin': confirmPin,
       },
     );
+    return _adopt(body['user']);
   }
 
   /// Links an RFID charge tag so its sessions show up here and it draws on this

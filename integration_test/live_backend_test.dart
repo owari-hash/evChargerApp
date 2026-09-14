@@ -20,9 +20,10 @@ import 'package:integration_test/integration_test.dart';
 /// The define is required: without it the app targets production, where this
 /// seeded driver and its balance do not exist.
 ///
-/// The driver below is the one created by the local dev seed.
-const String kIdentifier = '99118844';
-const String kPassword = 'Charge123';
+/// The driver below is the one created by the local dev seed. Seeded accounts
+/// predate PIN sign-in, so give it this PIN once through "forgot PIN".
+const String kPhone = '99118844';
+const String kPin = '1234';
 
 Future<void> _settle(WidgetTester tester, [int frames = 12]) async {
   for (int i = 0; i < frames; i++) {
@@ -43,10 +44,11 @@ void main() {
     await tester.pumpWidget(const EvChargerApp());
     await _settle(tester);
 
+    // The phone number, and the hidden input behind the PIN boxes.
     expect(find.byType(TextField), findsNWidgets(2));
 
-    await tester.enterText(find.byType(TextField).at(0), kIdentifier);
-    await tester.enterText(find.byType(TextField).at(1), kPassword);
+    await tester.enterText(find.byType(TextField).at(0), kPhone);
+    await tester.enterText(find.byType(TextField).at(1), kPin);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
 
@@ -55,7 +57,7 @@ void main() {
 
     // The real API answered and the app moved on to the dashboard.
     expect(find.text('Eplug'), findsOneWidget);
-    expect(AuthService.instance.currentUser.value?.email, 'bat@example.com');
+    expect(AuthService.instance.currentUser.value?.phone, '+97699118844');
 
     // Account tab, then the wallet. The nav shows a label only on the selected
     // item, so the tab is reached by its icon.

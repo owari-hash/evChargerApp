@@ -61,8 +61,8 @@ void main() {
       matching: find.byType(TextField),
     );
 
-    await tester.enterText(fields.at(0), kTestIdentifier);
-    await tester.enterText(fields.at(1), 'WrongPass1');
+    await tester.enterText(fields.at(0), kTestPhone);
+    await tester.enterText(fields.at(1), '0000');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
 
@@ -74,7 +74,7 @@ void main() {
 
     // The API's message is shown, and the dashboard is not reached.
     expect(
-      find.text('И-мэйл/утасны дугаар эсвэл нууц үг буруу байна'),
+      find.text('Утасны дугаар эсвэл PIN код буруу байна'),
       findsOneWidget,
     );
     expect(find.text(AppStrings.get('map')), findsNothing);

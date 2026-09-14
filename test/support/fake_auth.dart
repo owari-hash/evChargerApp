@@ -17,30 +17,42 @@ const Map<String, dynamic> kTestUser = <String, dynamic>{
   'name': 'Бат Болд',
   'emailVerified': true,
   'phoneVerified': true,
+  'hasPin': true,
   'idTags': <String>['TAG-001'],
   'locale': 'mn',
 };
 
 /// Credentials that the stub accepts. Anything else comes back 401.
-const String kTestIdentifier = '99118844';
-const String kTestPassword = 'Charge123';
+const String kTestPhone = '99118844';
+const String kTestPin = '1234';
+
+/// The SMS code the stub "texts" for sign-up and PIN resets.
+const String kTestCode = '123456';
 
 /// An [AuthService] wired to an in-memory driver API, so widget tests can sign
 /// in and out without a server or the platform keychain.
 ///
 /// Pass [startSignedIn] to begin with a stored session, the way a returning
-/// driver launches the app.
-ApiClient fakeApiClient({bool startSignedIn = false}) {
+/// driver launches the app, and [log] to record every request the app sends.
+ApiClient fakeApiClient({
+  bool startSignedIn = false,
+  List<http.Request>? log,
+}) {
   final SessionStore store = InMemorySessionStore();
   if (startSignedIn) store.write('evapp_session=stub');
-  return ApiClient(sessionStore: store, httpClient: _stubClient());
+  return ApiClient(sessionStore: store, httpClient: _stubClient(log));
 }
 
-AuthService fakeAuthService({bool startSignedIn = false}) =>
-    AuthService(client: fakeApiClient(startSignedIn: startSignedIn));
+AuthService fakeAuthService({
+  bool startSignedIn = false,
+  List<http.Request>? log,
+}) => AuthService(
+  client: fakeApiClient(startSignedIn: startSignedIn, log: log),
+);
 
-MockClient _stubClient() {
+MockClient _stubClient(List<http.Request>? log) {
   return MockClient((http.Request request) async {
+    log?.add(request);
     final String path = request.url.path;
     final Map<String, dynamic> body = request.body.isEmpty
         ? <String, dynamic>{}
@@ -55,29 +67,47 @@ MockClient _stubClient() {
       },
     );
 
-    http.Response fail(int status, String message) => http.Response(
-      jsonEncode(<String, String>{'error': message}),
+    http.Response fail(
+      int status,
+      String message, [
+      Map<String, String> fields = const <String, String>{},
+    ]) => http.Response(
+      jsonEncode(<String, dynamic>{'error': message, 'fields': fields}),
       status,
       headers: <String, String>{'content-type': 'application/json'},
     );
 
     if (path.endsWith('/auth/login')) {
       final bool matches =
-          body['identifier'] == kTestIdentifier &&
-          body['password'] == kTestPassword;
+          body['phone'] == kTestPhone && body['pin'] == kTestPin;
       return matches
           ? ok(<String, dynamic>{'user': kTestUser})
-          : fail(401, 'И-мэйл/утасны дугаар эсвэл нууц үг буруу байна');
+          : fail(401, 'Утасны дугаар эсвэл PIN код буруу байна');
     }
 
-    if (path.endsWith('/auth/register')) {
-      return ok(<String, dynamic>{
-        'user': kTestUser,
-        'verification': <String, dynamic>{
-          'sent': true,
-          'destination': 'b••@example.com',
-        },
-      });
+    if (path.endsWith('/auth/signup/send-code') ||
+        path.endsWith('/auth/pin/forgot')) {
+      return ok(<String, dynamic>{'ok': true, 'destination': '********8844'});
+    }
+
+    if (path.endsWith('/auth/signup/verify') ||
+        path.endsWith('/auth/pin/verify')) {
+      if (body['code'] != kTestCode) {
+        return fail(
+          400,
+          'Энэ код буруу эсвэл хугацаа нь дууссан байна. Шинэ код авна уу.',
+          <String, String>{'code': 'Энэ код буруу байна'},
+        );
+      }
+      final String key = path.endsWith('/auth/signup/verify')
+          ? 'signupTicket'
+          : 'resetTicket';
+      return ok(<String, dynamic>{'ok': true, key: 'stub-ticket'});
+    }
+
+    if (path.endsWith('/auth/signup/complete') ||
+        path.endsWith('/auth/pin/reset')) {
+      return ok(<String, dynamic>{'user': kTestUser});
     }
 
     if (path.endsWith('/auth/me')) {
@@ -153,19 +183,14 @@ MockClient _stubClient() {
       });
     }
 
-    if (path.endsWith('/account/password')) {
-      return ok(<String, dynamic>{'ok': true});
+    if (path.endsWith('/account/pin')) {
+      return ok(<String, dynamic>{'ok': true, 'user': kTestUser});
     }
 
     return fail(404, 'Хүсэлт олдсонгүй');
   });
 }
 
-/// Fills in the sign-in form with credentials the stub accepts and submits it.
-///
-/// Focus is dropped before the tap on purpose: `enterText` leaves a text
-/// selection handle in the overlay, which on a tall phone lands on top of the
-/// pinned submit button and swallows the tap.
 /// Signs a driver in through the UI, from wherever the app currently is.
 ///
 /// There is no sign-in wall any more — a guest lands in the tab frame — so
@@ -173,6 +198,10 @@ MockClient _stubClient() {
 /// Every finder is scoped to the sign-in screen because the tab frame keeps
 /// all five tabs alive in an [IndexedStack], and the map and station tabs have
 /// text fields and buttons of their own.
+///
+/// Focus is dropped before the tap on purpose: `enterText` leaves a text
+/// selection handle in the overlay, which on a tall phone lands on top of the
+/// pinned submit button and swallows the tap.
 Future<void> signInThroughUi(WidgetTester tester) async {
   final Finder form = find.byType(LoginRegisterScreen);
 
@@ -190,8 +219,9 @@ Future<void> signInThroughUi(WidgetTester tester) async {
     matching: find.byType(TextField),
   );
 
-  await tester.enterText(fields.at(0), kTestIdentifier);
-  await tester.enterText(fields.at(1), kTestPassword);
+  // The phone number, then the PIN boxes' hidden input.
+  await tester.enterText(fields.at(0), kTestPhone);
+  await tester.enterText(fields.at(1), kTestPin);
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pump();
 

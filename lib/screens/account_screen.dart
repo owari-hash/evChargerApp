@@ -217,7 +217,7 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                user.email,
+                user.email ?? user.phone ?? '',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
@@ -238,7 +238,7 @@ class _AccountScreenState extends State<AccountScreen> {
             palette,
             Icons.alternate_email_rounded,
             AppStrings.get('acct_email_label'),
-            user.email,
+            user.email ?? AppStrings.get('acct_no_email'),
             user.emailVerified,
           ),
           Divider(color: palette.border, height: 22),

@@ -7,9 +7,10 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/pin_code_field.dart';
 
-/// Password, email confirmation and phone verification — the app's counterpart
-/// to `/account/security` in the kiosk.
+/// PIN, email confirmation and phone verification — the app's counterpart to
+/// `/account/security` in the kiosk.
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key, this.authService, this.accountService});
 
@@ -36,8 +37,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
   bool _verifyingCode = false;
   bool _codeSent = false;
   bool _deletingAccount = false;
-  String? _passwordError;
-  Map<String, String> _passwordFields = const <String, String>{};
+  String? _pinError;
+  Map<String, String> _pinFields = const <String, String>{};
   String? _codeError;
 
   @override
@@ -49,33 +50,52 @@ class _SecurityScreenState extends State<SecurityScreen> {
     super.dispose();
   }
 
-  Future<void> _changePassword() async {
+  Future<void> _changePin(AuthUser user) async {
     if (_changing) return;
     FocusScope.of(context).unfocus();
+
+    final Map<String, String> local = <String, String>{};
+    if (user.hasPin && _current.text.length != 4) {
+      local['currentPin'] = AppStrings.get('auth_bad_pin');
+    }
+    if (_next.text.length != 4) {
+      local['pin'] = AppStrings.get('auth_bad_pin');
+    } else if (_confirm.text != _next.text) {
+      local['confirmPin'] = AppStrings.get('auth_pin_mismatch');
+      _confirm.clear();
+    }
+    if (local.isNotEmpty) {
+      setState(() {
+        _pinError = null;
+        _pinFields = local;
+      });
+      return;
+    }
+
     setState(() {
       _changing = true;
-      _passwordError = null;
-      _passwordFields = const <String, String>{};
+      _pinError = null;
+      _pinFields = const <String, String>{};
     });
 
     try {
-      await _account.changePassword(
-        currentPassword: _current.text,
-        password: _next.text,
-        confirmPassword: _confirm.text,
+      await _account.changePin(
+        currentPin: user.hasPin ? _current.text : null,
+        pin: _next.text,
+        confirmPin: _confirm.text,
       );
       if (!mounted) return;
       _current.clear();
       _next.clear();
       _confirm.clear();
       setState(() => _changing = false);
-      showSnack(context, AppStrings.get('sec_changed'));
+      showSnack(context, AppStrings.get('sec_pin_changed'));
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
         _changing = false;
-        _passwordError = error.message;
-        _passwordFields = error.fields;
+        _pinError = error.message;
+        _pinFields = error.fields;
       });
     }
   }
@@ -164,11 +184,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
             children: <Widget>[
-              _emailCard(palette, user),
+              _pinCard(palette, user),
               const SizedBox(height: 12),
               _phoneCard(palette, user),
               const SizedBox(height: 12),
-              _passwordCard(palette),
+              _emailCard(palette, user),
               const SizedBox(height: 12),
               _deleteAccountCard(palette),
             ],
@@ -179,23 +199,31 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Widget _emailCard(AppPalette palette, AuthUser user) {
+    final String? email = user.email;
+
     return SectionCard(
       title: AppStrings.get('sec_email_title'),
-      trailing: VerifiedChip(verified: user.emailVerified),
+      trailing: email == null
+          ? null
+          : VerifiedChip(verified: user.emailVerified),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            AppStrings.get(
-              user.emailVerified ? 'sec_email_confirmed' : 'sec_email_pending',
-            ).replaceFirst('{email}', user.email),
+            email == null
+                ? AppStrings.get('sec_email_none')
+                : AppStrings.get(
+                    user.emailVerified
+                        ? 'sec_email_confirmed'
+                        : 'sec_email_pending',
+                  ).replaceFirst('{email}', email),
             style: TextStyle(
               color: palette.inkMuted,
               fontSize: 12.5,
               height: 1.45,
             ),
           ),
-          if (!user.emailVerified) ...<Widget>[
+          if (email != null && !user.emailVerified) ...<Widget>[
             const SizedBox(height: 14),
             PrimaryAction(
               label: AppStrings.get('sec_resend_email'),
@@ -234,15 +262,15 @@ class _SecurityScreenState extends State<SecurityScreen> {
           if (!user.phoneVerified && hasPhone) ...<Widget>[
             const SizedBox(height: 14),
             if (_codeSent) ...<Widget>[
-              AccountField(
+              PinCodeField(
                 controller: _code,
-                label: AppStrings.get('sec_code_label'),
-                icon: Icons.sms_outlined,
-                keyboardType: TextInputType.number,
+                length: 6,
+                obscure: false,
                 enabled: !_verifyingCode,
+                label: AppStrings.get('sec_code_label'),
                 error: _codeError,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _verifyCode(),
+                autofillHints: const <String>[AutofillHints.oneTimeCode],
+                onCompleted: (_) => _verifyCode(),
               ),
               const SizedBox(height: 12),
               PrimaryAction(
@@ -272,74 +300,53 @@ class _SecurityScreenState extends State<SecurityScreen> {
     );
   }
 
-  Widget _passwordCard(AppPalette palette) {
+  Widget _pinCard(AppPalette palette, AuthUser user) {
     return SectionCard(
-      title: AppStrings.get('sec_password_title'),
+      title: AppStrings.get('sec_pin_title'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AccountField(
-            controller: _current,
-            label: AppStrings.get('sec_current'),
-            icon: Icons.lock_outline_rounded,
-            obscure: true,
-            enabled: !_changing,
-            error: _passwordFields['currentPassword'],
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 12),
-          AccountField(
-            controller: _next,
-            label: AppStrings.get('sec_new'),
-            icon: Icons.lock_reset_rounded,
-            obscure: true,
-            enabled: !_changing,
-            error: _passwordFields['password'],
-            helper: AppStrings.get('auth_password_hint'),
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 12),
-          AccountField(
-            controller: _confirm,
-            label: AppStrings.get('sec_confirm'),
-            icon: Icons.lock_reset_rounded,
-            obscure: true,
-            enabled: !_changing,
-            error: _passwordFields['confirmPassword'],
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _changePassword(),
-          ),
-          if (_passwordError != null) ...<Widget>[
-            const SizedBox(height: 12),
-            FormErrorBanner(message: _passwordError!),
-          ],
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              Icon(
-                Icons.info_outline_rounded,
-                size: 14,
-                color: palette.inkMuted,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  AppStrings.get('sec_changed'),
-                  style: TextStyle(
-                    color: palette.inkMuted,
-                    fontSize: 11,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            AppStrings.get(user.hasPin ? 'sec_pin_hint' : 'sec_pin_none'),
+            style: TextStyle(
+              color: palette.inkMuted,
+              fontSize: 12.5,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 14),
+          if (user.hasPin) ...<Widget>[
+            PinCodeField(
+              controller: _current,
+              enabled: !_changing,
+              label: AppStrings.get('sec_pin_current'),
+              error: _pinFields['currentPin'],
+            ),
+            const SizedBox(height: 12),
+          ],
+          PinCodeField(
+            controller: _next,
+            enabled: !_changing,
+            label: AppStrings.get('sec_pin_new'),
+            error: _pinFields['pin'],
+          ),
+          const SizedBox(height: 12),
+          PinCodeField(
+            controller: _confirm,
+            enabled: !_changing,
+            label: AppStrings.get('sec_pin_confirm'),
+            error: _pinFields['confirmPin'],
+          ),
+          if (_pinError != null) ...<Widget>[
+            const SizedBox(height: 12),
+            FormErrorBanner(message: _pinError!),
+          ],
+          const SizedBox(height: 14),
           PrimaryAction(
-            label: AppStrings.get('sec_change'),
+            label: AppStrings.get(user.hasPin ? 'sec_pin_change' : 'sec_pin_set'),
             busy: _changing,
             icon: Icons.shield_rounded,
-            onPressed: _changePassword,
+            onPressed: () => _changePin(user),
           ),
         ],
       ),

@@ -28,6 +28,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Eplug uses Face ID to sign you in without typing your PIN.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Eplug needs your location to display nearby charging stations in Ulaanbaatar and provide turn-by-turn navigation.</string>
 	<key>NSLocationAlwaysUsageDescription</key>

@@ -140,6 +140,9 @@ class ThemeController {
 
 class AppTheme {
   // Brand Colors inspired by reference image
+  /// ₮ and any glyph Geist lacks come from the platform face.
+  static const List<String> _fallback = <String>['SF Pro Text', 'Roboto'];
+
   static const Color darkForest = Color(0xFF0D2619);
   static const Color forestAccent = Color(0xFF1B4D3E);
   static const Color sageGreen = Color(0xFF25A269);
@@ -181,7 +184,7 @@ class AppTheme {
       // Matches the kiosk website's --font-sans.
       fontFamily: 'Geist',
       // ₮ and any glyph Geist lacks come from the platform face.
-      fontFamilyFallback: const <String>['SF Pro Text', 'Roboto'],
+      fontFamilyFallback: _fallback,
       appBarTheme: AppBarTheme(
         backgroundColor: p.bg,
         foregroundColor: p.ink,
@@ -189,6 +192,8 @@ class AppTheme {
         centerTitle: false,
         iconTheme: IconThemeData(color: p.ink),
         titleTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontFamilyFallback: _fallback,
           color: p.ink,
           fontSize: 20,
           fontWeight: FontWeight.bold,
@@ -207,11 +212,15 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         titleTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontFamilyFallback: _fallback,
           color: p.ink,
           fontSize: 18,
           fontWeight: FontWeight.w900,
         ),
         contentTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontFamilyFallback: _fallback,
           color: p.inkMuted,
           fontSize: 14,
           height: 1.45,
@@ -238,7 +247,14 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          // A component text style replaces the inherited one outright, so it
+          // has to name Geist itself or buttons fall back to the system font.
+          textStyle: const TextStyle(
+            fontFamily: 'Geist',
+            fontFamilyFallback: _fallback,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(

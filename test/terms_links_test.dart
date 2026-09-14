@@ -1,3 +1,4 @@
+import 'package:evchargerapp/content/legal_content.dart';
 import 'package:evchargerapp/screens/login_register_screen.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 import 'package:flutter/gestures.dart';
@@ -94,6 +95,76 @@ void main() {
       expect(sentence.trim(), isNotEmpty);
     });
   }
+
+  Future<void> settle(WidgetTester tester) async {
+    for (int i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
+  void tapLink(WidgetTester tester, String label) {
+    final TextSpan link = _termsSpans(
+      tester,
+    ).firstWhere((TextSpan s) => s.text == label);
+    (link.recognizer! as TapGestureRecognizer).onTap!();
+  }
+
+  testWidgets('the terms open in a sheet inside the app, and accepting there '
+      'ticks the box', (WidgetTester tester) async {
+    await openRegister(tester);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+
+    tapLink(tester, AppStrings.get('auth_terms_terms'));
+    await settle(tester);
+
+    final LegalDocument terms = LegalContent.terms(AppLanguage.mn);
+    expect(find.text(terms.intro), findsOneWidget);
+    expect(find.text('1. ${terms.sections.first.heading}'), findsOneWidget);
+
+    await tester.tap(find.text(AppStrings.get('legal_accept')));
+    await settle(tester);
+
+    expect(find.text(terms.intro), findsNothing);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+  });
+
+  testWidgets('the privacy link opens the sheet on the privacy notice', (
+    WidgetTester tester,
+  ) async {
+    await openRegister(tester);
+
+    tapLink(tester, AppStrings.get('auth_terms_privacy'));
+    await settle(tester);
+
+    final LegalDocument privacy = LegalContent.privacy(AppLanguage.mn);
+    expect(find.text(privacy.storedTitle), findsOneWidget);
+  });
+
+  testWidgets('the consent line stays on one line beside the checkbox', (
+    WidgetTester tester,
+  ) async {
+    for (final Size size in <Size>[const Size(320, 568), const Size(390, 844)]) {
+      tester.view.physicalSize = size * 2;
+      tester.view.devicePixelRatio = 2.0;
+      await tester.pumpWidget(
+        MaterialApp(home: LoginRegisterScreen(onLoginSuccess: _noop)),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text(AppStrings.get('register')));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final Rect box = tester.getRect(find.byType(Checkbox));
+      final Finder line = find.byWidgetPredicate(
+        (Widget w) =>
+            w is RichText &&
+            w.text.toPlainText().contains(AppStrings.get('auth_terms_privacy')),
+      );
+      final Rect text = tester.getRect(line);
+      expect(text.height, lessThanOrEqualTo(box.height + 0.5));
+      expect(tester.takeException(), isNull);
+    }
+    addTearDown(tester.view.resetPhysicalSize);
+  });
 
   testWidgets('the consent line disposes its recognizers with the screen', (
     WidgetTester tester,

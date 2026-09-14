@@ -41,6 +41,10 @@ class ApiException implements Exception {
 /// the jar. Nothing here is browser-specific though: the cookie is captured off
 /// the login response, persisted, and replayed on later requests.
 class ApiClient {
+  /// Word for word the kiosk website's network error, so both say the same.
+  static const String _networkError =
+      'Сервертэй холбогдож чадсангүй. Холболтоо шалгаад дахин оролдоно уу.';
+
   ApiClient({http.Client? httpClient, SessionStore? sessionStore})
     : _http = httpClient ?? http.Client(),
       _sessions = sessionStore ?? SecureSessionStore();
@@ -109,20 +113,11 @@ class ApiClient {
         await _http.send(request).timeout(_timeout),
       );
     } on TimeoutException {
-      throw const ApiException(
-        statusCode: 0,
-        message: 'Сервер удаан хариулж байна. Дахин оролдоно уу.',
-      );
+      throw const ApiException(statusCode: 0, message: _networkError);
     } on SocketException {
-      throw const ApiException(
-        statusCode: 0,
-        message: 'Интернэт холболтоо шалгаад дахин оролдоно уу.',
-      );
+      throw const ApiException(statusCode: 0, message: _networkError);
     } on http.ClientException {
-      throw const ApiException(
-        statusCode: 0,
-        message: 'Интернэт холболтоо шалгаад дахин оролдоно уу.',
-      );
+      throw const ApiException(statusCode: 0, message: _networkError);
     }
 
     await _captureSessionCookie(response);

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -8,25 +7,30 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_info.dart';
 import '../utils/app_strings.dart';
+import '../widgets/biometric_prompt.dart';
+import '../widgets/legal_sheet.dart';
 import '../widgets/pin_code_field.dart';
 
 /// Sign in, sign up, and reset a forgotten PIN.
 ///
-/// Signing in is a phone number and a 4-digit PIN. Signing up and resetting a
-/// PIN are the same three steps — the phone number, the SMS code, a new PIN
-/// typed twice — so they share one flow. Everything lives in one screen because
-/// the modes share the hero and the footer; only the field stack between them
-/// changes. The submit button is deliberately pinned outside the scrolling area
-/// so it stays reachable on a 320pt phone with the keyboard up.
+/// Laid out like the kiosk website's sign-in page on a phone: one card holding
+/// the sign-in / sign-up switch, the page title, the step, and the button, so
+/// the app and the website read as the same product. Signing in is a phone
+/// number and a 4-digit PIN, or Face ID / a fingerprint once turned on. Signing
+/// up and resetting a PIN are the same three steps — the phone number, the SMS
+/// code, a new PIN typed twice — so they share one flow.
 class LoginRegisterScreen extends StatefulWidget {
   const LoginRegisterScreen({
     super.key,
     required this.onLoginSuccess,
     AuthService? authService,
+    BiometricService? biometricService,
   }) : _authService = authService,
+       _biometricService = biometricService,
        sheetReason = null;
 
   /// Sign-in raised over whatever the driver was already doing, because they
@@ -38,7 +42,9 @@ class LoginRegisterScreen extends StatefulWidget {
     super.key,
     required String reason,
     AuthService? authService,
+    BiometricService? biometricService,
   }) : _authService = authService,
+       _biometricService = biometricService,
        sheetReason = reason,
        onLoginSuccess = _ignored;
 
@@ -52,8 +58,9 @@ class LoginRegisterScreen extends StatefulWidget {
   /// True when this is the modal presentation rather than the full screen.
   bool get isSheet => sheetReason != null;
 
-  /// Injectable so tests can drive the screen without a network.
+  /// Injectable so tests can drive the screen without a network or a device.
   final AuthService? _authService;
+  final BiometricService? _biometricService;
 
   @override
   State<LoginRegisterScreen> createState() => _LoginRegisterScreenState();
@@ -66,9 +73,13 @@ enum _Step { phone, code, pin }
 
 class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   AuthService get _auth => widget._authService ?? AuthService.instance;
+  BiometricService get _bio =>
+      widget._biometricService ?? BiometricService.instance;
 
   /// How long "resend code" stays disabled after a code goes out.
   static const int _resendSeconds = 60;
+
+  static final Uri _helpUrl = Uri.parse('https://eplug.mn/help');
 
   _Mode _mode = _Mode.login;
   _Step _step = _Step.phone;
@@ -91,6 +102,9 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   int _resendIn = 0;
   Timer? _resendTimer;
 
+  /// Set when Face ID / fingerprint sign-in is on for this device.
+  BiometricKind? _biometricKind;
+
   final TextEditingController _phone = TextEditingController();
   final TextEditingController _pin = TextEditingController();
   final TextEditingController _code = TextEditingController();
@@ -106,58 +120,30 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     _confirmPin,
   ];
 
-  late PageController _slideshowController;
-  int _activeSlide = 0;
-  Timer? _slideshowTimer;
-
-  final List<Map<String, String>> _slides = <Map<String, String>>[
-    <String, String>{
-      'titleKey': 'slideshow1_title',
-      'subKey': 'slideshow1_sub',
-      'image': 'assets/images/banner.jpg',
-    },
-    <String, String>{
-      'titleKey': 'slideshow2_title',
-      'subKey': 'slideshow2_sub',
-      'image': 'assets/images/bmw_x5.jpg',
-    },
-  ];
-
   bool get _isLoginMode => _mode == _Mode.login;
 
   @override
   void initState() {
     super.initState();
-    _slideshowController = PageController();
-    _startSlideshowTimer();
-    // The charge rail reads the fields on every keystroke.
     for (final TextEditingController field in _allFields) {
       field.addListener(_onFieldChanged);
     }
+    _loadBiometrics();
   }
 
   void _onFieldChanged() {
     if (mounted) setState(() {});
   }
 
-  void _startSlideshowTimer() {
-    _slideshowTimer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
-      if (_slideshowController.hasClients) {
-        final int nextPage = (_activeSlide + 1) % _slides.length;
-        _slideshowController.animateToPage(
-          nextPage,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
+  Future<void> _loadBiometrics() async {
+    final BiometricKind? kind = await _bio.availableKind();
+    final bool enabled = kind != null && await _bio.isEnabled();
+    if (mounted) setState(() => _biometricKind = enabled ? kind : null);
   }
 
   @override
   void dispose() {
-    _slideshowTimer?.cancel();
     _resendTimer?.cancel();
-    _slideshowController.dispose();
     _confirmFocus.dispose();
     for (final TextEditingController field in _allFields) {
       field
@@ -178,13 +164,13 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
   static bool _isPin(String value) => RegExp(r'^\d{4}$').hasMatch(value);
 
-  /// How far through sign-up or a reset the driver is, 0..1 — what the charge
-  /// rail shows.
-  double get _completion => switch (_step) {
-    _Step.phone => _looksLikePhone(_phone.text) ? 1 / 3 : 0,
-    _Step.code => (1 + _code.text.length / 6) / 3,
-    _Step.pin => (2 + (_newPin.text.length + _confirmPin.text.length) / 8) / 3,
-  };
+  /// The API masks the number as `********8844`; it reads better as `•••• 8844`.
+  static String _prettyDestination(String masked) {
+    final String digits = masked.replaceAll(RegExp(r'\D'), '');
+    return digits.length >= 4
+        ? '•••• ${digits.substring(digits.length - 4)}'
+        : masked;
+  }
 
   void _showLocalErrors(Map<String, String> errors) {
     setState(() {
@@ -233,8 +219,8 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   }
 
   /// Runs one request with the button busy. On failure the API's own words are
-  /// shown and false comes back.
-  Future<bool> _run(Future<void> Function() request) async {
+  /// shown and the error comes back; null means it went through.
+  Future<ApiException?> _run(Future<void> Function() request) async {
     setState(() {
       _pending = true;
       _formError = null;
@@ -243,7 +229,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     try {
       await request();
       if (mounted) setState(() => _pending = false);
-      return true;
+      return null;
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
@@ -252,7 +238,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
           _fieldErrors = error.fields;
         });
       }
-      return false;
+      return error;
     }
   }
 
@@ -276,23 +262,53 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     };
     if (local.isNotEmpty) return _showLocalErrors(local);
 
-    final bool ok = await _run(
-      () => _auth.signIn(phone: _phone.text, pin: _pin.text),
+    final String phone = _phone.text;
+    final String pin = _pin.text;
+    final ApiException? error = await _run(
+      () => _auth.signIn(phone: phone, pin: pin),
     );
     if (!mounted) return;
-    if (ok) return _finished();
+    if (error == null) return _signedIn(phone: phone, pin: pin);
     _pin.clear();
+  }
+
+  Future<void> _signInWithBiometrics() async {
+    if (_pending) return;
+    FocusScope.of(context).unfocus();
+
+    final SavedCredentials? saved = await _bio.unlock(
+      reason: AppStrings.get('bio_reason'),
+    );
+    if (saved == null || !mounted) return;
+
+    _phone.text = saved.phone;
+    final ApiException? error = await _run(
+      () => _auth.signIn(phone: saved.phone, pin: saved.pin),
+    );
+    if (!mounted) return;
+    if (error == null) return _finished();
+
+    // The remembered PIN no longer works — it was changed or reset somewhere
+    // else — so forget it rather than fail the same way next time.
+    if (error.statusCode == 401) {
+      await _bio.disable();
+      if (!mounted) return;
+      setState(() {
+        _biometricKind = null;
+        _formError = AppStrings.get('bio_stale');
+      });
+    }
   }
 
   /// Texts a code for the current mode, and starts the resend countdown.
   Future<bool> _requestCode() async {
     CodeSent? sent;
-    final bool ok = await _run(() async {
+    final ApiException? error = await _run(() async {
       sent = _mode == _Mode.signup
           ? await _auth.sendSignupCode(_phone.text)
           : await _auth.sendPinResetCode(_phone.text);
     });
-    if (!mounted || !ok || sent == null) return false;
+    if (!mounted || error != null || sent == null) return false;
 
     _code.clear();
     setState(() {
@@ -330,7 +346,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     }
 
     String? ticket;
-    final bool ok = await _run(() async {
+    final ApiException? error = await _run(() async {
       ticket = _mode == _Mode.signup
           ? await _auth.verifySignupCode(phone: _phone.text, code: _code.text)
           : await _auth.verifyPinResetCode(
@@ -339,7 +355,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
             );
     });
     if (!mounted) return;
-    if (!ok) {
+    if (error != null) {
       _code.clear();
       return;
     }
@@ -384,22 +400,16 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
       });
     }
 
+    final String phone = _phone.text;
+    final String pin = _newPin.text;
     final String ticket = _ticket ?? '';
-    final bool ok = await _run(
+    final ApiException? error = await _run(
       () => _mode == _Mode.signup
-          ? _auth.completeSignup(
-              ticket: ticket,
-              pin: _newPin.text,
-              confirmPin: _confirmPin.text,
-            )
-          : _auth.resetPin(
-              ticket: ticket,
-              pin: _newPin.text,
-              confirmPin: _confirmPin.text,
-            ),
+          ? _auth.completeSignup(ticket: ticket, pin: pin, confirmPin: pin)
+          : _auth.resetPin(ticket: ticket, pin: pin, confirmPin: pin),
     );
     if (!mounted) return;
-    if (ok) return _finished();
+    if (error == null) return _signedIn(phone: phone, pin: pin);
 
     // The verified-phone ticket ran out: only starting over can fix that.
     if (_fieldErrors.containsKey('ticket')) {
@@ -409,6 +419,14 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     }
   }
 
+  /// A PIN has just worked: offer Face ID / fingerprint for next time, then
+  /// carry on to wherever the driver was going.
+  Future<void> _signedIn({required String phone, required String pin}) async {
+    final NavigatorState navigator = Navigator.of(context, rootNavigator: true);
+    await offerBiometricSignIn(navigator, _bio, phone: phone, pin: pin);
+    if (mounted) _finished();
+  }
+
   void _finished() {
     if (widget.isSheet && Navigator.canPop(context)) {
       Navigator.pop(context, true);
@@ -416,363 +434,257 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     widget.onLoginSuccess();
   }
 
+  Future<void> _openHelp() async {
+    try {
+      await launchUrl(_helpUrl, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      /* Nothing more useful to do than stay on the form. */
+    }
+  }
+
   // --------------------------------------------------------------------- build
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     if (widget.isSheet) return _sheetBody(palette);
 
     return Scaffold(
-      // The image runs edge to edge behind everything, so there is no second
-      // surface for the scaffold colour to show through at the card's corners.
-      backgroundColor: Colors.black,
+      backgroundColor: palette.bg,
       resizeToAvoidBottomInset: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          _backdrop(palette),
-          SafeArea(
-            bottom: false,
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final double bottomInset = MediaQuery.of(
-                  context,
-                ).padding.bottom;
-                const double brandRowHeight = 56;
-                final double outerPadding = 14 + bottomInset;
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool compact = constraints.maxHeight < 640;
+            // The smallest iPhones get tighter spacing, so the button is on
+            // screen without scrolling.
+            final bool tight = constraints.maxHeight < 600;
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                tight
+                    ? 8
+                    : compact
+                    ? 12
+                    : 20,
+                16,
+                28,
+              ),
+              child: Column(
+                children: <Widget>[
+                  _Entrance(child: _card(palette, compact, tight: tight)),
+                  const SizedBox(height: 14),
+                  _below(palette),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
-                // Cap the card at exactly what is left once the brand row and
-                // the card's own margins are accounted for. The column can then
-                // never be over-committed, whatever the card wants to be: it
-                // sits at its natural height when short, and scrolls inside
-                // itself when a step is taller than the phone.
-                final double cardCap =
-                    (constraints.maxHeight - brandRowHeight - outerPadding)
-                        .clamp(0.0, constraints.maxHeight);
+  /// The modal presentation: the same card in a sheet, headed by why it was
+  /// raised.
+  Widget _sheetBody(AppPalette palette) {
+    final MediaQueryData media = MediaQuery.of(context);
 
-                return Column(
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.92),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: ColoredBox(
+            color: palette.bg,
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    SizedBox(
-                      height: brandRowHeight,
-                      child: const _BrandRow(),
-                    ),
-                    // Takes every point the card does not, which is what keeps
-                    // the card on the bottom edge. Scrollable so it tolerates
-                    // being squeezed to nothing without the copy overflowing,
-                    // and reversed so the headline stays against the card.
-                    Expanded(
-                      child: keyboardOpen
-                          ? const SizedBox.shrink()
-                          : LayoutBuilder(
-                              builder:
-                                  (
-                                    BuildContext context,
-                                    BoxConstraints heroBox,
-                                  ) {
-                                    // A taller card leaves little room. Rather
-                                    // than clip the headline in half, stand
-                                    // down entirely.
-                                    if (heroBox.maxHeight < _fullCopyHeight) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return Align(
-                                      alignment: Alignment.bottomLeft,
-                                      child: _heroCopy(),
-                                    );
-                                  },
-                            ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(14, 0, 14, outerPadding),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: cardCap),
-                        child: _formCard(palette),
+                    Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: palette.inkMuted.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(3),
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The modal presentation: the same form card, without the hero screen
-  /// around it. Capped at 90% of the viewport so a taller step scrolls inside
-  /// the card instead of running off the top of the sheet.
-  Widget _sheetBody(AppPalette palette) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 44,
-              height: 5,
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
-              child: Text(
-                widget.sheetReason!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                  shadows: <Shadow>[
-                    Shadow(color: Colors.black54, blurRadius: 12),
+                    const SizedBox(height: 14),
+                    Text(
+                      widget.sheetReason!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: palette.inkMuted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _card(palette, true),
                   ],
                 ),
               ),
             ),
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: _formCard(palette),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  /// Full-bleed slideshow under a scrim heavy enough to keep white text legible
-  /// wherever the photograph happens to be bright.
-  Widget _backdrop(AppPalette palette) {
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        // Blurred: the photographs are atmosphere, not subject matter, and a
-        // sharp image behind text competes with it. Clamped so the blur does
-        // not pull transparent edges into the frame.
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(
-            sigmaX: 18,
-            sigmaY: 18,
-            tileMode: TileMode.clamp,
-          ),
-          child: PageView.builder(
-            controller: _slideshowController,
-            onPageChanged: (int index) => setState(() => _activeSlide = index),
-            itemCount: _slides.length,
-            itemBuilder: (BuildContext context, int index) {
-              return Image.asset(
-                _slides[index]['image']!,
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (BuildContext context, Object error, StackTrace? stack) {
-                      return Container(
-                        color: palette.panel,
-                        child: Center(
-                          child: Icon(
-                            Icons.bolt_rounded,
-                            size: 96,
-                            color: palette.accent,
-                          ),
-                        ),
-                      );
-                    },
-              );
-            },
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: <Color>[
-                Colors.black.withValues(alpha: 0.66),
-                Colors.black.withValues(alpha: 0.20),
-                Colors.black.withValues(alpha: 0.70),
-              ],
-              stops: const <double>[0.0, 0.42, 1.0],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  /// The card: switch, title, step, error, fields and button — in the website's
+  /// order.
+  Widget _card(AppPalette palette, bool compact, {bool tight = false}) {
+    final double sectionGap = tight
+        ? 14
+        : compact
+        ? 22
+        : 28;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final bool signup = _mode == _Mode.signup;
 
-  /// Room the headline block needs before it is worth drawing at all.
-  static const double _fullCopyHeight = 140;
+    final String title = AppStrings.get(switch (_mode) {
+      _Mode.login => 'auth_login_headline',
+      _Mode.signup => 'auth_register_headline',
+      _Mode.reset => 'auth_reset_headline',
+    });
+    final String subtitle = AppStrings.get(switch (_mode) {
+      _Mode.login => 'auth_login_sub',
+      _Mode.signup => 'auth_register_sub',
+      _Mode.reset => 'auth_reset_sub',
+    });
+    final String stepTitle = AppStrings.get(switch (_step) {
+      _Step.phone => 'auth_phone_step',
+      _Step.code => 'auth_code_headline',
+      _Step.pin => signup ? 'auth_pin_headline' : 'auth_reset_pin_headline',
+    });
 
-  /// Height of two lines of the headline, and of the line beneath it. Both are
-  /// reserved whether or not this slide fills them, so moving between slides
-  /// does not shift everything below.
-  static const double _titleHeight = 60;
-  static const double _subtitleHeight = 36;
-
-  /// The slide's headline, sitting on the image rather than in a panel.
-  Widget _heroCopy() {
-    final Map<String, String> slide = _slides[_activeSlide];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            height: _titleHeight,
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Text(
-                AppStrings.get(slide['titleKey']!),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  height: 1.14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: _subtitleHeight,
-            child: Text(
-              AppStrings.get(slide['subKey']!),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.76),
-                fontSize: 13,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The form, floating clear of every edge so it reads as a card on the photo
-  /// instead of a panel welded to the bottom of the screen.
-  Widget _formCard(AppPalette palette) {
     return Container(
       width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 448),
+      padding: EdgeInsets.all(
+        tight
+            ? 16
+            : compact
+            ? 20
+            : 24,
+      ),
       decoration: BoxDecoration(
-        color: palette.bg,
-        borderRadius: BorderRadius.circular(26),
+        color: palette.card,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: palette.border),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.38),
+            color: Colors.black.withValues(alpha: dark ? 0.35 : 0.06),
             blurRadius: 30,
-            offset: const Offset(0, 12),
+            offset: const Offset(0, 14),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _ModeSwitch(
-            // A PIN reset belongs to signing in.
-            isLoginMode: _mode != _Mode.signup,
-            enabled: !_pending,
-            onChanged: (bool toLogin) =>
-                _setMode(toLogin ? _Mode.login : _Mode.signup),
-          ),
-          // Sign-up and a reset are three steps, so they show how far along
-          // the driver is. Sign-in is two fields — a meter there is noise.
-          if (!_isLoginMode) ...<Widget>[
-            const SizedBox(height: 14),
-            _ChargeRail(completion: _completion),
+          // A PIN reset has no switch, like the website's reset page.
+          if (_mode != _Mode.reset) ...<Widget>[
+            _SegmentedCapsule(
+              isLoginMode: _isLoginMode,
+              enabled: !_pending,
+              onChanged: (bool toLogin) =>
+                  _setMode(toLogin ? _Mode.login : _Mode.signup),
+            ),
+            SizedBox(height: sectionGap),
           ],
-          const SizedBox(height: 16),
-          Flexible(
-            child: SingleChildScrollView(
-              physics: _isLoginMode
-                  ? const NeverScrollableScrollPhysics()
-                  : const ClampingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: _isLoginMode
-                    ? _loginFields(palette)
-                    : _flowFields(palette),
-              ),
+          _Headline(title: title, subtitle: subtitle, compact: compact, tight: tight),
+          SizedBox(height: sectionGap),
+          if (!_isLoginMode) ...<Widget>[
+            _StepHeader(title: stepTitle, step: _step.index + 1),
+            SizedBox(height: tight ? 12 : 20),
+          ],
+          ..._errorBlock(),
+          _StepTransition(
+            child: Column(
+              key: ValueKey<String>('${_mode.name}-${_step.name}'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _isLoginMode
+                  ? _loginFields(palette)
+                  : _flowFields(palette),
             ),
           ),
-          if (_formError != null) ...<Widget>[
-            const SizedBox(height: 12),
-            _ErrorBanner(message: _formError!),
+          SizedBox(height: tight ? 14 : 20),
+          _actions(palette),
+          if (_mode == _Mode.reset) ...<Widget>[
+            const SizedBox(height: 10),
+            Center(
+              child: _textLink(
+                AppStrings.get('auth_back_to_login'),
+                _pending ? null : () => _setMode(_Mode.login),
+              ),
+            ),
           ],
-          const SizedBox(height: 14),
-          _buildSubmitButton(palette),
-          const SizedBox(height: 10),
-          const _FooterNote(),
         ],
       ),
     );
   }
 
-  Widget _phoneField() {
-    return _AuthField(
-      controller: _phone,
-      label: AppStrings.get('auth_phone'),
-      icon: Icons.phone_iphone_rounded,
-      keyboardType: TextInputType.phone,
-      textInputAction: _isLoginMode
-          ? TextInputAction.next
-          : TextInputAction.done,
-      enabled: !_pending,
-      error: _fieldErrors['phone'],
-      inputFormatters: <TextInputFormatter>[
-        FilteringTextInputFormatter.allow(RegExp(r'[\d\s+()\-]')),
+  /// Under the card, as on the website: the help link, then the version.
+  Widget _below(AppPalette palette) {
+    return Column(
+      children: <Widget>[
+        TextButton(
+          onPressed: _openHelp,
+          style: TextButton.styleFrom(foregroundColor: palette.inkMuted),
+          child: Text(
+            AppStrings.get('auth_help_center'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ),
+        const _FooterNote(),
       ],
-      onSubmitted: _isLoginMode ? null : (_) => _submit(),
-      autofillHints: const <String>[AutofillHints.telephoneNumber],
     );
+  }
+
+  /// The API's or the form's error, where the website shows its alert.
+  List<Widget> _errorBlock() {
+    if (_formError == null) return const <Widget>[];
+    return <Widget>[
+      _ErrorBanner(message: _formError!),
+      const SizedBox(height: 18),
+    ];
   }
 
   Widget _textLink(String label, VoidCallback? onPressed) {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: context.palette.inkMuted,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        minimumSize: const Size(0, 32),
+        foregroundColor: context.palette.accent,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        minimumSize: const Size(0, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
   }
 
   List<Widget> _loginFields(AppPalette palette) {
     return <Widget>[
-      _Headline(
-        title: AppStrings.get('auth_login_headline'),
-        subtitle: AppStrings.get('auth_login_sub'),
+      _PhoneField(
+        controller: _phone,
+        label: AppStrings.get('auth_phone'),
+        enabled: !_pending,
+        error: _fieldErrors['phone'],
+        textInputAction: TextInputAction.next,
       ),
-      const SizedBox(height: 14),
-      _phoneField(),
-      const SizedBox(height: 10),
+      const SizedBox(height: 18),
       PinCodeField(
         controller: _pin,
         label: AppStrings.get('auth_pin'),
@@ -780,6 +692,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         error: _fieldErrors['pin'],
         autofillHints: const <String>[AutofillHints.password],
       ),
+      const SizedBox(height: 4),
       Align(
         alignment: Alignment.centerRight,
         child: _textLink(
@@ -792,21 +705,25 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
   List<Widget> _flowFields(AppPalette palette) {
     final bool signup = _mode == _Mode.signup;
+    final TextStyle body = TextStyle(
+      color: palette.inkMuted,
+      fontSize: 14,
+      height: 1.45,
+    );
 
     return switch (_step) {
       _Step.phone => <Widget>[
-        _Headline(
-          title: AppStrings.get(
-            signup ? 'auth_register_headline' : 'auth_reset_headline',
-          ),
-          subtitle: AppStrings.get(
-            signup ? 'auth_register_sub' : 'auth_reset_sub',
-          ),
+        _PhoneField(
+          controller: _phone,
+          label: AppStrings.get('auth_phone'),
+          hint: AppStrings.get('auth_phone_hint'),
+          enabled: !_pending,
+          error: _fieldErrors['phone'],
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
         ),
-        const SizedBox(height: 14),
-        _phoneField(),
         if (signup) ...<Widget>[
-          const SizedBox(height: 12),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 600 ? 10 : 16),
           _TermsNotice(
             palette: palette,
             accepted: _acceptedTerms,
@@ -818,25 +735,19 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 ..remove('acceptTerms');
             }),
           ),
-        ] else
-          Align(
-            alignment: Alignment.centerRight,
-            child: _textLink(
-              AppStrings.get('auth_back_to_login'),
-              _pending ? null : () => _setMode(_Mode.login),
-            ),
-          ),
+        ],
       ],
       _Step.code => <Widget>[
-        _Headline(
-          title: AppStrings.get('auth_code_headline'),
-          subtitle: AppStrings.get(
+        Text(
+          AppStrings.get(
             'auth_code_sub',
-          ).replaceFirst('{dest}', _destination),
+          ).replaceFirst('{dest}', _prettyDestination(_destination)),
+          style: body,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         PinCodeField(
           controller: _code,
+          label: AppStrings.get('auth_code'),
           length: 6,
           obscure: false,
           autofocus: true,
@@ -848,13 +759,14 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         ),
         if (_devCode != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
             child: Text(
               AppStrings.get('auth_dev_code').replaceFirst('{code}', _devCode!),
-              style: TextStyle(color: palette.inkMuted, fontSize: 12),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: palette.inkMuted, fontSize: 13),
             ),
           ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Wrap(
           alignment: WrapAlignment.spaceBetween,
           children: <Widget>[
@@ -874,15 +786,11 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         ),
       ],
       _Step.pin => <Widget>[
-        _Headline(
-          title: AppStrings.get(
-            signup ? 'auth_pin_headline' : 'auth_reset_pin_headline',
-          ),
-          subtitle: AppStrings.get(
-            signup ? 'auth_pin_sub' : 'auth_reset_pin_sub',
-          ),
+        Text(
+          AppStrings.get(signup ? 'auth_pin_sub' : 'auth_reset_pin_sub'),
+          style: body,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         PinCodeField(
           controller: _newPin,
           label: AppStrings.get('auth_new_pin'),
@@ -892,7 +800,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
           autofillHints: const <String>[AutofillHints.newPassword],
           onCompleted: (_) => _confirmFocus.requestFocus(),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
         PinCodeField(
           controller: _confirmPin,
           focusNode: _confirmFocus,
@@ -924,113 +832,180 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     };
   }
 
-  Widget _buildSubmitButton(AppPalette palette) {
-    return SizedBox(
-      height: 52,
-      child: ElevatedButton(
-        onPressed: _pending ? null : _submit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: palette.panel,
-          foregroundColor: palette.onPanel,
-          disabledBackgroundColor: palette.panel.withValues(alpha: 0.55),
-          disabledForegroundColor: palette.onPanel.withValues(alpha: 0.75),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Flexible(
-              child: Text(
-                _submitLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.1,
+  Widget _actions(AppPalette palette) {
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    // The website's brand button: bright green, with dark text in dark mode.
+    final Color fill = palette.accent;
+    final Color label = dark ? const Color(0xFF04201A) : Colors.white;
+
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _Pressable(
+            enabled: !_pending,
+            child: SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _pending ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: fill,
+                  foregroundColor: label,
+                  disabledBackgroundColor: fill.withValues(alpha: 0.55),
+                  disabledForegroundColor: label.withValues(alpha: 0.85),
+                  elevation: 0,
+                  shape: const StadiumBorder(),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    if (_pending) ...<Widget>[
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: label,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Flexible(
+                      child: Text(
+                        _submitLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            if (_pending)
-              SizedBox(
-                width: 17,
-                height: 17,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: palette.onPanel.withValues(alpha: 0.9),
-                ),
-              )
-            else
-              const Icon(Icons.arrow_forward_rounded, size: 18),
-          ],
+          ),
         ),
-      ),
+        if (_isLoginMode && _biometricKind != null) ...<Widget>[
+          const SizedBox(width: 12),
+          _Pressable(
+            enabled: !_pending,
+            child: _BiometricButton(
+              kind: _biometricKind!,
+              onPressed: _pending ? null : _signInWithBiometrics,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
 
 // ---------------------------------------------------------------------- pieces
 
-/// The wordmark and the language switcher, over the backdrop.
-class _BrandRow extends StatelessWidget {
-  const _BrandRow();
+/// The one orchestrated entrance: the card rises into place as the screen
+/// opens. Nothing else animates on its own.
+class _Entrance extends StatelessWidget {
+  const _Entrance({required this.child});
+
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-      child: Row(
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              'assets/images/ev logo.png',
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
+    final bool reduceMotion = MediaQuery.of(context).disableAnimations;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      builder: (BuildContext context, double t, Widget? child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 14),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Moving between steps: the old step fades away as the new one slides in
+/// from the side, so the driver sees they moved forward.
+class _StepTransition extends StatelessWidget {
+  const _StepTransition({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool reduceMotion = MediaQuery.of(context).disableAnimations;
+    return AnimatedSwitcher(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 240),
+      reverseDuration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 140),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (Widget child, Animation<double> animation) =>
+          FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.06, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  AppStrings.get('appName'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                Text(
-                  AppStrings.get('tagline'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      layoutBuilder: (Widget? current, List<Widget> previous) => Stack(
+        alignment: Alignment.topCenter,
+        children: <Widget>[...previous, ?current],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Presses in slightly under a finger, like a native button.
+class _Pressable extends StatefulWidget {
+  const _Pressable({required this.child, this.enabled = true});
+
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _down = false;
+
+  void _set(bool down) {
+    if (_down != down && mounted) setState(() => _down = down);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: widget.enabled ? (_) => _set(true) : null,
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: AnimatedScale(
+        scale: _down ? 0.98 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }
 }
 
-/// Segmented sign-in / sign-up switch with a sliding thumb.
-class _ModeSwitch extends StatelessWidget {
-  const _ModeSwitch({
+/// The sign-in / sign-up switch: a tinted track with a raised thumb that slides
+/// to the chosen side, as on the website.
+class _SegmentedCapsule extends StatelessWidget {
+  const _SegmentedCapsule({
     required this.isLoginMode,
     required this.onChanged,
     this.enabled = true,
@@ -1043,19 +1018,19 @@ class _ModeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      height: 44,
+      height: 46,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: palette.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.border),
+        color: palette.ink.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(23),
       ),
       child: Stack(
         children: <Widget>[
           AnimatedAlign(
-            duration: const Duration(milliseconds: 240),
+            duration: const Duration(milliseconds: 280),
             curve: Curves.easeOutCubic,
             alignment: isLoginMode
                 ? Alignment.centerLeft
@@ -1065,8 +1040,16 @@ class _ModeSwitch extends StatelessWidget {
               heightFactor: 1,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: palette.panel,
-                  borderRadius: BorderRadius.circular(10),
+                  color: dark ? palette.bg : Colors.white,
+                  borderRadius: BorderRadius.circular(19),
+                  border: Border.all(color: palette.border),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: dark ? 0.3 : 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1098,17 +1081,19 @@ class _ModeSwitch extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: active,
-        child: InkWell(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: enabled ? () => onChanged(loginSegment) : null,
-          borderRadius: BorderRadius.circular(10),
           child: Center(
             child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: active ? palette.onPanel : palette.inkMuted,
+              // From the text theme, so it keeps Geist: a bare TextStyle here
+              // would replace the inherited one and fall back to the system
+              // font.
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                color: active ? palette.ink : palette.inkMuted,
                 fontSize: 14,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                letterSpacing: 0.1,
+                fontWeight: FontWeight.w600,
               ),
               child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
@@ -1119,91 +1104,96 @@ class _ModeSwitch extends StatelessWidget {
   }
 }
 
-/// How much of the form is done, drawn as the state-of-charge readout this app
-/// uses everywhere else. The bolt rides the fill.
-class _ChargeRail extends StatelessWidget {
-  const _ChargeRail({required this.completion});
+/// The step's own title with "Step 2 of 3" beside it and three bars under
+/// both — the website's step header.
+class _StepHeader extends StatelessWidget {
+  const _StepHeader({required this.title, required this.step});
 
-  final double completion;
+  final String title;
+
+  /// 1-based.
+  final int step;
+
+  static const int _steps = 3;
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final int percent = (completion * 100).round();
-    final bool full = completion >= 1.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
             Expanded(
-              child: Text(
-                AppStrings.get('auth_charge_label'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.inkMuted,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                layoutBuilder: (Widget? current, List<Widget> previous) =>
+                    Stack(
+                      alignment: Alignment.centerLeft,
+                      children: <Widget>[...previous, ?current],
+                    ),
+                child: Text(
+                  title,
+                  key: ValueKey<String>(title),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Text(
-              '$percent%',
+              AppStrings.get('auth_step_of').replaceFirst('{step}', '$step'),
               style: TextStyle(
-                color: full ? palette.accent : palette.inkMuted,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
+                color: palette.inkMuted,
+                fontSize: 13.5,
                 fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 7),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double width = constraints.maxWidth;
-            return SizedBox(
-              height: 4,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: palette.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: const SizedBox(width: double.infinity, height: 4),
+        const SizedBox(height: 10),
+        Row(
+          children: <Widget>[
+            for (int i = 1; i <= _steps; i++) ...<Widget>[
+              if (i > 1) const SizedBox(width: 6),
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i <= step ? palette.accent : palette.border,
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeOutCubic,
-                    width: width * completion.clamp(0.0, 1.0),
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: palette.accent,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          },
+            ],
+          ],
         ),
       ],
     );
   }
 }
 
+/// The page title and the line under it, as at the top of the website's card.
 class _Headline extends StatelessWidget {
-  const _Headline({required this.title, required this.subtitle});
+  const _Headline({
+    required this.title,
+    required this.subtitle,
+    this.compact = false,
+    this.tight = false,
+  });
 
   final String title;
   final String subtitle;
+  final bool compact;
+  final bool tight;
 
   @override
   Widget build(BuildContext context) {
@@ -1216,18 +1206,22 @@ class _Headline extends StatelessWidget {
           title,
           style: TextStyle(
             color: palette.ink,
-            fontSize: 22,
+            fontSize: tight
+                ? 24
+                : compact
+                ? 26
+                : 28,
             height: 1.15,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             letterSpacing: -0.6,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: tight ? 6 : 8),
         Text(
           subtitle,
           style: TextStyle(
             color: palette.inkMuted,
-            fontSize: 12.5,
+            fontSize: tight ? 14 : 15,
             height: 1.4,
           ),
         ),
@@ -1236,97 +1230,147 @@ class _Headline extends StatelessWidget {
   }
 }
 
-/// One text input, styled once so every field on the screen matches.
-class _AuthField extends StatelessWidget {
-  const _AuthField({
+/// The phone number with the country code fixed in front, bordered like the
+/// website's field.
+class _PhoneField extends StatefulWidget {
+  const _PhoneField({
     required this.controller,
     required this.label,
-    required this.icon,
+    this.hint,
     this.enabled = true,
     this.error,
-    this.keyboardType,
     this.textInputAction,
-    this.inputFormatters,
     this.onSubmitted,
-    this.autofillHints,
   });
 
   final TextEditingController controller;
   final String label;
-  final IconData icon;
+
+  /// One line under the field, while there is no error to show instead.
+  final String? hint;
   final bool enabled;
   final String? error;
-  final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
-  final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onSubmitted;
-  final Iterable<String>? autofillHints;
+
+  @override
+  State<_PhoneField> createState() => _PhoneFieldState();
+}
+
+class _PhoneFieldState extends State<_PhoneField> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final bool hasError = error != null && error!.isNotEmpty;
+    final bool hasError = widget.error != null && widget.error!.isNotEmpty;
+    const InputBorder none = InputBorder.none;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        TextField(
-          controller: controller,
-          enabled: enabled,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          inputFormatters: inputFormatters,
-          onSubmitted: onSubmitted,
-          autofillHints: autofillHints,
-          style: TextStyle(
-            color: palette.ink,
-            fontSize: 14.5,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: label,
-            hintStyle: TextStyle(
-              color: palette.inkMuted.withValues(alpha: 0.8),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: palette.ink,
               fontSize: 14,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.w500,
             ),
-            prefixIcon: Icon(
-              icon,
-              size: 19,
-              color: hasError ? AppTheme.errorRed : palette.inkMuted,
-            ),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 44,
-              minHeight: 44,
-            ),
-            filled: true,
-            fillColor: palette.card,
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 15,
-            ),
-            enabledBorder: _border(
-              hasError ? AppTheme.errorRed : palette.border,
-              hasError ? 1.4 : 1,
-            ),
-            focusedBorder: _border(
-              hasError ? AppTheme.errorRed : palette.accent,
-              1.6,
-            ),
-            disabledBorder: _border(palette.border.withValues(alpha: 0.6), 1),
-            border: _border(palette.border, 1),
           ),
         ),
-        if (hasError)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 56,
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasError
+                  ? AppTheme.errorRed
+                  : _focus.hasFocus
+                  ? palette.accent
+                  : palette.border,
+              width: hasError || _focus.hasFocus ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              const SizedBox(width: 16),
+              Text(
+                '+976',
+                style: TextStyle(
+                  color: palette.ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(width: 1, height: 24, color: palette.border),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: _focus,
+                  enabled: widget.enabled,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: widget.textInputAction,
+                  onSubmitted: widget.onSubmitted,
+                  autofillHints: const <String>[AutofillHints.telephoneNumber],
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d\s+]')),
+                    LengthLimitingTextInputFormatter(16),
+                  ],
+                  cursorColor: palette.accent,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 16,
+                    letterSpacing: 0.4,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    filled: false,
+                    border: none,
+                    enabledBorder: none,
+                    focusedBorder: none,
+                    disabledBorder: none,
+                    errorBorder: none,
+                    hintText: '9911 2233',
+                    hintStyle: TextStyle(
+                      color: palette.inkMuted.withValues(alpha: 0.6),
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+        if (hasError || widget.hint != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 5, 4, 0),
+            padding: const EdgeInsets.only(top: 8),
             child: Text(
-              error!,
-              style: const TextStyle(
-                color: AppTheme.errorRed,
-                fontSize: 11,
+              hasError ? widget.error! : widget.hint!,
+              style: TextStyle(
+                color: hasError ? AppTheme.errorRed : palette.inkMuted,
+                fontSize: 13,
                 height: 1.35,
               ),
             ),
@@ -1334,14 +1378,50 @@ class _AuthField extends StatelessWidget {
       ],
     );
   }
-
-  OutlineInputBorder _border(Color color, double width) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
-    borderSide: BorderSide(color: color, width: width),
-  );
 }
 
-/// What went wrong, in the API's own words.
+/// A round button beside the primary one: Face ID on iPhone, the fingerprint
+/// on Android.
+class _BiometricButton extends StatelessWidget {
+  const _BiometricButton({required this.kind, required this.onPressed});
+
+  final BiometricKind kind;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+
+    return Semantics(
+      button: true,
+      label: biometricSignInLabel(kind),
+      child: Tooltip(
+        message: biometricSignInLabel(kind),
+        child: GestureDetector(
+          onTap: onPressed,
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: palette.card,
+              shape: BoxShape.circle,
+              border: Border.all(color: palette.border),
+            ),
+            child: Center(
+              child: BiometricGlyph(
+                kind: kind,
+                color: palette.accent,
+                size: 26,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What went wrong, in the API's own words — styled like the website's alert.
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
 
@@ -1350,29 +1430,29 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.errorRed.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.errorRed.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.errorRed.withValues(alpha: 0.30)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const Icon(
             Icons.error_outline_rounded,
-            size: 17,
+            size: 18,
             color: AppTheme.errorRed,
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
                 color: AppTheme.errorRed,
-                fontSize: 12.5,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -1382,7 +1462,8 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Build version, so testers can report what they are on.
+/// The website footer's line — company, rights and version — so testers can
+/// report what they are on.
 class _FooterNote extends StatelessWidget {
   const _FooterNote();
 
@@ -1390,15 +1471,17 @@ class _FooterNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
 
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Text(
-        'v$kAppVersion',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        AppStrings.get('footer_rights')
+            .replaceFirst('{year}', '${DateTime.now().year}')
+            .replaceFirst('{version}', kAppVersion),
+        textAlign: TextAlign.center,
         style: TextStyle(
-          fontSize: 10.5,
+          fontSize: 12,
+          height: 1.45,
           color: palette.inkMuted.withValues(alpha: 0.85),
-          letterSpacing: 0.4,
         ),
       ),
     );
@@ -1408,8 +1491,8 @@ class _FooterNote extends StatelessWidget {
 /// The sign-up consent checkbox, with the two documents actually reachable.
 ///
 /// Apple expects the terms and privacy policy a registration screen refers to
-/// to be openable from that screen, so both names are links; tapping anywhere
-/// else on the sentence ticks the box.
+/// to be openable from that screen, so both names are links that open them in
+/// a sheet inside the app; tapping anywhere else on the sentence ticks the box.
 class _TermsNotice extends StatefulWidget {
   const _TermsNotice({
     required this.palette,
@@ -1430,9 +1513,6 @@ class _TermsNotice extends StatefulWidget {
 }
 
 class _TermsNoticeState extends State<_TermsNotice> {
-  static final Uri _termsUrl = Uri.parse('https://eplug.mn/legal/terms');
-  static final Uri _privacyUrl = Uri.parse('https://eplug.mn/legal/privacy');
-
   /// Held on the state so they are disposed with the screen. A recognizer built
   /// inline in `build` is never released.
   late final TapGestureRecognizer _termsTap;
@@ -1441,8 +1521,8 @@ class _TermsNoticeState extends State<_TermsNotice> {
   @override
   void initState() {
     super.initState();
-    _termsTap = TapGestureRecognizer()..onTap = () => _open(_termsUrl);
-    _privacyTap = TapGestureRecognizer()..onTap = () => _open(_privacyUrl);
+    _termsTap = TapGestureRecognizer()..onTap = () => _open(LegalTab.terms);
+    _privacyTap = TapGestureRecognizer()..onTap = () => _open(LegalTab.privacy);
   }
 
   @override
@@ -1452,17 +1532,14 @@ class _TermsNoticeState extends State<_TermsNotice> {
     super.dispose();
   }
 
-  Future<void> _open(Uri url) async {
-    bool ok = false;
-    try {
-      ok = await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      ok = false;
-    }
-    if (ok || !mounted) return;
-    ScaffoldMessenger.of(
+  /// Accepting from the bottom of the sheet ticks the box.
+  Future<void> _open(LegalTab tab) async {
+    final bool accepted = await showLegalSheet(
       context,
-    ).showSnackBar(SnackBar(content: Text(AppStrings.get('link_open_failed'))));
+      initialTab: tab,
+      offerAccept: widget.enabled && !widget.accepted,
+    );
+    if (accepted && mounted) widget.onChanged(true);
   }
 
   @override
@@ -1470,20 +1547,15 @@ class _TermsNoticeState extends State<_TermsNotice> {
     final AppPalette palette = widget.palette;
     final bool hasError = widget.error != null && widget.error!.isNotEmpty;
     final TextStyle base = TextStyle(
-      color: palette.inkMuted,
-      fontSize: 12,
-      height: 1.5,
-      letterSpacing: 0.1,
+      color: palette.ink,
+      fontSize: 14,
+      height: 1.2,
     );
-    // Accent, weight and a rule are three ways of saying the same thing. The
-    // rule is the one a colourblind driver still sees, so it stays and the
-    // weight drops back — the line reads as a sentence with two links in it,
-    // not as two buttons with words around them.
     final TextStyle link = base.copyWith(
       color: palette.accent,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       decoration: TextDecoration.underline,
-      decorationColor: palette.accent.withValues(alpha: 0.45),
+      decorationColor: palette.accent.withValues(alpha: 0.5),
       decorationThickness: 1.2,
     );
 
@@ -1494,46 +1566,59 @@ class _TermsNoticeState extends State<_TermsNotice> {
         Row(
           children: <Widget>[
             SizedBox(
-              width: 32,
-              height: 32,
+              width: 22,
+              height: 22,
               child: Checkbox(
                 value: widget.accepted,
                 onChanged: widget.enabled
                     ? (bool? value) => widget.onChanged(value ?? false)
                     : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
                 activeColor: palette.accent,
+                checkColor: Colors.white,
                 side: BorderSide(
                   color: hasError ? AppTheme.errorRed : palette.inkMuted,
-                  width: 1.4,
+                  width: 1.5,
                 ),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 10),
             Expanded(
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: widget.enabled
                     ? () => widget.onChanged(!widget.accepted)
                     : null,
-                child: Text.rich(
-                  TextSpan(
-                    style: base,
-                    children: <InlineSpan>[
-                      TextSpan(text: AppStrings.get('auth_terms_prefix')),
-                      TextSpan(
-                        text: AppStrings.get('auth_terms_terms'),
-                        style: link,
-                        recognizer: _termsTap,
-                      ),
-                      TextSpan(text: AppStrings.get('auth_terms_middle')),
-                      TextSpan(
-                        text: AppStrings.get('auth_terms_privacy'),
-                        style: link,
-                        recognizer: _privacyTap,
-                      ),
-                      TextSpan(text: AppStrings.get('auth_terms_suffix')),
-                    ],
+                // One line, level with the box. A narrow phone shrinks the
+                // sentence rather than wrapping it below the checkbox.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text.rich(
+                    TextSpan(
+                      style: base,
+                      children: <InlineSpan>[
+                        TextSpan(text: AppStrings.get('auth_terms_prefix')),
+                        TextSpan(
+                          text: AppStrings.get('auth_terms_terms'),
+                          style: link,
+                          recognizer: _termsTap,
+                        ),
+                        TextSpan(text: AppStrings.get('auth_terms_middle')),
+                        TextSpan(
+                          text: AppStrings.get('auth_terms_privacy'),
+                          style: link,
+                          recognizer: _privacyTap,
+                        ),
+                        TextSpan(text: AppStrings.get('auth_terms_suffix')),
+                      ],
+                    ),
+                    maxLines: 1,
+                    softWrap: false,
                   ),
                 ),
               ),
@@ -1542,12 +1627,12 @@ class _TermsNoticeState extends State<_TermsNotice> {
         ),
         if (hasError)
           Padding(
-            padding: const EdgeInsets.fromLTRB(38, 2, 4, 0),
+            padding: const EdgeInsets.fromLTRB(32, 6, 4, 0),
             child: Text(
               widget.error!,
               style: const TextStyle(
                 color: AppTheme.errorRed,
-                fontSize: 11,
+                fontSize: 13,
                 height: 1.35,
               ),
             ),

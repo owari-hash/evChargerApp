@@ -4,18 +4,26 @@ import '../models/auth_user.dart';
 import '../services/account_service.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/biometric_prompt.dart';
 import '../widgets/pin_code_field.dart';
 
 /// PIN, email confirmation and phone verification — the app's counterpart to
 /// `/account/security` in the kiosk.
 class SecurityScreen extends StatefulWidget {
-  const SecurityScreen({super.key, this.authService, this.accountService});
+  const SecurityScreen({
+    super.key,
+    this.authService,
+    this.accountService,
+    this.biometricService,
+  });
 
   final AuthService? authService;
   final AccountService? accountService;
+  final BiometricService? biometricService;
 
   @override
   State<SecurityScreen> createState() => _SecurityScreenState();
@@ -25,6 +33,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
   AuthService get _auth => widget.authService ?? AuthService.instance;
   AccountService get _account =>
       widget.accountService ?? AccountService.instance;
+  BiometricService get _bio =>
+      widget.biometricService ?? BiometricService.instance;
 
   final TextEditingController _current = TextEditingController();
   final TextEditingController _next = TextEditingController();
@@ -40,6 +50,27 @@ class _SecurityScreenState extends State<SecurityScreen> {
   String? _pinError;
   Map<String, String> _pinFields = const <String, String>{};
   String? _codeError;
+
+  /// Null when the device has no Face ID / fingerprint, which hides the card.
+  BiometricKind? _bioKind;
+  bool _bioEnabled = false;
+  bool _bioBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometrics();
+  }
+
+  Future<void> _loadBiometrics() async {
+    final BiometricKind? kind = await _bio.availableKind();
+    final bool enabled = kind != null && await _bio.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _bioKind = kind;
+      _bioEnabled = enabled;
+    });
+  }
 
   @override
   void dispose() {
@@ -84,6 +115,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
         pin: _next.text,
         confirmPin: _confirm.text,
       );
+      // Face ID / fingerprint sign-in would otherwise keep the old PIN.
+      await _bio.refresh(phone: user.phone ?? '', pin: _next.text);
       if (!mounted) return;
       _current.clear();
       _next.clear();
@@ -185,6 +218,10 @@ class _SecurityScreenState extends State<SecurityScreen> {
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
             children: <Widget>[
               _pinCard(palette, user),
+              if (_bioKind != null) ...<Widget>[
+                const SizedBox(height: 12),
+                _biometricCard(palette, user, _bioKind!),
+              ],
               const SizedBox(height: 12),
               _phoneCard(palette, user),
               const SizedBox(height: 12),
@@ -353,6 +390,90 @@ class _SecurityScreenState extends State<SecurityScreen> {
     );
   }
 
+  /// Turning it on needs the PIN once — it is what gets remembered — checked
+  /// against the server before it is stored.
+  Future<void> _toggleBiometrics(bool on, AuthUser user) async {
+    if (_bioBusy) return;
+
+    if (!on) {
+      setState(() => _bioBusy = true);
+      await _bio.disable();
+      if (!mounted) return;
+      setState(() {
+        _bioBusy = false;
+        _bioEnabled = false;
+      });
+      showSnack(context, AppStrings.get('sec_bio_off'));
+      return;
+    }
+
+    final String? phone = user.phone;
+    if (phone == null) return;
+    final String? pin = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (BuildContext sheetContext) => const _PinPromptSheet(),
+    );
+    if (pin == null || !mounted) return;
+
+    setState(() => _bioBusy = true);
+    try {
+      await _auth.signIn(phone: phone, pin: pin);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _bioBusy = false);
+      showApiSnack(context, error);
+      return;
+    }
+
+    final bool enabled = await _bio.enable(
+      phone: phone,
+      pin: pin,
+      reason: AppStrings.get('bio_reason'),
+    );
+    if (!mounted) return;
+    setState(() {
+      _bioBusy = false;
+      _bioEnabled = enabled;
+    });
+    if (enabled) showSnack(context, AppStrings.get('sec_bio_on'));
+  }
+
+  Widget _biometricCard(AppPalette palette, AuthUser user, BiometricKind kind) {
+    return SectionCard(
+      title: AppStrings.get(
+        kind == BiometricKind.face ? 'sec_bio_face' : 'sec_bio_finger',
+      ),
+      trailing: Switch.adaptive(
+        value: _bioEnabled,
+        activeTrackColor: palette.accent,
+        onChanged: _bioBusy || !user.hasPin
+            ? null
+            : (bool on) => _toggleBiometrics(on, user),
+      ),
+      child: Row(
+        children: <Widget>[
+          BiometricGlyph(kind: kind, color: palette.accent, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              AppStrings.get('sec_bio_body'),
+              style: TextStyle(
+                color: palette.inkMuted,
+                fontSize: 12.5,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _deleteAccountCard(AppPalette palette) {
     return SectionCard(
       title: AppStrings.get('sec_delete_title'),
@@ -421,6 +542,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
     setState(() => _deletingAccount = true);
     try {
+      await _bio.disable();
       await _account.deleteAccount();
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -430,5 +552,59 @@ class _SecurityScreenState extends State<SecurityScreen> {
       setState(() => _deletingAccount = false);
       showSnack(context, AppStrings.get('sec_delete_success'));
     }
+  }
+}
+
+/// Asks for the PIN once, to turn on Face ID / fingerprint sign-in. Pops the
+/// PIN as soon as the fourth digit goes in.
+class _PinPromptSheet extends StatefulWidget {
+  const _PinPromptSheet();
+
+  @override
+  State<_PinPromptSheet> createState() => _PinPromptSheetState();
+}
+
+class _PinPromptSheetState extends State<_PinPromptSheet> {
+  final TextEditingController _pin = TextEditingController();
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        22,
+        20,
+        24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            AppStrings.get('sec_bio_enter_pin'),
+            style: TextStyle(
+              color: palette.ink,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          PinCodeField(
+            controller: _pin,
+            autofocus: true,
+            onCompleted: (String pin) => Navigator.pop(context, pin),
+          ),
+        ],
+      ),
+    );
   }
 }

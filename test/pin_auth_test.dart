@@ -9,7 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:evchargerapp/services/biometric_service.dart';
+
 import 'support/fake_auth.dart';
+import 'support/fake_biometrics.dart';
 
 Map<String, dynamic> _body(http.Request request) => request.body.isEmpty
     ? <String, dynamic>{}
@@ -27,8 +30,9 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _open(
   WidgetTester tester,
   AuthService auth,
-  VoidCallback onLoginSuccess,
-) async {
+  VoidCallback onLoginSuccess, {
+  BiometricService? biometrics,
+}) async {
   tester.view.physicalSize = const Size(390, 844) * 3;
   tester.view.devicePixelRatio = 3.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -37,6 +41,7 @@ Future<void> _open(
     MaterialApp(
       home: LoginRegisterScreen(
         authService: auth,
+        biometricService: biometrics ?? fakeBiometrics(kind: null),
         onLoginSuccess: onLoginSuccess,
       ),
     ),
@@ -139,6 +144,129 @@ void main() {
       ]);
       expect(_body(log[2])['resetTicket'], 'stub-ticket');
       expect(auth.isSignedIn, isTrue);
+    });
+  });
+
+  group('Face ID / fingerprint', () {
+    testWidgets('after a PIN sign-in the app offers Face ID, and turning it '
+        'on remembers the credentials', (WidgetTester tester) async {
+      final BiometricService biometrics = fakeBiometrics();
+      bool signedIn = false;
+      await _open(
+        tester,
+        fakeAuthService(),
+        () => signedIn = true,
+        biometrics: biometrics,
+      );
+
+      await tester.enterText(_fields.at(0), kTestPhone);
+      await tester.enterText(_fields.at(1), kTestPin);
+      await _submit(tester);
+      await _settle(tester);
+
+      expect(
+        find.text(AppStrings.get('bio_offer_title_face')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(AppStrings.get('bio_enable')));
+      await _settle(tester);
+
+      expect(signedIn, isTrue);
+      expect(await biometrics.isEnabled(), isTrue);
+    });
+
+    testWidgets('"Not now" signs in and does not ask again', (
+      WidgetTester tester,
+    ) async {
+      final BiometricService biometrics = fakeBiometrics();
+      bool signedIn = false;
+      await _open(
+        tester,
+        fakeAuthService(),
+        () => signedIn = true,
+        biometrics: biometrics,
+      );
+
+      await tester.enterText(_fields.at(0), kTestPhone);
+      await tester.enterText(_fields.at(1), kTestPin);
+      await _submit(tester);
+      await _settle(tester);
+      await tester.tap(find.text(AppStrings.get('bio_not_now')));
+      await _settle(tester);
+
+      expect(signedIn, isTrue);
+      expect(await biometrics.isEnabled(), isFalse);
+      expect(await biometrics.wasDeclined(), isTrue);
+    });
+
+    testWidgets('with Face ID on, one tap signs in without typing the PIN', (
+      WidgetTester tester,
+    ) async {
+      final BiometricService biometrics = fakeBiometrics();
+      await biometrics.enable(phone: kTestPhone, pin: kTestPin, reason: '');
+      final List<http.Request> log = <http.Request>[];
+      bool signedIn = false;
+      await _open(
+        tester,
+        fakeAuthService(log: log),
+        () => signedIn = true,
+        biometrics: biometrics,
+      );
+      await _settle(tester);
+
+      await tester.tap(
+        find.byTooltip(AppStrings.get('bio_sign_in_face')),
+      );
+      await _settle(tester);
+
+      expect(signedIn, isTrue);
+      expect(_body(log.single), <String, dynamic>{
+        'phone': kTestPhone,
+        'pin': kTestPin,
+      });
+    });
+
+    testWidgets('a remembered PIN that no longer works is forgotten', (
+      WidgetTester tester,
+    ) async {
+      final BiometricService biometrics = fakeBiometrics();
+      await biometrics.enable(phone: kTestPhone, pin: '9999', reason: '');
+      bool signedIn = false;
+      await _open(
+        tester,
+        fakeAuthService(),
+        () => signedIn = true,
+        biometrics: biometrics,
+      );
+      await _settle(tester);
+
+      await tester.tap(
+        find.byTooltip(AppStrings.get('bio_sign_in_face')),
+      );
+      await _settle(tester);
+
+      expect(signedIn, isFalse);
+      expect(find.text(AppStrings.get('bio_stale')), findsOneWidget);
+      expect(await biometrics.isEnabled(), isFalse);
+      expect(
+        find.byTooltip(AppStrings.get('bio_sign_in_face')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a device without biometrics shows no button and no offer', (
+      WidgetTester tester,
+    ) async {
+      bool signedIn = false;
+      await _open(tester, fakeAuthService(), () => signedIn = true);
+
+      expect(find.byTooltip(AppStrings.get('bio_sign_in_face')), findsNothing);
+      await tester.enterText(_fields.at(0), kTestPhone);
+      await tester.enterText(_fields.at(1), kTestPin);
+      await _submit(tester);
+
+      expect(signedIn, isTrue);
+      expect(find.text(AppStrings.get('bio_offer_title_face')), findsNothing);
     });
   });
 

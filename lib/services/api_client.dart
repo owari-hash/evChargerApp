@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show SocketException;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
@@ -45,9 +46,13 @@ class ApiClient {
   static const String _networkError =
       'Сервертэй холбогдож чадсангүй. Холболтоо шалгаад дахин оролдоно уу.';
 
-  ApiClient({http.Client? httpClient, SessionStore? sessionStore})
-    : _http = httpClient ?? http.Client(),
-      _sessions = sessionStore ?? SecureSessionStore();
+  ApiClient({
+    http.Client? httpClient,
+    SessionStore? sessionStore,
+    bool? browserManagesCookies,
+  }) : _http = httpClient ?? http.Client(),
+       _sessions = sessionStore ?? SecureSessionStore(),
+       _browserManagesCookies = browserManagesCookies ?? kIsWeb;
 
   /// The client the app runs on. Every service shares it so they all speak with
   /// the same session cookie — signing in once signs in everywhere.
@@ -61,12 +66,21 @@ class ApiClient {
   final http.Client _http;
   final SessionStore _sessions;
 
+  /// In a browser the jar belongs to the browser, as on the kiosk website:
+  /// `Cookie` is a forbidden request header, `Set-Cookie` is hidden from page
+  /// scripts, and a same-origin request carries the httpOnly cookie on its own.
+  final bool _browserManagesCookies;
+
   String? _cookie;
   bool _restored = false;
 
   /// True once a session cookie is held, whether restored from disk or just
   /// issued. Says nothing about whether the server still honours it.
-  Future<bool> get hasSession async => (await _currentCookie()) != null;
+  ///
+  /// A browser's cookie cannot be seen from here, so there it is always true
+  /// and `auth/me` decides.
+  Future<bool> get hasSession async =>
+      _browserManagesCookies || (await _currentCookie()) != null;
 
   Future<Map<String, dynamic>> get(String path, {Map<String, String>? query}) =>
       _send('GET', path, query: query);
@@ -97,7 +111,9 @@ class ApiClient {
     Map<String, String>? query,
   }) async {
     final Uri url = ApiConfig.uri(path, query);
-    final String? cookie = await _currentCookie();
+    final String? cookie = _browserManagesCookies
+        ? null
+        : await _currentCookie();
 
     final http.Request request = http.Request(method, url)
       ..headers['Accept'] = 'application/json';
@@ -130,6 +146,7 @@ class ApiClient {
   /// which is why this looks for the named cookie rather than splitting on
   /// commas — a cookie's own `Expires` date contains one.
   Future<void> _captureSessionCookie(http.Response response) async {
+    if (_browserManagesCookies) return;
     final String? raw = response.headers['set-cookie'];
     if (raw == null || raw.isEmpty) return;
 

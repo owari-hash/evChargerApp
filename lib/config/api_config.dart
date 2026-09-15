@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+
 /// Where the driver-facing API lives.
 ///
 /// The app talks to the **driver API** (`/app-api/...`) served by the Next.js
@@ -15,6 +17,12 @@
 /// # Android emulator reaches the host on 10.0.2.2
 /// flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3100
 /// ```
+///
+/// A **web** build is the exception: the driver API sends no CORS headers, so a
+/// page may only call `/app-api` on its own origin — the same relative calls the
+/// kiosk website makes. Serve the build from eplug.mn, and in development let
+/// `web_dev_config.yaml` proxy `/app-api/` so `flutter run -d chrome` is
+/// same-origin too. Passing API_BASE_URL to a web build brings CORS back.
 class ApiConfig {
   const ApiConfig._();
 
@@ -30,9 +38,23 @@ class ApiConfig {
   /// looked like they were not syncing when in truth they were never in the
   /// same store. Production is the default now precisely so that cannot happen
   /// by accident.
-  static String get baseUrl => _override.isNotEmpty
-      ? _stripTrailingSlashes(_override)
-      : _productionBaseUrl;
+  static String get baseUrl => resolveBaseUrl(
+    override: _override,
+    isWeb: kIsWeb,
+    pageOrigin: kIsWeb ? Uri.base.origin : '',
+  );
+
+  /// The rule behind [baseUrl], with the platform passed in so tests can pin it.
+  @visibleForTesting
+  static String resolveBaseUrl({
+    required String override,
+    required bool isWeb,
+    required String pageOrigin,
+  }) {
+    if (override.isNotEmpty) return _stripTrailingSlashes(override);
+    if (isWeb) return _stripTrailingSlashes(pageOrigin);
+    return _productionBaseUrl;
+  }
 
   /// Absolute URL for a driver-API path, e.g. `uri('/auth/login')`.
   static Uri uri(String path, [Map<String, String>? query]) {

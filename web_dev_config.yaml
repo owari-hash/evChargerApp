@@ -1,0 +1,13 @@
+# Dev server for `flutter run -d chrome` / `-d web-server`.
+#
+# The driver API sends no CORS headers — the kiosk website never needs them,
+# because it calls /app-api on its own origin. A web build does the same (see
+# lib/config/api_config.dart), so in development this proxy puts /app-api on
+# the dev server's origin. The browser then keeps the evapp_session cookie for
+# localhost exactly as it does for eplug.mn.
+#
+# To use a local kiosk instead, change the target to http://127.0.0.1:3100/.
+server:
+  proxy:
+    - target: "https://eplug.mn/"
+      prefix: "/app-api/"

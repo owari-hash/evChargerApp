@@ -164,10 +164,7 @@ void main() {
       await _submit(tester);
       await _settle(tester);
 
-      expect(
-        find.text(AppStrings.get('bio_offer_title_face')),
-        findsOneWidget,
-      );
+      expect(find.text(AppStrings.get('bio_offer_title_face')), findsOneWidget);
       await tester.tap(find.text(AppStrings.get('bio_enable')));
       await _settle(tester);
 
@@ -214,9 +211,7 @@ void main() {
       );
       await _settle(tester);
 
-      await tester.tap(
-        find.byTooltip(AppStrings.get('bio_sign_in_face')),
-      );
+      await tester.tap(find.byTooltip(AppStrings.get('bio_sign_in_face')));
       await _settle(tester);
 
       expect(signedIn, isTrue);
@@ -240,18 +235,13 @@ void main() {
       );
       await _settle(tester);
 
-      await tester.tap(
-        find.byTooltip(AppStrings.get('bio_sign_in_face')),
-      );
+      await tester.tap(find.byTooltip(AppStrings.get('bio_sign_in_face')));
       await _settle(tester);
 
       expect(signedIn, isFalse);
       expect(find.text(AppStrings.get('bio_stale')), findsOneWidget);
       expect(await biometrics.isEnabled(), isFalse);
-      expect(
-        find.byTooltip(AppStrings.get('bio_sign_in_face')),
-        findsNothing,
-      );
+      expect(find.byTooltip(AppStrings.get('bio_sign_in_face')), findsNothing);
     });
 
     testWidgets('a device without biometrics shows no button and no offer', (
@@ -285,6 +275,30 @@ void main() {
 
       expect(signedIn, isTrue);
       expect(_paths(log), <String>['/app-api/auth/login']);
+    });
+
+    testWidgets('a whole number moves to the PIN, and the fourth digit to the '
+        'sign-in button', (WidgetTester tester) async {
+      await _open(tester, fakeAuthService(), () {});
+
+      await tester.enterText(_fields.at(0), kTestPhone);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(_fields.at(1)).focusNode!.hasFocus,
+        isTrue,
+      );
+
+      await tester.enterText(_fields.at(1), kTestPin);
+      // The PIN field reports completion after the frame.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester
+            .widget<ElevatedButton>(find.byType(ElevatedButton))
+            .focusNode!
+            .hasFocus,
+        isTrue,
+      );
     });
 
     testWidgets('a short PIN is caught before anything is sent', (
@@ -341,6 +355,16 @@ void main() {
       expect(signedIn, isFalse);
 
       await tester.enterText(_fields.at(1), '1234');
+      // A matching repeat lands on the sign-up button.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester
+            .widget<ElevatedButton>(find.byType(ElevatedButton))
+            .focusNode!
+            .hasFocus,
+        isTrue,
+      );
       await _submit(tester);
 
       expect(signedIn, isTrue);

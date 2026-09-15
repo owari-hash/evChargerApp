@@ -41,6 +41,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
   final TextEditingController _confirm = TextEditingController();
   final TextEditingController _code = TextEditingController();
 
+  // Each complete PIN moves the cursor on; a matching repeat lands on the button.
+  final FocusNode _nextFocus = FocusNode();
+  final FocusNode _confirmFocus = FocusNode();
+  final FocusNode _changeFocus = FocusNode();
+
   bool _changing = false;
   bool _resending = false;
   bool _sendingCode = false;
@@ -78,7 +83,28 @@ class _SecurityScreenState extends State<SecurityScreen> {
     _next.dispose();
     _confirm.dispose();
     _code.dispose();
+    _nextFocus.dispose();
+    _confirmFocus.dispose();
+    _changeFocus.dispose();
     super.dispose();
+  }
+
+  /// Runs when the repeat is complete: a typo is caught at once, a match moves
+  /// focus to the button so saving stays one deliberate tap.
+  void _checkConfirm(String value) {
+    if (value == _next.text) {
+      if (_pinFields.containsKey('confirmPin')) {
+        setState(() => _pinFields = const <String, String>{});
+      }
+      _changeFocus.requestFocus();
+      return;
+    }
+    _confirm.clear();
+    setState(() {
+      _pinFields = <String, String>{
+        'confirmPin': AppStrings.get('auth_pin_mismatch'),
+      };
+    });
   }
 
   Future<void> _changePin(AuthUser user) async {
@@ -358,21 +384,26 @@ class _SecurityScreenState extends State<SecurityScreen> {
               enabled: !_changing,
               label: AppStrings.get('sec_pin_current'),
               error: _pinFields['currentPin'],
+              onCompleted: (_) => _nextFocus.requestFocus(),
             ),
             const SizedBox(height: 12),
           ],
           PinCodeField(
             controller: _next,
+            focusNode: _nextFocus,
             enabled: !_changing,
             label: AppStrings.get('sec_pin_new'),
             error: _pinFields['pin'],
+            onCompleted: (_) => _confirmFocus.requestFocus(),
           ),
           const SizedBox(height: 12),
           PinCodeField(
             controller: _confirm,
+            focusNode: _confirmFocus,
             enabled: !_changing,
             label: AppStrings.get('sec_pin_confirm'),
             error: _pinFields['confirmPin'],
+            onCompleted: _checkConfirm,
           ),
           if (_pinError != null) ...<Widget>[
             const SizedBox(height: 12),
@@ -380,9 +411,12 @@ class _SecurityScreenState extends State<SecurityScreen> {
           ],
           const SizedBox(height: 14),
           PrimaryAction(
-            label: AppStrings.get(user.hasPin ? 'sec_pin_change' : 'sec_pin_set'),
+            label: AppStrings.get(
+              user.hasPin ? 'sec_pin_change' : 'sec_pin_set',
+            ),
             busy: _changing,
             icon: Icons.shield_rounded,
+            focusNode: _changeFocus,
             onPressed: () => _changePin(user),
           ),
         ],

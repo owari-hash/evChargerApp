@@ -49,9 +49,9 @@ void main() {
     );
     await tester.pump();
 
-    // The name shows in the header and again in the editable field; the
-    // address in the header and again in the status card.
-    expect(find.text('Бат Болд'), findsNWidgets(2));
+    // The name shows in the header; the address in the header and again in
+    // the status card.
+    expect(find.text('Бат Болд'), findsOneWidget);
     expect(find.text('bat@example.com'), findsNWidgets(2));
 
     // Every sub-page is reachable from here.

@@ -112,6 +112,12 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   final TextEditingController _confirmPin = TextEditingController();
   final FocusNode _confirmFocus = FocusNode();
 
+  // The cursor walks the form by itself: a whole number moves it on, the fourth
+  // PIN digit (or a matching repeat) lands it on the button.
+  final FocusNode _loginPinFocus = FocusNode();
+  final FocusNode _submitFocus = FocusNode();
+  bool _phoneWasFull = false;
+
   late final List<TextEditingController> _allFields = <TextEditingController>[
     _phone,
     _pin,
@@ -145,6 +151,8 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   void dispose() {
     _resendTimer?.cancel();
     _confirmFocus.dispose();
+    _loginPinFocus.dispose();
+    _submitFocus.dispose();
     for (final TextEditingController field in _allFields) {
       field
         ..removeListener(_onFieldChanged)
@@ -163,6 +171,25 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   }
 
   static bool _isPin(String value) => RegExp(r'^\d{4}$').hasMatch(value);
+
+  /// Eight local digits, with or without the 976 code typed in front.
+  static bool _isFullLocalNumber(String value) {
+    String digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 8 && digits.startsWith('976')) {
+      digits = digits.substring(3);
+    }
+    return digits.length == 8;
+  }
+
+  /// A whole number moves on by itself: to the PIN when signing in, to the
+  /// button on the first step of sign-up or a PIN reset.
+  void _onPhoneChanged(String value) {
+    final bool full = _isFullLocalNumber(value);
+    if (full && !_phoneWasFull) {
+      (_isLoginMode ? _loginPinFocus : _submitFocus).requestFocus();
+    }
+    _phoneWasFull = full;
+  }
 
   /// The API masks the number as `********8844`; it reads better as `•••• 8844`.
   static String _prettyDestination(String masked) {
@@ -370,12 +397,13 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   }
 
   /// Runs as soon as the repeat is complete, so a typo is caught before the
-  /// driver reaches for the button.
+  /// driver reaches for the button — and a match lands focus on it.
   void _checkConfirm(String value) {
     if (value == _newPin.text) {
       if (_fieldErrors.isNotEmpty) {
         setState(() => _fieldErrors = const <String, String>{});
       }
+      _submitFocus.requestFocus();
       return;
     }
     _confirmPin.clear();
@@ -601,7 +629,12 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
             ),
             SizedBox(height: sectionGap),
           ],
-          _Headline(title: title, subtitle: subtitle, compact: compact, tight: tight),
+          _Headline(
+            title: title,
+            subtitle: subtitle,
+            compact: compact,
+            tight: tight,
+          ),
           SizedBox(height: sectionGap),
           if (!_isLoginMode) ...<Widget>[
             _StepHeader(title: stepTitle, step: _step.index + 1),
@@ -683,14 +716,17 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         enabled: !_pending,
         error: _fieldErrors['phone'],
         textInputAction: TextInputAction.next,
+        onChanged: _onPhoneChanged,
       ),
       const SizedBox(height: 18),
       PinCodeField(
         controller: _pin,
+        focusNode: _loginPinFocus,
         label: AppStrings.get('auth_pin'),
         enabled: !_pending,
         error: _fieldErrors['pin'],
         autofillHints: const <String>[AutofillHints.password],
+        onCompleted: (_) => _submitFocus.requestFocus(),
       ),
       const SizedBox(height: 4),
       Align(
@@ -721,6 +757,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
           error: _fieldErrors['phone'],
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _submit(),
+          onChanged: _onPhoneChanged,
         ),
         if (signup) ...<Widget>[
           SizedBox(height: MediaQuery.sizeOf(context).height < 600 ? 10 : 16),
@@ -847,6 +884,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
               height: 56,
               child: ElevatedButton(
                 onPressed: _pending ? null : _submit,
+                focusNode: _submitFocus,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: fill,
                   foregroundColor: label,
@@ -1241,6 +1279,7 @@ class _PhoneField extends StatefulWidget {
     this.error,
     this.textInputAction,
     this.onSubmitted,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -1252,6 +1291,7 @@ class _PhoneField extends StatefulWidget {
   final String? error;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<_PhoneField> createState() => _PhoneFieldState();
@@ -1332,6 +1372,7 @@ class _PhoneFieldState extends State<_PhoneField> {
                   keyboardType: TextInputType.phone,
                   textInputAction: widget.textInputAction,
                   onSubmitted: widget.onSubmitted,
+                  onChanged: widget.onChanged,
                   autofillHints: const <String>[AutofillHints.telephoneNumber],
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(RegExp(r'[\d\s+]')),

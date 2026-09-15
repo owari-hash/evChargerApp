@@ -30,57 +30,14 @@ class _AccountScreenState extends State<AccountScreen> {
   AccountService get _account =>
       widget.accountService ?? AccountService.instance;
 
-  final TextEditingController _name = TextEditingController();
-  final TextEditingController _phone = TextEditingController();
   final TextEditingController _newTag = TextEditingController();
 
-  bool _savingProfile = false;
   bool _linkingTag = false;
-  String? _profileError;
-  Map<String, String> _profileFields = const <String, String>{};
-
-  @override
-  void initState() {
-    super.initState();
-    final AuthUser? user = _auth.currentUser.value;
-    _name.text = user?.name ?? '';
-    _phone.text = user?.phone ?? '';
-  }
 
   @override
   void dispose() {
-    _name.dispose();
-    _phone.dispose();
     _newTag.dispose();
     super.dispose();
-  }
-
-  Future<void> _saveProfile() async {
-    if (_savingProfile) return;
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _savingProfile = true;
-      _profileError = null;
-      _profileFields = const <String, String>{};
-    });
-
-    try {
-      await _account.updateProfile(
-        name: _name.text,
-        phone: _phone.text,
-        locale: AppStrings.currentLanguage == AppLanguage.mn ? 'mn' : 'en',
-      );
-      if (!mounted) return;
-      setState(() => _savingProfile = false);
-      showSnack(context, AppStrings.get('acct_saved'));
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _savingProfile = false;
-        _profileError = error.message;
-        _profileFields = error.fields;
-      });
-    }
   }
 
   Future<void> _linkTag() async {
@@ -167,8 +124,6 @@ class _AccountScreenState extends State<AccountScreen> {
             _statusCard(palette, user),
             const SizedBox(height: 12),
             _navCard(palette),
-            const SizedBox(height: 12),
-            _profileCard(palette),
             const SizedBox(height: 12),
             _idTagsCard(palette, user),
           ],
@@ -389,46 +344,6 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _profileCard(AppPalette palette) {
-    return SectionCard(
-      title: AppStrings.get('acct_profile_title'),
-      child: Column(
-        children: <Widget>[
-          AccountField(
-            controller: _name,
-            label: AppStrings.get('acct_name_label'),
-            icon: Icons.badge_outlined,
-            enabled: !_savingProfile,
-            error: _profileFields['name'],
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 12),
-          AccountField(
-            controller: _phone,
-            label: AppStrings.get('acct_mobile_label'),
-            icon: Icons.phone_iphone_rounded,
-            keyboardType: TextInputType.phone,
-            enabled: !_savingProfile,
-            error: _profileFields['phone'],
-            helper: '+976 9911 2233',
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _saveProfile(),
-          ),
-          if (_profileError != null) ...<Widget>[
-            const SizedBox(height: 12),
-            FormErrorBanner(message: _profileError!),
-          ],
-          const SizedBox(height: 14),
-          PrimaryAction(
-            label: AppStrings.get('acct_save'),
-            busy: _savingProfile,
-            onPressed: _saveProfile,
-          ),
-        ],
       ),
     );
   }

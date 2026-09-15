@@ -174,12 +174,16 @@ class PrimaryAction extends StatelessWidget {
     required this.onPressed,
     this.busy = false,
     this.icon,
+    this.focusNode,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool busy;
   final IconData? icon;
+
+  /// Lets a form move focus onto the button once its last field is complete.
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +193,7 @@ class PrimaryAction extends StatelessWidget {
       height: 50,
       child: ElevatedButton(
         onPressed: busy ? null : onPressed,
+        focusNode: focusNode,
         style: ElevatedButton.styleFrom(
           backgroundColor: palette.panel,
           foregroundColor: palette.onPanel,

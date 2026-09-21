@@ -485,11 +485,11 @@ class _AppBarAction extends StatelessWidget {
 class _BootSplash extends StatelessWidget {
   const _BootSplash();
 
-  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, and the
-  /// backdrop the badge artwork was feathered onto. Handing over from the
-  /// native launch screen to Flutter is meant to be invisible; using the theme
-  /// palette here instead made the app blink from one splash to another.
-  static const Color launchBackground = Color(0xFF1A2028);
+  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, which is in
+  /// turn sampled from the app icon. Handing over from the native launch
+  /// screen to Flutter is meant to be invisible; using the theme palette here
+  /// instead made the app blink from one splash to another.
+  static const Color launchBackground = Color(0xFF0A1F14);
 
   @override
   Widget build(BuildContext context) {
@@ -497,7 +497,7 @@ class _BootSplash extends StatelessWidget {
       color: launchBackground,
       child: Center(
         child: Image(
-          image: AssetImage('assets/images/logo_badge.png'),
+          image: AssetImage('assets/images/launch_badge.png'),
           width: 180,
           height: 180,
           filterQuality: FilterQuality.medium,

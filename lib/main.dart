@@ -485,11 +485,11 @@ class _AppBarAction extends StatelessWidget {
 class _BootSplash extends StatelessWidget {
   const _BootSplash();
 
-  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, which is in
-  /// turn sampled from the app icon. Handing over from the native launch
+  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, which is the
+  /// cream the Eplug logo is drawn on. Handing over from the native launch
   /// screen to Flutter is meant to be invisible; using the theme palette here
   /// instead made the app blink from one splash to another.
-  static const Color launchBackground = Color(0xFF0A1F14);
+  static const Color launchBackground = Color(0xFFFAF8F4);
 
   @override
   Widget build(BuildContext context) {
@@ -498,8 +498,7 @@ class _BootSplash extends StatelessWidget {
       child: Center(
         child: Image(
           image: AssetImage('assets/images/launch_badge.png'),
-          width: 180,
-          height: 180,
+          width: 220,
           filterQuality: FilterQuality.medium,
         ),
       ),

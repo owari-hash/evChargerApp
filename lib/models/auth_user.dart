@@ -13,6 +13,8 @@ class AuthUser {
     this.locale = 'mn',
     this.createdAt,
     this.lastLoginAt,
+    this.vehicleBrand,
+    this.vehicleModel,
   });
 
   final String id;
@@ -37,6 +39,11 @@ class AuthUser {
   final DateTime? createdAt;
   final DateTime? lastLoginAt;
 
+  /// The vehicle this driver charges — set on the account, not read off OCPP,
+  /// so it can be shown next to the station and start time of a live session.
+  final String? vehicleBrand;
+  final String? vehicleModel;
+
   /// First name, for greeting the driver. Falls back to the address' local
   /// part, then the phone number, so the greeting is never empty.
   String get displayName {
@@ -44,6 +51,15 @@ class AuthUser {
     if (trimmed.isNotEmpty) return trimmed.split(RegExp(r'\s+')).first;
     if (email != null) return email!.split('@').first;
     return phone ?? '';
+  }
+
+  /// "Brand Model", either half alone, or null when neither is set.
+  String? get vehicleDisplayName {
+    final String joined = [
+      vehicleBrand,
+      vehicleModel,
+    ].whereType<String>().map((String s) => s.trim()).where((String s) => s.isNotEmpty).join(' ');
+    return joined.isEmpty ? null : joined;
   }
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -62,6 +78,8 @@ class AuthUser {
       locale: (json['locale'] ?? 'mn').toString(),
       createdAt: _dateOrNull(json['createdAt']),
       lastLoginAt: _dateOrNull(json['lastLoginAt']),
+      vehicleBrand: _stringOrNull(json['vehicleBrand']),
+      vehicleModel: _stringOrNull(json['vehicleModel']),
     );
   }
 

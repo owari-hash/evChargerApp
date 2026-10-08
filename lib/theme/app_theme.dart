@@ -47,29 +47,31 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Ambient shadow colour, softened in dark mode.
   final Color shadow;
 
+  // Values match evChargerKiosk's design tokens (src/app/globals.css)
+  // exactly, so the web app and this app read as the same product.
   static const AppPalette light = AppPalette(
-    bg: Color(0xFFF4F7F4),
+    bg: Color(0xFFF5F8F6),
     card: Color(0xFFFFFFFF),
-    border: Color(0xFFE1EBE4),
-    ink: Color(0xFF0D2619),
-    inkMuted: Color(0xFF5E7367),
+    border: Color(0xFFDDE6E1),
+    ink: Color(0xFF0D1F17),
+    inkMuted: Color(0xFF57695F),
     // Brighter than the ink colour: as a large surface the near-black forest
     // read as flat. Still 10:1 against white text.
     panel: Color(0xFF124A33),
     onPanel: Color(0xFFFFFFFF),
-    accent: Color(0xFF25A269),
+    accent: Color(0xFF1F8A56),
     shadow: Color(0x1A000000),
   );
 
   static const AppPalette dark = AppPalette(
-    bg: Color(0xFF08130E),
-    card: Color(0xFF122019),
-    border: Color(0xFF20372B),
-    ink: Color(0xFFE9F1EB),
-    inkMuted: Color(0xFF8FA79A),
+    bg: Color(0xFF060B12),
+    card: Color(0xFF0F1722),
+    border: Color(0xFF1F2B3A),
+    ink: Color(0xFFE6EDF6),
+    inkMuted: Color(0xFF94A7BD),
     panel: Color(0xFF192E23),
     onPanel: Color(0xFFF2F8F4),
-    accent: Color(0xFF2FBE7C),
+    accent: Color(0xFF10B981),
     shadow: Color(0x66000000),
   );
 
@@ -145,13 +147,14 @@ class AppTheme {
 
   static const Color darkForest = Color(0xFF0D2619);
   static const Color forestAccent = Color(0xFF1B4D3E);
-  static const Color sageGreen = Color(0xFF25A269);
+  // Matches evChargerKiosk's --brand / --foreground / --border / --muted.
+  static const Color sageGreen = Color(0xFF1F8A56);
   static const Color lightSage = Color(0xFFD8ECE1);
-  static const Color softBg = Color(0xFFF4F7F4);
+  static const Color softBg = Color(0xFFF5F8F6);
   static const Color cardWhite = Color(0xFFFFFFFF);
-  static const Color borderSubtle = Color(0xFFE1EBE4);
-  static const Color textDark = Color(0xFF0A1E14);
-  static const Color textMuted = Color(0xFF5E7367);
+  static const Color borderSubtle = Color(0xFFDDE6E1);
+  static const Color textDark = Color(0xFF0D1F17);
+  static const Color textMuted = Color(0xFF57695F);
   static const Color warningOrange = Color(0xFFE67E22);
   static const Color errorRed = Color(0xFFE74C3C);
 

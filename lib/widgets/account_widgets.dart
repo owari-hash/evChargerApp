@@ -452,3 +452,36 @@ void showApiSnack(BuildContext context, Object error) {
 void showSnack(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
+
+/// Blocks a charge from starting on an empty or too-low wallet, with a
+/// one-tap way to top up instead of a silent refusal at the station.
+Future<void> showStartBlockedDialog(
+  BuildContext context, {
+  required String message,
+  required VoidCallback onTopUp,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) => AlertDialog(
+      icon: const Icon(
+        Icons.account_balance_wallet_rounded,
+        color: AppTheme.warningOrange,
+      ),
+      title: Text(AppStrings.get('start_blocked_title')),
+      content: Text(message),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: Text(AppStrings.get('cancel')),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(dialogContext);
+            onTopUp();
+          },
+          child: Text(AppStrings.get('start_blocked_cta')),
+        ),
+      ],
+    ),
+  );
+}

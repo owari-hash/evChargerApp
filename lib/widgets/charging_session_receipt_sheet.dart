@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
+import '../models/charging_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import 'ebarimt_sheet.dart';
 
+/// Shown right after a charge stops. Every figure here is one the driver
+/// watched tick up on the dashboard a moment ago, or — for [totalCostMnt] and
+/// [transactionId] — one just read back from the charge point's own meter;
+/// nothing is invented to fill the card out.
 class ChargingSessionReceiptSheet extends StatelessWidget {
   final String stationName;
   final double totalEnergyKwh;
   final double activePowerKw;
-  final double totalCostMnt;
+  final double? totalCostMnt;
+
+  /// Null when the session never reached the real backend (the dashboard's
+  /// local simulation) — there is then nothing to request an e-Barimt for.
+  final int? transactionId;
 
   const ChargingSessionReceiptSheet({
     super.key,
@@ -15,12 +25,14 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
     required this.totalEnergyKwh,
     required this.activePowerKw,
     required this.totalCostMnt,
+    this.transactionId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final String txRef =
-        'UB-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    final double? unitPrice = (totalCostMnt != null && totalEnergyKwh > 0)
+        ? totalCostMnt! / totalEnergyKwh
+        : null;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -31,7 +43,6 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Top Success Icon
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -54,11 +65,6 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
               color: context.palette.ink,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Гүйлгээний дугаар: #$txRef',
-            style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
-          ),
           const SizedBox(height: 20),
 
           // Total Cost Highlight Header
@@ -80,7 +86,7 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  formatMntLeading(totalCostMnt),
+                  totalCostMnt == null ? '—' : formatMntLeading(totalCostMnt!),
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
@@ -92,7 +98,6 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Breakdown List
           _buildReceiptRow(
             context,
             AppStrings.get('charging_station'),
@@ -101,8 +106,8 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           Divider(height: 20, color: context.palette.border),
           _buildReceiptRow(
             context,
-            AppStrings.get('connector_speed'),
-            '${activePowerKw.toInt()} кВт CCS2 Fast',
+            AppStrings.get('power'),
+            '${activePowerKw.toInt()} кВт',
           ),
           Divider(height: 20, color: context.palette.border),
           _buildReceiptRow(
@@ -110,34 +115,41 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
             AppStrings.get('energy_delivered'),
             '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц',
           ),
-          Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(
-            context,
-            AppStrings.get('unit_price'),
-            '${formatMntLeading(450)} / кВт.ц',
-          ),
-          Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(context, 'Төлбөрийн хэрэгсэл', 'QPay (Амжилттай)'),
+          if (unitPrice != null) ...[
+            Divider(height: 20, color: context.palette.border),
+            _buildReceiptRow(
+              context,
+              AppStrings.get('unit_price'),
+              '${formatMntLeading(unitPrice)} / кВт.ц',
+            ),
+          ],
           const SizedBox(height: 28),
 
-          // Action Buttons
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(AppStrings.get('receipt_emailed')),
-                        backgroundColor: context.palette.panel,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.download_rounded, size: 18),
-                  // Never wrap: label length varies by language.
+                  onPressed: transactionId == null
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          EbarimtSheet.show(
+                            context,
+                            ChargingSession(
+                              transactionId: transactionId!,
+                              chargePointId: '',
+                              connectorId: 0,
+                              idTag: '',
+                              status: SessionStatus.completed,
+                              energyKwh: totalEnergyKwh,
+                              cost: totalCostMnt,
+                              stationName: stationName,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
                   label: Text(
-                    AppStrings.get('download_receipt'),
+                    AppStrings.get('sess_ebarimt_get'),
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.ellipsis,

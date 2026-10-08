@@ -157,6 +157,7 @@ class AppStrings {
       'remaining_km': 'Үлдсэн зайн хэмжээ',
       'charging': 'Цэнэглэж байна',
       'idle': 'Бэлэн',
+      'charging_since': '{time}-с',
       'scan_qr': 'QR код уншуулах',
       'ready_to_charge': 'Цэнэглэхэд бэлэн үү?',
       'scan_qr_desc': 'Цэнэглэгч дээрх QR кодыг уншуулж холбогдоно уу',
@@ -305,6 +306,17 @@ class AppStrings {
       'acct_idtags_unlink_yes': 'Тийм, салгая',
       'acct_idtags_linked': '{tag} карт таны бүртгэлд холбогдлоо.',
       'acct_idtags_unlinked': '{tag} картын холбоос салгагдлаа.',
+      'acct_vehicle_title': 'Таны тээврийн хэрэгсэл',
+      'acct_vehicle_body':
+          'Идэвхтэй цэнэглэлт дээр харагдана, ижил станцад байгаа бусдаас ялгахад хялбар болно.',
+      'acct_vehicle_brand': 'Марк',
+      'acct_vehicle_brand_hint': 'жишээ нь: BYD',
+      'acct_vehicle_model': 'Загвар',
+      'acct_vehicle_model_hint': 'жишээ нь: Atto 3',
+      'acct_vehicle_save': 'Хадгалах',
+      'acct_vehicle_saved': 'Машины мэдээлэл хадгалагдлаа.',
+      'vehicle_not_set': 'Машин бүртгээгүй',
+      'station_unknown': 'Тодорхойгүй станц',
 
       // ---- Wallet ----
       'wallet_title': 'Хэтэвч',
@@ -323,6 +335,12 @@ class AppStrings {
           'Холбосон карт алга байна. Бүртгэл хэсгээс картаа холбоно уу.',
       'wallet_low_balance':
           'Таны үлдэгдэл {amount}-өөс бага байна. Цэнэглэхийн өмнө хэтэвчээ цэнэглэнэ үү.',
+      'start_blocked_title': 'Үлдэгдэл хүрэлцэхгүй байна',
+      'start_blocked_body_zero':
+          'Таны хэтэвчинд үлдэгдэл алга байна. Цэнэглэж эхлэхийн өмнө хэтэвчээ цэнэглэнэ үү.',
+      'start_blocked_body_min':
+          'Цэнэглэж эхлэхийн тулд хэтэвчинд дор хаяж {amount} байх шаардлагатай.',
+      'start_blocked_cta': 'Хэтэвч цэнэглэх',
       'wallet_unavailable':
           'Хэтэвчийн үйлчилгээ түр боломжгүй байна. Хэсэг хугацааны дараа дахин оролдоно уу.',
       'wallet_history': 'Хэтэвчийн хөдөлгөөн',
@@ -378,6 +396,8 @@ class AppStrings {
       'sess_rejected': 'Татгалзсан',
       'sess_stop': 'Зогсоох',
       'sess_stopping': 'Зогсоож байна…',
+      'sess_ebarimt_get': 'И-Баримт авах',
+      'sess_ebarimt_view': 'И-Баримт харах',
       'sess_stop_confirm': 'Энэ цэнэглэлтийг зогсоох уу?',
       'sess_stop_yes': 'Тийм, зогсооё',
       'sess_keep': 'Үргэлжлүүлэх',
@@ -547,6 +567,7 @@ class AppStrings {
       'remaining_km': 'Remaining Range',
       'charging': 'Charging',
       'idle': 'Standby',
+      'charging_since': 'since {time}',
       'scan_qr': 'Scan QR Code',
       'ready_to_charge': 'Ready to Charge?',
       'scan_qr_desc': 'Scan the station QR code to unlock plug & pay',
@@ -688,6 +709,17 @@ class AppStrings {
       'acct_idtags_unlink_yes': 'Yes, unlink',
       'acct_idtags_linked': 'Charge tag {tag} is linked to your account.',
       'acct_idtags_unlinked': 'Charge tag {tag} is no longer linked.',
+      'acct_vehicle_title': 'Your vehicle',
+      'acct_vehicle_body':
+          'Shown on an active charging session, so you can tell it apart from others at the same station.',
+      'acct_vehicle_brand': 'Brand',
+      'acct_vehicle_brand_hint': 'e.g. BYD',
+      'acct_vehicle_model': 'Model',
+      'acct_vehicle_model_hint': 'e.g. Atto 3',
+      'acct_vehicle_save': 'Save',
+      'acct_vehicle_saved': 'Vehicle details saved.',
+      'vehicle_not_set': 'No vehicle added',
+      'station_unknown': 'Unknown station',
 
       // ---- Wallet ----
       'wallet_title': 'Wallet',
@@ -705,6 +737,12 @@ class AppStrings {
       'wallet_no_linked_tags': 'No tag linked. Link one from your account.',
       'wallet_low_balance':
           'Your balance is under {amount}. Top up before you charge.',
+      'start_blocked_title': 'Not enough balance',
+      'start_blocked_body_zero':
+          'Your wallet balance is zero. Top up before you start a charge.',
+      'start_blocked_body_min':
+          'You need at least {amount} in your wallet to start a charge.',
+      'start_blocked_cta': 'Top up wallet',
       'wallet_unavailable':
           'The wallet service is not available right now. Please try again shortly.',
       'wallet_history': 'Wallet activity',
@@ -758,6 +796,8 @@ class AppStrings {
       'sess_rejected': 'Rejected',
       'sess_stop': 'Stop',
       'sess_stopping': 'Stopping…',
+      'sess_ebarimt_get': 'Get e-Barimt',
+      'sess_ebarimt_view': 'View e-Barimt',
       'sess_stop_confirm': 'Stop this charging session?',
       'sess_stop_yes': 'Yes, stop it',
       'sess_keep': 'Keep charging',

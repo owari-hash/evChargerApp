@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/station.dart';
+import '../services/api_client.dart';
 import '../services/ocpp_mock_service.dart';
 import '../services/stations_service.dart';
+import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import '../widgets/account_widgets.dart';
 import '../widgets/auth_gate.dart';
+import 'wallet_screen.dart';
 
 class TripsStationsScreen extends StatefulWidget {
   const TripsStationsScreen({super.key});
@@ -276,6 +280,34 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
       reason: AppStrings.get('signin_required_charge'),
     );
     if (!signedIn || !mounted) return;
+
+    // A prepaid network has nothing to bill the session to on an empty
+    // wallet, so this is checked before the deposit screen proceeds rather
+    // than letting the driver pay only to be refused at the station.
+    try {
+      final String? reason = WalletService.startBlockReason(
+        await WalletService.instance.load(),
+      );
+      if (reason != null) {
+        if (!mounted) return;
+        await showStartBlockedDialog(
+          context,
+          message: reason,
+          onTopUp: () {
+            Navigator.pop(context);
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (BuildContext context) => const WalletScreen(),
+              ),
+            );
+          },
+        );
+        return;
+      }
+    } on ApiException {
+      // Offline, or the wallet is unavailable. The station's own OCPP
+      // authorize is the real gate, so a charge is not blocked on this.
+    }
 
     setState(() => _isProcessing = true);
 

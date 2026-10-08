@@ -5,14 +5,17 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/ocpp_mock_service.dart';
 import '../services/sessions_service.dart';
+import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../widgets/account_widgets.dart';
 import '../widgets/charge_limit_selector.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_power_ring_gauge.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/swipe_to_slide_button.dart';
 import '../widgets/vehicle_charging_matrix.dart';
+import 'wallet_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   final VoidCallback onNavigateToQuickControls;
@@ -30,9 +33,6 @@ class HomeDashboardScreen extends StatefulWidget {
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
 }
 
-/// Demo vehicle name, previously inlined into the markup.
-const String _vehicleName = 'BMW X5 xDrive50e';
-
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final OcppMockService _service = OcppMockService.instance;
 
@@ -42,6 +42,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   /// The transaction id of a real session, when the API reports one running.
   /// Null means anything on screen is local demo state.
   int? _remoteTransactionId;
+
+  /// When the real session now charging actually started, for the hero label.
+  DateTime? _sessionStart;
 
   @override
   void initState() {
@@ -69,10 +72,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       setState(() {
         if (active == null) {
           _remoteTransactionId = null;
+          _sessionStart = null;
           _service.clearRemoteSession();
           return;
         }
         _remoteTransactionId = active.transactionId;
+        _sessionStart = active.startTimestamp;
         _service.adoptRemoteSession(
           transactionId: active.transactionId,
           stationName: active.displayLocation,
@@ -87,24 +92,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       if (!mounted) return;
       setState(() {
         _remoteTransactionId = null;
+        _sessionStart = null;
         _service.clearRemoteSession();
       });
     }
   }
 
   void _handleStartChargingSession() async {
+    // A prepaid network has nothing to bill the session to on an empty
+    // wallet, so this is checked before the swipe does anything rather than
+    // letting the driver find out at the station.
+    try {
+      final String? reason = WalletService.startBlockReason(
+        await WalletService.instance.load(),
+      );
+      if (reason != null) {
+        if (!mounted) return;
+        await showStartBlockedDialog(
+          context,
+          message: reason,
+          onTopUp: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (BuildContext context) => const WalletScreen(),
+            ),
+          ),
+        );
+        return;
+      }
+    } on ApiException {
+      // Offline, or the wallet is unavailable. The station's own OCPP
+      // authorize is the real gate, so a charge is not blocked on this.
+    }
+
     await _service.startSessionFromQrCode('EV-UB-SHANGRILA', 25000.0);
     if (mounted) setState(() {});
   }
 
+  /// The driver's own car, as they named it in their account — never invented.
+  String get _vehicleLabel =>
+      _auth.currentUser.value?.vehicleDisplayName ?? AppStrings.get('vehicle_not_set');
+
+  String _formatClock(DateTime time) {
+    final DateTime local = time.toLocal();
+    final String hh = local.hour.toString().padLeft(2, '0');
+    final String mm = local.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
   void _handleStopChargingSession() async {
-    final double energy = _service.totalEnergyKwh;
+    double energy = _service.totalEnergyKwh;
     final double power = _service.activePowerKw;
-    final double cost = energy * 450.0;
-    final String station =
-        _service.activeStationName ?? 'Шангри-Ла Молл Цэнэглэгч';
+    double? cost;
+    String station = _service.activeStationName ?? AppStrings.get('station_unknown');
 
     final int? remote = _remoteTransactionId;
+    int? finishedTransactionId;
     if (remote != null) {
       try {
         await _sessions.stop(remote);
@@ -116,6 +158,28 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         return;
       }
       _remoteTransactionId = null;
+      finishedTransactionId = remote;
+
+      // The charge point's own meter is the real number; local telemetry was
+      // only ever an estimate while the session was still running.
+      try {
+        final List<ChargingSession> sessions = await _sessions.list(limit: 5);
+        ChargingSession? finished;
+        for (final ChargingSession s in sessions) {
+          if (s.transactionId == remote) {
+            finished = s;
+            break;
+          }
+        }
+        if (finished != null) {
+          energy = finished.energyKwh.toDouble();
+          cost = finished.cost?.toDouble();
+          station = finished.displayLocation;
+        }
+      } on ApiException {
+        // The stop already succeeded; a receipt with the locally-tracked
+        // estimate beats no receipt at all.
+      }
     }
 
     await _service.stopUserChargingSession();
@@ -130,6 +194,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           totalEnergyKwh: energy,
           activePowerKw: power,
           totalCostMnt: cost,
+          transactionId: finishedTransactionId,
         ),
       );
       setState(() {});
@@ -188,18 +253,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       child: Stack(
                         children: [
                           Positioned.fill(
-                            child: Image.asset(
-                              'assets/images/bmw_x5.jpg',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    color: AppTheme.darkForest,
-                                    child: const Icon(
-                                      Icons.directions_car_rounded,
-                                      size: 80,
-                                      color: AppTheme.sageGreen,
-                                    ),
-                                  ),
+                            child: Container(
+                              color: AppTheme.darkForest,
+                              child: const Icon(
+                                Icons.directions_car_rounded,
+                                size: 80,
+                                color: AppTheme.sageGreen,
+                              ),
                             ),
                           ),
                           Positioned(
@@ -219,34 +279,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                   color: Colors.black.withValues(alpha: 0.7),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Row(
+                                child: Column(
                                   mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(
-                                      isCharging
-                                          ? Icons.bolt_rounded
-                                          : Icons.electric_car_rounded,
-                                      color: AppTheme.sageGreen,
-                                      size: 16,
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isCharging
+                                              ? Icons.bolt_rounded
+                                              : Icons.electric_car_rounded,
+                                          color: AppTheme.sageGreen,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            isCharging
+                                                ? 'ЦЭНЭГЛЭЖ БАЙНА • ${_service.activePowerKw.toInt()} кВт'
+                                                : '$_vehicleLabel • ${AppStrings.get('idle')}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        isCharging
-                                            ? 'ЦЭНЭГЛЭЖ БАЙНА • ${_service.activePowerKw.toInt()} кВт'
-                                            // The tariff belongs to a station,
-                                            // and no session means no station —
-                                            // this used to read a hardcoded ₮0.
-                                            : '$_vehicleName • ${AppStrings.get('idle')}',
+                                    // Who is plugged in where, and since when —
+                                    // the detail a shared station needs so the
+                                    // driver can tell their own session apart.
+                                    if (isCharging) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        [
+                                          _vehicleLabel,
+                                          if (_service.activeStationName != null)
+                                            _service.activeStationName!,
+                                          if (_sessionStart != null)
+                                            AppStrings.get(
+                                              'charging_since',
+                                            ).replaceFirst('{time}', _formatClock(_sessionStart!)),
+                                        ].join(' • '),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.75),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),

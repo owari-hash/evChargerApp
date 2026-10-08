@@ -129,6 +129,7 @@ class WalletConfig {
     required this.minTopUp,
     required this.maxTopUp,
     required this.minStartBalance,
+    required this.requireBalanceToStart,
   });
 
   final bool enabled;
@@ -141,6 +142,11 @@ class WalletConfig {
   final int maxTopUp;
   final int minStartBalance;
 
+  /// When true, the CSMS itself refuses to start a session below
+  /// [minStartBalance] — the app checks the same threshold first so the
+  /// driver sees why before tapping their tag at a station.
+  final bool requireBalanceToStart;
+
   factory WalletConfig.fromJson(Map<String, dynamic> json) {
     return WalletConfig(
       enabled: json['enabled'] != false,
@@ -151,6 +157,7 @@ class WalletConfig {
       minTopUp: _num(json['minTopUp']).round(),
       maxTopUp: _num(json['maxTopUp']).round(),
       minStartBalance: _num(json['minStartBalance']).round(),
+      requireBalanceToStart: json['requireBalanceToStart'] == true,
     );
   }
 }

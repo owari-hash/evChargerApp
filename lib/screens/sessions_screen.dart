@@ -7,6 +7,7 @@ import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/ebarimt_sheet.dart';
 
 /// Charging history, and the way to stop a session that is still running —
 /// the app's counterpart to `/account/sessions` in the kiosk.
@@ -101,6 +102,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
       setState(() => _stopping = null);
       showApiSnack(context, error);
     }
+  }
+
+  Future<void> _openEbarimt(ChargingSession session) async {
+    await EbarimtSheet.show(context, session);
+    // The sheet mutates its own copy; re-reading the list is the simplest way
+    // to pick up a receipt it just created without threading state back out.
+    if (mounted) await _load();
   }
 
   @override
@@ -280,6 +288,33 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   foregroundColor: AppTheme.errorRed,
                   side: BorderSide(
                     color: AppTheme.errorRed.withValues(alpha: 0.5),
+                    width: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (session.status == SessionStatus.completed) ...<Widget>[
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 42,
+              child: OutlinedButton.icon(
+                onPressed: () => _openEbarimt(session),
+                icon: Icon(
+                  session.ebarimt?.status == EBarimtStatus.success
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.receipt_long_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  session.ebarimt?.status == EBarimtStatus.success
+                      ? AppStrings.get('sess_ebarimt_view')
+                      : AppStrings.get('sess_ebarimt_get'),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: palette.accent,
+                  side: BorderSide(
+                    color: palette.accent.withValues(alpha: 0.5),
                     width: 1.4,
                   ),
                 ),

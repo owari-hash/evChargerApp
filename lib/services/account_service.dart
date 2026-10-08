@@ -36,6 +36,19 @@ class AccountService {
     return _adopt(body['user']);
   }
 
+  /// The vehicle shown on an active session, alongside the station and start
+  /// time. Either field clears when sent empty.
+  Future<AuthUser> updateVehicle({String? brand, String? model}) async {
+    final Map<String, dynamic> body = await _client.patch(
+      '/account/profile',
+      body: <String, dynamic>{
+        'vehicleBrand': (brand ?? '').trim(),
+        'vehicleModel': (model ?? '').trim(),
+      },
+    );
+    return _adopt(body['user']);
+  }
+
   /// Changes the sign-in PIN, or sets the first one when [currentPin] is null
   /// on an account that has none. The API signs every *other* device out and
   /// re-issues this device's cookie, so the driver stays signed in here.

@@ -31,13 +31,42 @@ class _AccountScreenState extends State<AccountScreen> {
       widget.accountService ?? AccountService.instance;
 
   final TextEditingController _newTag = TextEditingController();
+  late final TextEditingController _vehicleBrand = TextEditingController(
+    text: _auth.currentUser.value?.vehicleBrand ?? '',
+  );
+  late final TextEditingController _vehicleModel = TextEditingController(
+    text: _auth.currentUser.value?.vehicleModel ?? '',
+  );
 
   bool _linkingTag = false;
+  bool _savingVehicle = false;
 
   @override
   void dispose() {
     _newTag.dispose();
+    _vehicleBrand.dispose();
+    _vehicleModel.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveVehicle() async {
+    if (_savingVehicle) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _savingVehicle = true);
+
+    try {
+      await _account.updateVehicle(
+        brand: _vehicleBrand.text,
+        model: _vehicleModel.text,
+      );
+      if (!mounted) return;
+      setState(() => _savingVehicle = false);
+      showSnack(context, AppStrings.get('acct_vehicle_saved'));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _savingVehicle = false);
+      showApiSnack(context, error);
+    }
   }
 
   Future<void> _linkTag() async {
@@ -124,6 +153,8 @@ class _AccountScreenState extends State<AccountScreen> {
             _statusCard(palette, user),
             const SizedBox(height: 12),
             _navCard(palette),
+            const SizedBox(height: 12),
+            _vehicleCard(palette),
             const SizedBox(height: 12),
             _idTagsCard(palette, user),
           ],
@@ -344,6 +375,49 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _vehicleCard(AppPalette palette) {
+    return SectionCard(
+      title: AppStrings.get('acct_vehicle_title'),
+      subtitle: AppStrings.get('acct_vehicle_body'),
+      child: Column(
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: AccountField(
+                  controller: _vehicleBrand,
+                  label: AppStrings.get('acct_vehicle_brand'),
+                  icon: Icons.directions_car_filled_rounded,
+                  helper: AppStrings.get('acct_vehicle_brand_hint'),
+                  enabled: !_savingVehicle,
+                  textInputAction: TextInputAction.next,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AccountField(
+                  controller: _vehicleModel,
+                  label: AppStrings.get('acct_vehicle_model'),
+                  helper: AppStrings.get('acct_vehicle_model_hint'),
+                  enabled: !_savingVehicle,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _saveVehicle(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          PrimaryAction(
+            label: AppStrings.get('acct_vehicle_save'),
+            busy: _savingVehicle,
+            onPressed: _saveVehicle,
+          ),
+        ],
       ),
     );
   }

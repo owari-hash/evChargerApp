@@ -34,4 +34,22 @@ class SessionsService {
     );
     return (body['status'] ?? 'Accepted').toString();
   }
+
+  /// Requests a real e-Barimt tax receipt for a past session — the same
+  /// endpoint the kiosk web app's receipt flow calls, not a device-side
+  /// stand-in. [customerTin] is required for [EBarimtType.b2b].
+  Future<ChargingSession> requestEbarimt(
+    int transactionId, {
+    required EBarimtType type,
+    String? customerTin,
+  }) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/sessions/$transactionId/ebarimt',
+      body: <String, dynamic>{
+        'type': type == EBarimtType.b2b ? 'B2B_RECEIPT' : 'B2C_RECEIPT',
+        if (customerTin != null) 'customerTin': customerTin,
+      },
+    );
+    return ChargingSession.fromJson(body['session'] as Map<String, dynamic>);
+  }
 }

@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
+import '../models/station.dart';
+import '../services/api_client.dart';
 import '../services/auth_service.dart';
-import '../services/ocpp_mock_service.dart';
+import '../services/stations_service.dart';
+import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 import '../widgets/ocpp_json_logger_sheet.dart';
 import '../widgets/signed_out_panel.dart';
 import 'mongolia_map_screen.dart';
+import 'wallet_screen.dart';
 
+/// Wallet balance and the nearby network, one tap from the dashboard.
+///
+/// This used to be a car's cockpit — climate, media, tyre pressure — none of
+/// which the app has ever been connected to anything to read. What the app
+/// actually knows is the wallet and the charging network, so that is what is
+/// here now.
 class QuickControlsScreen extends StatefulWidget {
   const QuickControlsScreen({super.key, this.authService});
 
@@ -18,11 +29,53 @@ class QuickControlsScreen extends StatefulWidget {
 }
 
 class _QuickControlsScreenState extends State<QuickControlsScreen> {
-  final OcppMockService _service = OcppMockService.instance;
-
   AuthService get _auth => widget.authService ?? AuthService.instance;
-  double _climateTemp = 17.0;
-  bool _isPlayingMedia = true;
+  final StationsService _stations = StationsService.instance;
+
+  WalletSnapshot? _wallet;
+  bool _walletLoading = true;
+  String? _walletError;
+
+  @override
+  void initState() {
+    super.initState();
+    _stations.stations.addListener(_onStationsChanged);
+    _stations.load();
+    _loadWallet();
+  }
+
+  @override
+  void dispose() {
+    _stations.stations.removeListener(_onStationsChanged);
+    super.dispose();
+  }
+
+  void _onStationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadWallet() async {
+    setState(() {
+      _walletLoading = true;
+      _walletError = null;
+    });
+    try {
+      final WalletSnapshot snapshot = await WalletService.instance.load(
+        entryLimit: 1,
+      );
+      if (!mounted) return;
+      setState(() {
+        _wallet = snapshot;
+        _walletLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _walletError = error.message;
+        _walletLoading = false;
+      });
+    }
+  }
 
   void _openInteractiveMap(BuildContext context) {
     // A pushed route rather than a modal sheet: sheets strip the top padding
@@ -55,8 +108,8 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Controls act on the driver's own charge, so there is nothing here for a
-    // guest to operate.
+    // Both the wallet and the network are account-scoped reads here, so a
+    // guest has nothing on this screen to look at.
     if (!_auth.isSignedIn) {
       return Scaffold(
         backgroundColor: context.palette.bg,
@@ -65,10 +118,17 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
           title: AppStrings.get('guest_controls_title'),
           body: AppStrings.get('guest_controls_body'),
           reason: AppStrings.get('signin_required_controls'),
-          onSignedIn: () => setState(() {}),
+          onSignedIn: () {
+            _loadWallet();
+            setState(() {});
+          },
         ),
       );
     }
+
+    final List<ChargingStationLocation> nearby = _stations.stations.value
+        .take(3)
+        .toList(growable: false);
 
     return Scaffold(
       backgroundColor: context.palette.bg,
@@ -96,520 +156,304 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.wait(<Future<void>>[
+            _stations.load(force: true),
+            _loadWallet(),
+          ]);
+        },
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          children: [
+            _buildWalletCard(context),
+            const SizedBox(height: 16),
+            _buildNearbyStationsCard(context, nearby),
+            const SizedBox(height: 16),
+            _buildMapCard(context),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWalletCard(BuildContext context) {
+    final num? balance = _wallet?.wallet.balance;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.palette.panel,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.get('wallet_balance'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.palette.onPanel.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (_walletLoading)
+                  SizedBox(
+                    height: 26,
+                    width: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: context.palette.onPanel,
+                    ),
+                  )
+                else if (_walletError != null)
+                  Text(
+                    AppStrings.get('wallet_unavailable'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.palette.onPanel.withValues(alpha: 0.85),
+                    ),
+                  )
+                else
+                  Text(
+                    formatMnt(balance ?? 0),
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: context.palette.onPanel,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: context.palette.onPanel,
+              foregroundColor: context.palette.panel,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const WalletScreen()),
+            ),
+            child: Text(AppStrings.get('topup_title')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearbyStationsCard(
+    BuildContext context,
+    List<ChargingStationLocation> nearby,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: context.palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  AppStrings.get('nearby_stations'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: context.palette.ink,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _openInteractiveMap(context),
+                child: Text(AppStrings.get('map')),
+              ),
+            ],
+          ),
+          if (_stations.loading.value && nearby.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+            )
+          else if (nearby.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                _stations.error.value ?? AppStrings.get('route_unavailable'),
+                style: TextStyle(fontSize: 12, color: context.palette.inkMuted),
+              ),
+            )
+          else
+            ...nearby.map(
+              (ChargingStationLocation station) => InkWell(
+                onTap: () => _openInteractiveMap(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: station.availableConnectors > 0
+                              ? AppTheme.sageGreen
+                              : context.palette.inkMuted,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              station.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: context.palette.ink,
+                              ),
+                            ),
+                            Text(
+                              station.distance.isNotEmpty
+                                  ? '${station.distance} · ${station.availableConnectors}/${station.totalConnectors} ${AppStrings.get('available')}'
+                                  : '${station.availableConnectors}/${station.totalConnectors} ${AppStrings.get('available')}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.palette.inkMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₮${station.pricePerKwh.toInt()}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: context.palette.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapCard(BuildContext context) {
+    return InkWell(
+      onTap: () => _openInteractiveMap(context),
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.palette.card,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: context.palette.border),
+        ),
         child: Column(
           children: [
-            // Row 1: Energy & Climate
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Energy Card
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: context.palette.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.get('energy'),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '11:44 цагт цэнэглэж эхэлсэн',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            '${_service.targetLimitPct.toInt()}%',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          Text(
-                            AppStrings.get('charge_limit'),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          // Limit slider badge
-                          Container(
-                            width: double.infinity,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: context.palette.accent.withValues(
-                                alpha: 0.16,
-                              ),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: _service.targetLimitPct / 100,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.sageGreen,
-                                      borderRadius: BorderRadius.circular(13),
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  'Хязгаар ${_service.targetLimitPct.toInt()}%',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            Row(
+              children: [
+                Text(
+                  AppStrings.get('location'),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.palette.ink,
                   ),
-                  const SizedBox(width: 14),
-
-                  // Climate Card
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: context.palette.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  AppStrings.get('climate'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.palette.ink,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${AppStrings.get('outside_temp')} 28°C',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${_climateTemp.toInt()}°C',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900,
-                                        color: context.palette.ink,
-                                      ),
-                                    ),
-                                    Text(
-                                      AppStrings.get('windows_locked'),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: context.palette.inkMuted,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.ac_unit_rounded,
-                                color: context.palette.accent,
-                                size: 26,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          // Temp range bar
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '08°C',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: context.palette.inkMuted,
-                                ),
-                              ),
-                              Text(
-                                '42°C',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: context.palette.inkMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SliderTheme(
-                            data: SliderThemeData(
-                              trackHeight: 3,
-                              thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6,
-                              ),
-                              activeTrackColor: AppTheme.sageGreen,
-                              inactiveTrackColor: context.palette.accent
-                                  .withValues(alpha: 0.16),
-                            ),
-                            child: Slider(
-                              value: _climateTemp,
-                              min: 8,
-                              max: 42,
-                              onChanged: (val) =>
-                                  setState(() => _climateTemp = val),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Row 2: Media & Tire Pressure
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Media Card
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: context.palette.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.get('media'),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            AppStrings.get('media_system'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            AppStrings.get('media_track'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          Text(
-                            AppStrings.get('media_artist'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          // Media Controls
-                          Row(
-                            children: [
-                              Expanded(
-                                child: LinearProgressIndicator(
-                                  value: 0.45,
-                                  color: AppTheme.sageGreen,
-                                  backgroundColor: context.palette.accent
-                                      .withValues(alpha: 0.16),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: () => setState(
-                                  () => _isPlayingMedia = !_isPlayingMedia,
-                                ),
-                                child: Icon(
-                                  _isPlayingMedia
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  color: context.palette.ink,
-                                  size: 20,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Tire Pressure Card
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: context.palette.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.get('tire_pressure'),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${AppStrings.get('last_measured')}: 12:15',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      '49 psi',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.palette.ink,
-                                      ),
-                                    ),
-                                    SizedBox(height: 18),
-                                    Text(
-                                      '47 psi',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.palette.ink,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: context.palette.accent.withValues(
-                                    alpha: 0.16,
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.tire_repair_rounded,
-                                  color: context.palette.accent,
-                                  size: 26,
-                                ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      '48 psi',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.palette.ink,
-                                      ),
-                                    ),
-                                    SizedBox(height: 18),
-                                    Text(
-                                      '49 psi',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.palette.ink,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Interactive Location Map Card
-            InkWell(
-              onTap: () => _openInteractiveMap(context),
-              borderRadius: BorderRadius.circular(24),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: context.palette.card,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: context.palette.border),
                 ),
-                child: Column(
+                const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    Icons.open_in_full_rounded,
+                    color: context.palette.ink,
+                    size: 20,
+                  ),
+                  onPressed: () => _openInteractiveMap(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                height: 152,
+                decoration: BoxDecoration(
+                  color: context.palette.accent.withValues(alpha: 0.09),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          AppStrings.get('location'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: context.palette.ink,
-                          ),
+                    CustomPaint(
+                      painter: _MapPreviewPainter(
+                        routeColor: context.palette.accent,
+                        gridColor: context.palette.accent.withValues(
+                          alpha: 0.22,
                         ),
-                        const Spacer(),
-                        IconButton(
-                          icon: Icon(
-                            Icons.open_in_full_rounded,
-                            color: context.palette.ink,
-                            size: 20,
-                          ),
-                          onPressed: () => _openInteractiveMap(context),
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
                       child: Container(
-                        height: 152,
-                        decoration: BoxDecoration(
-                          color: context.palette.accent.withValues(alpha: 0.09),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
                         ),
-                        child: Stack(
-                          fit: StackFit.expand,
+                        decoration: BoxDecoration(
+                          color: context.palette.card.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: context.palette.border),
+                        ),
+                        child: Row(
                           children: [
-                            CustomPaint(
-                              painter: _MapPreviewPainter(
-                                routeColor: context.palette.accent,
-                                gridColor: context.palette.accent.withValues(
-                                  alpha: 0.22,
+                            Icon(
+                              Icons.map_rounded,
+                              color: context.palette.accent,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                AppStrings.get('map_title'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.palette.ink,
                                 ),
                               ),
                             ),
-                            // Address chip, floated so the map reads underneath.
-                            Positioned(
-                              left: 12,
-                              right: 12,
-                              bottom: 12,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 9,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: context.palette.card.withValues(
-                                    alpha: 0.94,
-                                  ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: context.palette.border,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.my_location_rounded,
-                                      color: context.palette.accent,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        AppStrings.get('vehicle_location'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: context.palette.ink,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: context.palette.inkMuted,
-                                      size: 18,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: context.palette.inkMuted,
+                              size: 18,
                             ),
                           ],
                         ),
@@ -619,7 +463,6 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -627,8 +470,9 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
   }
 }
 
-/// A small map-like preview: faint street grid, a route, and the car's pin.
-/// The old painter drew a zig-zag line chart, which said nothing about place.
+/// A small map-like preview: faint street grid and a route. Decorative only —
+/// it opens the real map on tap, it does not claim to be the driver's actual
+/// location.
 class _MapPreviewPainter extends CustomPainter {
   _MapPreviewPainter({required this.routeColor, required this.gridColor});
 
@@ -641,7 +485,6 @@ class _MapPreviewPainter extends CustomPainter {
       ..color = gridColor
       ..strokeWidth = 1;
 
-    // Streets: a few off-centre lines so it reads as a map, not graph paper.
     for (final double f in <double>[0.22, 0.55, 0.82]) {
       canvas.drawLine(
         Offset(0, size.height * f),
@@ -657,7 +500,6 @@ class _MapPreviewPainter extends CustomPainter {
       );
     }
 
-    // One wider avenue.
     final Paint avenue = Paint()
       ..color = gridColor
       ..strokeWidth = 5
@@ -668,7 +510,6 @@ class _MapPreviewPainter extends CustomPainter {
       avenue,
     );
 
-    // The travelled route.
     final Path route = Path()
       ..moveTo(size.width * 0.14, size.height * 0.82)
       ..cubicTo(
@@ -696,7 +537,6 @@ class _MapPreviewPainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
-    // Origin dot.
     final Offset origin = Offset(size.width * 0.14, size.height * 0.82);
     canvas.drawCircle(origin, 4.5, Paint()..color = routeColor);
     canvas.drawCircle(
@@ -708,7 +548,6 @@ class _MapPreviewPainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
-    // Destination pin with a soft halo.
     final Offset pin = Offset(size.width * 0.86, size.height * 0.22);
     canvas.drawCircle(
       pin,

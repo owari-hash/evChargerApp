@@ -1,4 +1,6 @@
 import '../models/wallet.dart';
+import '../utils/app_strings.dart';
+import '../utils/money.dart';
 import 'api_client.dart';
 
 /// The driver's prepaid wallet: balance, ledger and QPay top-ups.
@@ -57,4 +59,28 @@ class WalletService {
 
   static Map<String, dynamic> _map(dynamic value) =>
       value is Map<String, dynamic> ? value : const <String, dynamic>{};
+
+  /// Null when a charge may start. Otherwise the message to show the driver
+  /// before they tap their tag at a station only to be refused there.
+  ///
+  /// A zero or negative balance always blocks, regardless of config — a
+  /// prepaid network has nothing to bill the session to. Below
+  /// [WalletConfig.minStartBalance] blocks only when the CSMS itself enforces
+  /// that floor, so the app never refuses a charge the station would accept.
+  static String? startBlockReason(WalletSnapshot snapshot) {
+    if (!snapshot.config.enabled) return null;
+
+    if (snapshot.wallet.balance <= 0) {
+      return AppStrings.get('start_blocked_body_zero');
+    }
+
+    if (snapshot.config.requireBalanceToStart &&
+        snapshot.wallet.balance < snapshot.config.minStartBalance) {
+      return AppStrings.get(
+        'start_blocked_body_min',
+      ).replaceFirst('{amount}', formatMnt(snapshot.config.minStartBalance));
+    }
+
+    return null;
+  }
 }

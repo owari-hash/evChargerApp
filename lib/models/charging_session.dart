@@ -18,6 +18,7 @@ class ChargingSession {
     this.lastPowerW,
     this.lastSocPercent,
     this.stopReason,
+    this.ebarimt,
   });
 
   final int transactionId;
@@ -33,6 +34,7 @@ class ChargingSession {
   final num? lastPowerW;
   final num? lastSocPercent;
   final String? stopReason;
+  final EBarimtData? ebarimt;
 
   bool get isActive => status == SessionStatus.active;
 
@@ -70,6 +72,30 @@ class ChargingSession {
           ? json['lastSocPercent'] as num
           : null,
       stopReason: _text(json['stopReason']),
+      ebarimt: json['ebarimt'] is Map<String, dynamic>
+          ? EBarimtData.fromJson(json['ebarimt'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  /// This session with its e-Barimt replaced — the rest of the session is
+  /// unaffected by requesting a receipt.
+  ChargingSession copyWithEbarimt(EBarimtData ebarimt) {
+    return ChargingSession(
+      transactionId: transactionId,
+      chargePointId: chargePointId,
+      stationName: stationName,
+      connectorId: connectorId,
+      idTag: idTag,
+      status: status,
+      startTimestamp: startTimestamp,
+      stopTimestamp: stopTimestamp,
+      energyKwh: energyKwh,
+      cost: cost,
+      lastPowerW: lastPowerW,
+      lastSocPercent: lastSocPercent,
+      stopReason: stopReason,
+      ebarimt: ebarimt,
     );
   }
 
@@ -97,3 +123,71 @@ class ChargingSession {
 }
 
 enum SessionStatus { active, completed, rejected }
+
+/// A Mongolian e-Barimt tax receipt for one session, mirroring `EBarimtData`
+/// in evChargerKiosk's `src/lib/types.ts`. Requested after the fact from
+/// `POST /sessions/:id/ebarimt` — nothing here is generated on the device.
+class EBarimtData {
+  const EBarimtData({
+    required this.type,
+    required this.totalAmount,
+    required this.totalVAT,
+    required this.status,
+    this.receiptId,
+    this.qrData,
+    this.lottery,
+    this.merchantTin,
+    this.customerTin,
+    this.issuedAt,
+    this.error,
+  });
+
+  final String? receiptId;
+  final EBarimtType type;
+  final String? qrData;
+  final String? lottery;
+  final String? merchantTin;
+  final String? customerTin;
+  final num totalAmount;
+  final num totalVAT;
+  final EBarimtStatus status;
+  final DateTime? issuedAt;
+  final String? error;
+
+  factory EBarimtData.fromJson(Map<String, dynamic> json) {
+    return EBarimtData(
+      receiptId: _text(json['receiptId']),
+      type: (json['type']?.toString() ?? '') == 'B2B_RECEIPT'
+          ? EBarimtType.b2b
+          : EBarimtType.b2c,
+      qrData: _text(json['qrData']),
+      lottery: _text(json['lottery']),
+      merchantTin: _text(json['merchantTin']),
+      customerTin: _text(json['customerTin']),
+      totalAmount: json['totalAmount'] is num ? json['totalAmount'] as num : 0,
+      totalVAT: json['totalVAT'] is num ? json['totalVAT'] as num : 0,
+      status: switch (json['status']?.toString()) {
+        'SUCCESS' => EBarimtStatus.success,
+        'FAILED' => EBarimtStatus.failed,
+        _ => EBarimtStatus.pending,
+      },
+      issuedAt: _date(json['issuedAt']),
+      error: _text(json['error']),
+    );
+  }
+
+  static String? _text(dynamic value) {
+    if (value == null) return null;
+    final String text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static DateTime? _date(dynamic value) {
+    final String? text = _text(value);
+    return text == null ? null : DateTime.tryParse(text);
+  }
+}
+
+enum EBarimtType { b2c, b2b }
+
+enum EBarimtStatus { pending, success, failed }

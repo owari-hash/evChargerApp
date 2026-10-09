@@ -4,7 +4,6 @@ import 'package:evchargerapp/screens/quick_controls_screen.dart';
 import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
-import 'package:evchargerapp/widgets/charge_limit_selector.dart';
 import 'package:evchargerapp/screens/login_register_screen.dart';
 import 'package:evchargerapp/widgets/swipe_to_slide_button.dart';
 
@@ -36,24 +35,6 @@ void main() {
     final String mode = theme.brightness == Brightness.dark ? 'dark' : 'light';
 
     for (final Size size in _phones) {
-      testWidgets(
-        'charge limit selector fits ${size.width.toInt()}pt ($mode)',
-        (WidgetTester tester) async {
-          tester.view.physicalSize = size * 2;
-          tester.view.devicePixelRatio = 2.0;
-          addTearDown(tester.view.resetPhysicalSize);
-
-          await tester.pumpWidget(
-            _host(
-              ChargeLimitSelector(targetLimitPct: 75, onLimitChanged: (_) {}),
-              theme,
-            ),
-          );
-          await _pumpFrames(tester);
-          expect(tester.takeException(), isNull);
-        },
-      );
-
       testWidgets('slide-to-start fits ${size.width.toInt()}pt ($mode)', (
         WidgetTester tester,
       ) async {
@@ -66,7 +47,7 @@ void main() {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: const SwipeToSlideButton(
-                onSwipeCompleted: _noop,
+                onSwipeCompleted: _decline,
                 text: 'Цэнэглэж эхлэхийн тулд гулсуулна уу',
               ),
             ),
@@ -163,3 +144,5 @@ void main() {
 }
 
 void _noop() {}
+
+bool _decline() => false;

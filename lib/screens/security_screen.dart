@@ -47,6 +47,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
   final FocusNode _changeFocus = FocusNode();
 
   bool _changing = false;
+
+  /// The PIN card shows just its button until the driver asks to change it.
+  bool _pinFormOpen = false;
   bool _resending = false;
   bool _sendingCode = false;
   bool _verifyingCode = false;
@@ -147,7 +150,10 @@ class _SecurityScreenState extends State<SecurityScreen> {
       _current.clear();
       _next.clear();
       _confirm.clear();
-      setState(() => _changing = false);
+      setState(() {
+        _changing = false;
+        _pinFormOpen = false;
+      });
       showSnack(context, AppStrings.get('sec_pin_changed'));
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -363,64 +369,100 @@ class _SecurityScreenState extends State<SecurityScreen> {
     );
   }
 
+  void _closePinForm() {
+    FocusScope.of(context).unfocus();
+    _current.clear();
+    _next.clear();
+    _confirm.clear();
+    setState(() {
+      _pinFormOpen = false;
+      _pinError = null;
+      _pinFields = const <String, String>{};
+    });
+  }
+
   Widget _pinCard(AppPalette palette, AuthUser user) {
+    final String actionLabel = AppStrings.get(
+      user.hasPin ? 'sec_pin_change' : 'sec_pin_set',
+    );
+
     return SectionCard(
       title: AppStrings.get('sec_pin_title'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            AppStrings.get(user.hasPin ? 'sec_pin_hint' : 'sec_pin_none'),
-            style: TextStyle(
-              color: palette.inkMuted,
-              fontSize: 12.5,
-              height: 1.45,
-            ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: _pinFormOpen
+            ? _pinForm(palette, user, actionLabel)
+            : PrimaryAction(
+                label: actionLabel,
+                icon: Icons.lock_reset_rounded,
+                onPressed: () => setState(() => _pinFormOpen = true),
+              ),
+      ),
+    );
+  }
+
+  Widget _pinForm(AppPalette palette, AuthUser user, String actionLabel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          AppStrings.get(user.hasPin ? 'sec_pin_hint' : 'sec_pin_none'),
+          style: TextStyle(
+            color: palette.inkMuted,
+            fontSize: 12.5,
+            height: 1.45,
           ),
-          const SizedBox(height: 14),
-          if (user.hasPin) ...<Widget>[
-            PinCodeField(
-              controller: _current,
-              enabled: !_changing,
-              label: AppStrings.get('sec_pin_current'),
-              error: _pinFields['currentPin'],
-              onCompleted: (_) => _nextFocus.requestFocus(),
-            ),
-            const SizedBox(height: 12),
-          ],
+        ),
+        const SizedBox(height: 14),
+        if (user.hasPin) ...<Widget>[
           PinCodeField(
-            controller: _next,
-            focusNode: _nextFocus,
+            controller: _current,
+            autofocus: true,
             enabled: !_changing,
-            label: AppStrings.get('sec_pin_new'),
-            error: _pinFields['pin'],
-            onCompleted: (_) => _confirmFocus.requestFocus(),
+            label: AppStrings.get('sec_pin_current'),
+            error: _pinFields['currentPin'],
+            onCompleted: (_) => _nextFocus.requestFocus(),
           ),
           const SizedBox(height: 12),
-          PinCodeField(
-            controller: _confirm,
-            focusNode: _confirmFocus,
-            enabled: !_changing,
-            label: AppStrings.get('sec_pin_confirm'),
-            error: _pinFields['confirmPin'],
-            onCompleted: _checkConfirm,
-          ),
-          if (_pinError != null) ...<Widget>[
-            const SizedBox(height: 12),
-            FormErrorBanner(message: _pinError!),
-          ],
-          const SizedBox(height: 14),
-          PrimaryAction(
-            label: AppStrings.get(
-              user.hasPin ? 'sec_pin_change' : 'sec_pin_set',
-            ),
-            busy: _changing,
-            icon: Icons.shield_rounded,
-            focusNode: _changeFocus,
-            onPressed: () => _changePin(user),
-          ),
         ],
-      ),
+        PinCodeField(
+          controller: _next,
+          focusNode: _nextFocus,
+          autofocus: !user.hasPin,
+          enabled: !_changing,
+          label: AppStrings.get('sec_pin_new'),
+          error: _pinFields['pin'],
+          onCompleted: (_) => _confirmFocus.requestFocus(),
+        ),
+        const SizedBox(height: 12),
+        PinCodeField(
+          controller: _confirm,
+          focusNode: _confirmFocus,
+          enabled: !_changing,
+          label: AppStrings.get('sec_pin_confirm'),
+          error: _pinFields['confirmPin'],
+          onCompleted: _checkConfirm,
+        ),
+        if (_pinError != null) ...<Widget>[
+          const SizedBox(height: 12),
+          FormErrorBanner(message: _pinError!),
+        ],
+        const SizedBox(height: 14),
+        PrimaryAction(
+          label: actionLabel,
+          busy: _changing,
+          icon: Icons.shield_rounded,
+          focusNode: _changeFocus,
+          onPressed: () => _changePin(user),
+        ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: _changing ? null : _closePinForm,
+          child: Text(AppStrings.get('cancel')),
+        ),
+      ],
     );
   }
 

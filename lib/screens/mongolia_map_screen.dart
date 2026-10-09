@@ -85,7 +85,8 @@ class MongoliaMapScreen extends StatefulWidget {
   State<MongoliaMapScreen> createState() => _MongoliaMapScreenState();
 }
 
-class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
+class _MongoliaMapScreenState extends State<MongoliaMapScreen>
+    with SingleTickerProviderStateMixin {
   final OcppMockService _service = OcppMockService.instance;
   final MapController _mapController = MapController();
 
@@ -113,6 +114,15 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   String? _routeError;
 
   final StationsService _stations = StationsService.instance;
+
+  /// Zoom a route opens at — close enough to read the next turn, as in
+  /// Google Maps' driving view.
+  static const double _navigationZoom = 17.0;
+
+  late final AnimationController _cameraFlight = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
 
   @override
   void initState() {
@@ -229,8 +239,14 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               );
 
               if (_isNavigatingRoute) {
-                // Follow the driver rather than driving the map ourselves.
-                _mapController.move(_userPosition, _mapController.camera.zoom);
+                // Follow the driver rather than driving the map ourselves —
+                // unless the opening flight is still under way.
+                if (!_cameraFlight.isAnimating) {
+                  _mapController.move(
+                    _userPosition,
+                    _mapController.camera.zoom,
+                  );
+                }
                 _checkArrival();
               }
             });
@@ -254,7 +270,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
       _routeLoading = true;
     });
 
-    _mapController.move(_userPosition, 15.0);
+    _flyTo(_userPosition, _navigationZoom);
 
     try {
       final DrivingRoute route = await RouteService.fetchDrivingRoute(
@@ -266,7 +282,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
         _route = route;
         _routeLoading = false;
       });
-      _fitRoute(route);
     } on RouteUnavailable catch (e) {
       debugPrint('Route lookup failed: $e');
       if (!mounted) return;
@@ -279,19 +294,34 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
     }
   }
 
-  /// Frames the whole route so the driver can see where they are going.
-  void _fitRoute(DrivingRoute route) {
-    if (route.points.length < 2) return;
-    try {
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(route.points),
-          padding: const EdgeInsets.fromLTRB(48, 120, 48, 260),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Could not fit route bounds: $e');
+  /// Glides the camera to [target], easing the zoom alongside the pan.
+  ///
+  /// Starting a route used to jump to the driver, then zoom right back out to
+  /// frame the whole route; now it flies in and stays on them.
+  void _flyTo(LatLng target, double zoom) {
+    final MapCamera from = _mapController.camera;
+    final LatLngTween centre = LatLngTween(begin: from.center, end: target);
+    final Tween<double> zoomTween = Tween<double>(begin: from.zoom, end: zoom);
+    final Animation<double> curve = CurvedAnimation(
+      parent: _cameraFlight,
+      curve: Curves.easeInOutCubic,
+    );
+
+    void step() {
+      _mapController.move(centre.evaluate(curve), zoomTween.evaluate(curve));
     }
+
+    _cameraFlight
+      ..stop()
+      ..reset();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _mapController.move(target, zoom);
+      return;
+    }
+    curve.addListener(step);
+    _cameraFlight.forward().whenCompleteOrCancel(
+      () => curve.removeListener(step),
+    );
   }
 
   /// Ends guidance once the driver reaches the charger.
@@ -443,7 +473,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
   }
 
   void _centerDriverLocation() {
-    _mapController.move(_userPosition, 15.5);
+    _flyTo(_userPosition, _isNavigatingRoute ? _navigationZoom : 15.5);
   }
 
   Future<void> _launchExternalGpsNavigation(double lat, double lng) async {
@@ -468,6 +498,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
 
   @override
   void dispose() {
+    _cameraFlight.dispose();
     _positionStreamSub?.cancel();
     _stations.stations.removeListener(_onStationsChanged);
     _stations.loading.removeListener(_onStationsChanged);
@@ -534,9 +565,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 tileProvider: NetworkTileProvider(
-                  headers: {
-                    'User-Agent': 'EplugApp/1.0 (contact@eplug.mn)',
-                  },
+                  headers: {'User-Agent': 'EplugApp/1.0 (contact@eplug.mn)'},
                 ),
               ),
 
@@ -1106,4 +1135,17 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen> {
       ),
     );
   }
+}
+
+/// Linear interpolation between two coordinates, for camera flights. Short
+/// hops only — fine across a city, not across the antimeridian.
+class LatLngTween extends Tween<LatLng> {
+  LatLngTween({required LatLng begin, required LatLng end})
+    : super(begin: begin, end: end);
+
+  @override
+  LatLng lerp(double t) => LatLng(
+    begin!.latitude + (end!.latitude - begin!.latitude) * t,
+    begin!.longitude + (end!.longitude - begin!.longitude) * t,
+  );
 }

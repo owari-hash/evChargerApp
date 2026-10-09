@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import '../models/ocpp_models.dart';
 import '../models/station.dart';
 import 'stations_service.dart';
@@ -14,13 +13,17 @@ class OcppMockService {
   bool isConnected = true;
   String chargePointId = 'CP-UB-Eplug-001';
   int activeTransactionId = 10042;
-  double batteryLevel = 62.0; // %
-  double remainingKm = 98.0; // km
+
+  /// State of charge as the car itself reported it during a real session.
+  /// Null whenever nothing has reported one — the app never makes one up.
+  double? batteryLevel; // %
   // Idle until a session actually starts. These used to hold demo values, so
   // every driver saw a charge in progress the moment they signed in.
   double activePowerKw = 0.0; // kW
   double totalEnergyKwh = 0.0; // kWh
-  double targetLimitPct = 75.0;
+
+  /// What the network has billed the running session so far, when it says.
+  double? sessionCostMnt;
   bool isPlugLocked = true;
   bool isDarkTheme = false;
 
@@ -46,11 +49,13 @@ class OcppMockService {
     required double energyKwh,
     required double powerKw,
     double? socPercent,
+    double? costMnt,
   }) {
     activeTransactionId = transactionId;
     activeStationName = stationName;
     totalEnergyKwh = energyKwh;
     activePowerKw = powerKw;
+    sessionCostMnt = costMnt;
     if (socPercent != null && socPercent > 0) batteryLevel = socPercent;
     connectorStatuses[1] = ConnectorStatus.charging;
   }
@@ -63,6 +68,8 @@ class OcppMockService {
     sessionStartTime = null;
     totalEnergyKwh = 0.0;
     activePowerKw = 0.0;
+    sessionCostMnt = null;
+    batteryLevel = null;
     connectorStatuses[1] = ConnectorStatus.available;
   }
 
@@ -94,18 +101,10 @@ class OcppMockService {
     if (!enablePeriodicTimer) return;
     _telemetryTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (connectorStatuses[1] == ConnectorStatus.charging) {
-        // Charging only ever adds. Lowering the target below the current level
-        // used to clamp the battery *downwards*, so the charge and the range
-        // fell while the session bill kept climbing.
-        if (batteryLevel < targetLimitPct) {
-          batteryLevel = min(targetLimitPct, batteryLevel + 0.15);
-          remainingKm = batteryLevel * 1.58;
-          totalEnergyKwh += 0.02;
-        }
-
+        // A refresh pulse only. This used to add a made-up 0.15% and 0.02 kWh
+        // every tick; the real numbers come from the driver API's session.
         _telemetryStreamController.add({
           'batteryLevel': batteryLevel,
-          'remainingKm': remainingKm,
           'powerKw': activePowerKw,
           'totalEnergyKwh': totalEnergyKwh,
           'status': connectorStatuses[1]?.code ?? 'Charging',
@@ -152,7 +151,6 @@ class OcppMockService {
     connectorStatuses[1] = ConnectorStatus.charging;
     _telemetryStreamController.add({
       'batteryLevel': batteryLevel,
-      'remainingKm': remainingKm,
       'powerKw': activePowerKw,
       'totalEnergyKwh': totalEnergyKwh,
       'status': 'Charging',

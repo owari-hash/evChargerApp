@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/station.dart';
+import '../models/wallet.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/stations_service.dart';
 import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
-import '../utils/money.dart';
 import '../widgets/ocpp_json_logger_sheet.dart';
 import '../widgets/signed_out_panel.dart';
 import 'mongolia_map_screen.dart';

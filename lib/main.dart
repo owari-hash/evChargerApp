@@ -176,6 +176,8 @@ class _MainAppFrameState extends State<MainAppFrame> {
         onNavigateToQuickControls: () {
           setState(() => _activeTabIndex = 2);
         },
+        onFindCharger: () => setState(() => _activeTabIndex = _mapTab),
+        onAddVehicle: () => setState(() => _activeTabIndex = _accountTab),
       ),
       MongoliaMapScreen(onOpenQrScanner: () => _openQrScannerModal(context)),
       QuickControlsScreen(authService: widget.authService),

@@ -316,6 +316,10 @@ class AppStrings {
       'acct_vehicle_save': 'Хадгалах',
       'acct_vehicle_saved': 'Машины мэдээлэл хадгалагдлаа.',
       'vehicle_not_set': 'Машин бүртгээгүй',
+      'vehicle_add_title': 'Машинаа нэмээрэй',
+      'vehicle_add_cta': 'Нэмэх',
+      'battery_while_charging': 'Цэнэглэх үед',
+      'pick_charger_hint': 'Цэнэглэгчээ газрын зургаас сонгох эсвэл QR кодыг уншуулна уу',
       'station_unknown': 'Тодорхойгүй станц',
 
       // ---- Wallet ----
@@ -719,6 +723,10 @@ class AppStrings {
       'acct_vehicle_save': 'Save',
       'acct_vehicle_saved': 'Vehicle details saved.',
       'vehicle_not_set': 'No vehicle added',
+      'vehicle_add_title': 'Add your car',
+      'vehicle_add_cta': 'Add',
+      'battery_while_charging': 'While charging',
+      'pick_charger_hint': 'Pick a charger on the map or scan its QR code',
       'station_unknown': 'Unknown station',
 
       // ---- Wallet ----

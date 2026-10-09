@@ -5,17 +5,20 @@ import '../utils/app_strings.dart';
 import '../utils/money.dart';
 
 class ChargingPowerRingGauge extends StatefulWidget {
-  final double batteryLevel;
+  /// Null when the car has not reported a state of charge.
+  final double? batteryLevel;
   final double activePowerKw;
   final double totalEnergyKwh;
-  final double targetLimitPct;
+
+  /// What the network has billed so far; null when it has not said.
+  final double? costMnt;
 
   const ChargingPowerRingGauge({
     super.key,
     required this.batteryLevel,
     required this.activePowerKw,
     required this.totalEnergyKwh,
-    required this.targetLimitPct,
+    this.costMnt,
   });
 
   @override
@@ -43,8 +46,6 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
 
   @override
   Widget build(BuildContext context) {
-    final double costMnt = widget.totalEnergyKwh * 450.0;
-
     return AnimatedBuilder(
       animation: _rotationController,
       builder: (context, child) {
@@ -91,7 +92,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                     CustomPaint(
                       size: const Size(190, 190),
                       painter: _GlowingRingPainter(
-                        progressPct: widget.batteryLevel / 100,
+                        progressPct: (widget.batteryLevel ?? 0) / 100,
                         rotationValue: _rotationController.value,
                       ),
                     ),
@@ -106,7 +107,7 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
-                              widget.batteryLevel.toStringAsFixed(0),
+                              widget.batteryLevel?.toStringAsFixed(0) ?? '—',
                               style: const TextStyle(
                                 fontSize: 44,
                                 fontWeight: FontWeight.w900,
@@ -114,14 +115,15 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                                 height: 1.0,
                               ),
                             ),
-                            const Text(
-                              '%',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.sageGreen,
+                            if (widget.batteryLevel != null)
+                              const Text(
+                                '%',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.sageGreen,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -207,7 +209,9 @@ class _ChargingPowerRingGaugeState extends State<ChargingPowerRingGauge>
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            formatMntLeading(costMnt),
+                            widget.costMnt == null
+                                ? '—'
+                                : formatMntLeading(widget.costMnt!),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

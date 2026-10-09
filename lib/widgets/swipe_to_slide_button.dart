@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,8 +11,12 @@ import '../utils/app_strings.dart';
 /// The knob follows the finger, springs back if released short of the
 /// threshold, and glides home once past it. A travelling chevron wave hints at
 /// the gesture while the control is idle.
+///
+/// [onSwipeCompleted] says whether the action went ahead. Returning false —
+/// an empty wallet, say — springs the knob back so the driver can try again;
+/// it used to stay parked at the end with nothing left to swipe.
 class SwipeToSlideButton extends StatefulWidget {
-  final VoidCallback onSwipeCompleted;
+  final FutureOr<bool> Function() onSwipeCompleted;
 
   /// Defaults to the localized "slide to start" label.
   final String? text;
@@ -110,7 +115,7 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
     });
   }
 
-  void _handleDragEnd(double maxDrag) {
+  Future<void> _handleDragEnd(double maxDrag) async {
     if (_isCompleted || maxDrag <= 0) return;
     setState(() => _isDragging = false);
 
@@ -119,11 +124,27 @@ class _SwipeToSlideButtonState extends State<SwipeToSlideButton>
       _hint.stop();
       HapticFeedback.mediumImpact();
       _settleTo(maxDrag, Curves.easeOutCubic);
-      widget.onSwipeCompleted();
+
+      bool accepted = false;
+      try {
+        accepted = await widget.onSwipeCompleted();
+      } finally {
+        if (mounted && !accepted) _reset();
+      }
     } else {
       _settleTo(0.0, Curves.easeOutBack);
       setState(() => _passedThreshold = false);
     }
+  }
+
+  /// Back to idle: knob home, arrow restored, hint running again.
+  void _reset() {
+    setState(() {
+      _isCompleted = false;
+      _passedThreshold = false;
+    });
+    _settleTo(0.0, Curves.easeOutBack);
+    if (_hintEnabled) _hint.repeat();
   }
 
   @override

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../models/auth_user.dart';
 import '../models/charging_session.dart';
 import '../models/ocpp_models.dart';
 import '../services/api_client.dart';
@@ -9,12 +12,12 @@ import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
-import '../widgets/charge_limit_selector.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_power_ring_gauge.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/swipe_to_slide_button.dart';
 import '../widgets/vehicle_charging_matrix.dart';
+import '../widgets/vehicle_silhouette.dart';
 import 'wallet_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -23,8 +26,16 @@ class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({
     super.key,
     required this.onNavigateToQuickControls,
+    this.onFindCharger,
+    this.onAddVehicle,
     this.authService,
   });
+
+  /// Opens the station map, where a real charger is picked to start on.
+  final VoidCallback? onFindCharger;
+
+  /// Opens the account page, where the driver saves their car.
+  final VoidCallback? onAddVehicle;
 
   /// Injectable so tests can drive the screen without the real session.
   final AuthService? authService;
@@ -46,10 +57,39 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   /// When the real session now charging actually started, for the hero label.
   DateTime? _sessionStart;
 
+  /// Re-reads the running session so energy, power, charge and cost follow
+  /// the charge point's own meter rather than a local estimate.
+  Timer? _liveRefresh;
+
   @override
   void initState() {
     super.initState();
+    _auth.currentUser.addListener(_onUserChanged);
     _syncWithDriverApi();
+  }
+
+  @override
+  void dispose() {
+    _auth.currentUser.removeListener(_onUserChanged);
+    _liveRefresh?.cancel();
+    super.dispose();
+  }
+
+  /// Saving a car on the account page updates the hero straight away.
+  void _onUserChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _scheduleLiveRefresh() {
+    if (_remoteTransactionId == null) {
+      _liveRefresh?.cancel();
+      _liveRefresh = null;
+      return;
+    }
+    _liveRefresh ??= Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _syncWithDriverApi(),
+    );
   }
 
   /// Asks the driver API what is actually charging right now.
@@ -84,8 +124,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           energyKwh: active.energyKwh.toDouble(),
           powerKw: (active.lastPowerW ?? 0) / 1000.0,
           socPercent: active.lastSocPercent?.toDouble(),
+          costMnt: active.cost?.toDouble(),
         );
       });
+      _scheduleLiveRefresh();
     } on ApiException {
       // Offline, or the session list is unavailable. Showing nothing is right;
       // inventing a charge is not.
@@ -95,10 +137,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         _sessionStart = null;
         _service.clearRemoteSession();
       });
+      _scheduleLiveRefresh();
     }
   }
 
-  void _handleStartChargingSession() async {
+  /// Returns whether a charge went ahead, so the slider can spring back when
+  /// it did not.
+  ///
+  /// A charge is started on a particular charger, so once the wallet can pay
+  /// for one this hands over to the map. It used to start a pretend session
+  /// on a hard-coded station with a made-up ₮25,000 deposit.
+  Future<bool> _handleStartChargingSession() async {
     // A prepaid network has nothing to bill the session to on an empty
     // wallet, so this is checked before the swipe does anything rather than
     // letting the driver find out at the station.
@@ -107,7 +156,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         await WalletService.instance.load(),
       );
       if (reason != null) {
-        if (!mounted) return;
+        if (!mounted) return false;
         await showStartBlockedDialog(
           context,
           message: reason,
@@ -117,20 +166,25 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
           ),
         );
-        return;
+        return false;
       }
     } on ApiException {
       // Offline, or the wallet is unavailable. The station's own OCPP
       // authorize is the real gate, so a charge is not blocked on this.
     }
 
-    await _service.startSessionFromQrCode('EV-UB-SHANGRILA', 25000.0);
-    if (mounted) setState(() {});
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppStrings.get('pick_charger_hint'))),
+    );
+    widget.onFindCharger?.call();
+    return false;
   }
 
   /// The driver's own car, as they named it in their account — never invented.
   String get _vehicleLabel =>
-      _auth.currentUser.value?.vehicleDisplayName ?? AppStrings.get('vehicle_not_set');
+      _auth.currentUser.value?.vehicleDisplayName ??
+      AppStrings.get('vehicle_not_set');
 
   String _formatClock(DateTime time) {
     final DateTime local = time.toLocal();
@@ -143,7 +197,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     double energy = _service.totalEnergyKwh;
     final double power = _service.activePowerKw;
     double? cost;
-    String station = _service.activeStationName ?? AppStrings.get('station_unknown');
+    String station =
+        _service.activeStationName ?? AppStrings.get('station_unknown');
 
     final int? remote = _remoteTransactionId;
     int? finishedTransactionId;
@@ -183,6 +238,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
 
     await _service.stopUserChargingSession();
+    _service.clearRemoteSession();
+    _scheduleLiveRefresh();
 
     if (mounted) {
       showModalBottomSheet(
@@ -236,7 +293,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   isCharging: isCharging,
                   child: Container(
                     width: double.infinity,
-                    height: 200,
+                    height: 214,
                     decoration: BoxDecoration(
                       color: context.palette.panel,
                       borderRadius: BorderRadius.circular(28),
@@ -252,16 +309,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       borderRadius: BorderRadius.circular(28),
                       child: Stack(
                         children: [
-                          Positioned.fill(
-                            child: Container(
-                              color: AppTheme.darkForest,
-                              child: const Icon(
-                                Icons.directions_car_rounded,
-                                size: 80,
-                                color: AppTheme.sageGreen,
-                              ),
-                            ),
-                          ),
+                          Positioned.fill(child: _buildVehicleHero(isCharging)),
                           Positioned(
                             bottom: 16,
                             left: 16,
@@ -297,8 +345,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                         Flexible(
                                           child: Text(
                                             isCharging
-                                                ? 'ЦЭНЭГЛЭЖ БАЙНА • ${_service.activePowerKw.toInt()} кВт'
-                                                : '$_vehicleLabel • ${AppStrings.get('idle')}',
+                                                ? '${AppStrings.get('charging').toUpperCase()} • ${_service.activePowerKw.toInt()} кВт'
+                                                : AppStrings.get('idle'),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
@@ -318,17 +366,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                       Text(
                                         [
                                           _vehicleLabel,
-                                          if (_service.activeStationName != null)
+                                          if (_service.activeStationName !=
+                                              null)
                                             _service.activeStationName!,
                                           if (_sessionStart != null)
                                             AppStrings.get(
                                               'charging_since',
-                                            ).replaceFirst('{time}', _formatClock(_sessionStart!)),
+                                            ).replaceFirst(
+                                              '{time}',
+                                              _formatClock(_sessionStart!),
+                                            ),
                                         ].join(' • '),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.75),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.75,
+                                          ),
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -353,7 +407,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     batteryLevel: _service.batteryLevel,
                     activePowerKw: _service.activePowerKw,
                     totalEnergyKwh: _service.totalEnergyKwh,
-                    targetLimitPct: _service.targetLimitPct,
+                    costMnt: _service.sessionCostMnt,
                   ),
                   const SizedBox(height: 16),
 
@@ -379,15 +433,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                   ),
                 ] else ...[
-                  // Pre-charging Charge Limit & Estimation Selector
-                  ChargeLimitSelector(
-                    targetLimitPct: _service.targetLimitPct,
-                    onLimitChanged: (val) {
-                      setState(() => _service.targetLimitPct = val);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
                   // Swipe to Start Action Slider (Dribbble Seamless EV Flow)
                   SwipeToSlideButton(
                     onSwipeCompleted: _handleStartChargingSession,
@@ -426,10 +471,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       Expanded(
                         child: _buildMetricCard(
                           title: AppStrings.get('battery'),
-                          value: '${_service.batteryLevel.toStringAsFixed(0)}%',
+                          // Only the car knows its charge, and it only tells
+                          // the charger — so there is a number while charging
+                          // and an honest dash the rest of the time.
+                          value: _service.batteryLevel == null
+                              ? '—'
+                              : '${_service.batteryLevel!.toStringAsFixed(0)}%',
                           subtitle: isCharging
                               ? AppStrings.get('charging')
-                              : AppStrings.get('idle'),
+                              : AppStrings.get('battery_while_charging'),
                           icon: Icons.battery_charging_full_rounded,
                         ),
                       ),
@@ -441,6 +491,122 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// The driver's own car: its name as a wordmark over a drawn side profile
+  /// shaped like it. Without a saved car, an invitation to add one.
+  Widget _buildVehicleHero(bool isCharging) {
+    final AuthUser? user = _auth.currentUser.value;
+    final String brand = user?.vehicleBrand?.trim() ?? '';
+    final String model = user?.vehicleModel?.trim() ?? '';
+    final bool hasVehicle = brand.isNotEmpty || model.isNotEmpty;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.0, 0.35),
+          radius: 1.1,
+          colors: <Color>[
+            Color(0xFF1C4A35),
+            AppTheme.darkForest,
+            Color(0xFF07140D),
+          ],
+          stops: <double>[0.0, 0.62, 1.0],
+        ),
+      ),
+      child: Stack(
+        children: <Widget>[
+          Positioned(
+            top: 16,
+            left: 18,
+            right: 18,
+            child: hasVehicle
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (brand.isNotEmpty)
+                        Text(
+                          brand.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppTheme.lightSage,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2.6,
+                          ),
+                        ),
+                      if (model.isNotEmpty)
+                        Text(
+                          model,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.4,
+                            height: 1.15,
+                          ),
+                        ),
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          AppStrings.get('vehicle_add_title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (widget.onAddVehicle != null)
+                        TextButton.icon(
+                          onPressed: widget.onAddVehicle,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.darkForest,
+                            backgroundColor: AppTheme.lightSage,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 16),
+                          label: Text(
+                            AppStrings.get('vehicle_add_cta'),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            top: 58,
+            bottom: 52,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: isCharging ? 1.0 : 0.0),
+              duration: const Duration(milliseconds: 600),
+              builder: (BuildContext context, double glow, Widget? _) {
+                return VehicleSilhouette(
+                  style: bodyStyleFor(brand, model),
+                  accent: const Color(0xFF34D399),
+                  glow: glow,
+                  muted: !hasVehicle,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

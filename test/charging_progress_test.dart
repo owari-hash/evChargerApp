@@ -8,64 +8,32 @@ void main() {
   setUp(() {
     OcppMockService.enablePeriodicTimer = false;
     service = OcppMockService.instance;
-    service.batteryLevel = 62.0;
-    service.targetLimitPct = 75.0;
-    service.totalEnergyKwh = 18.5;
-    service.connectorStatuses[1] = ConnectorStatus.charging;
+    service.clearRemoteSession();
   });
 
-  /// Mirrors one telemetry tick.
-  void tick() {
-    if (service.connectorStatuses[1] == ConnectorStatus.charging) {
-      if (service.batteryLevel < service.targetLimitPct) {
-        service.batteryLevel =
-            service.batteryLevel + 0.15 > service.targetLimitPct
-            ? service.targetLimitPct
-            : service.batteryLevel + 0.15;
-        service.remainingKm = service.batteryLevel * 1.58;
-        service.totalEnergyKwh += 0.02;
-      }
-    }
-  }
-
-  test('battery and cost only ever rise while charging', () {
-    double lastBattery = service.batteryLevel;
-    double lastCost = service.totalEnergyKwh * 450;
-
-    for (int i = 0; i < 50; i++) {
-      tick();
-      expect(service.batteryLevel, greaterThanOrEqualTo(lastBattery));
-      expect(service.totalEnergyKwh * 450, greaterThanOrEqualTo(lastCost));
-      lastBattery = service.batteryLevel;
-      lastCost = service.totalEnergyKwh * 450;
-    }
-    expect(service.batteryLevel, greaterThan(62.0));
+  test('no state of charge or cost is shown until the network reports one', () {
+    // Regression: the dashboard greeted every driver with a 62% battery and
+    // priced energy at an invented 450 ₮/kWh.
+    expect(service.batteryLevel, isNull);
+    expect(service.sessionCostMnt, isNull);
   });
 
-  test('lowering the target below the charge never drains the battery', () {
-    // Regression: dragging the limit to 50% snapped a 62% battery down to 50%.
-    service.targetLimitPct = 50.0;
-    final double before = service.batteryLevel;
-    final double kmBefore = service.remainingKm;
+  test('a real session brings its own numbers and leaves none behind', () {
+    service.adoptRemoteSession(
+      transactionId: 7,
+      stationName: 'Test',
+      energyKwh: 4.2,
+      powerKw: 22,
+      socPercent: 54,
+      costMnt: 1890,
+    );
+    expect(service.connectorStatuses[1], ConnectorStatus.charging);
+    expect(service.batteryLevel, 54);
+    expect(service.sessionCostMnt, 1890);
 
-    for (int i = 0; i < 10; i++) {
-      tick();
-    }
-
-    expect(service.batteryLevel, before);
-    expect(service.remainingKm, kmBefore);
-  });
-
-  test('charging stops accruing cost once the target is reached', () {
-    service.targetLimitPct = 62.3;
-    for (int i = 0; i < 40; i++) {
-      tick();
-    }
-    final double settled = service.totalEnergyKwh;
-    for (int i = 0; i < 10; i++) {
-      tick();
-    }
-    expect(service.totalEnergyKwh, settled);
-    expect(service.batteryLevel, closeTo(62.3, 0.001));
+    service.clearRemoteSession();
+    expect(service.batteryLevel, isNull);
+    expect(service.sessionCostMnt, isNull);
+    expect(service.totalEnergyKwh, 0.0);
   });
 }

@@ -1517,7 +1517,7 @@ class _FooterNote extends StatelessWidget {
       child: Text(
         AppStrings.get('footer_rights')
             .replaceFirst('{year}', '${DateTime.now().year}')
-            .replaceFirst('{version}', kAppVersion),
+            .replaceFirst('{version}', AppInfo.version),
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 12,

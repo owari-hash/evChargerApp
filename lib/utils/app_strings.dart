@@ -477,6 +477,19 @@ class AppStrings {
       'sec_delete_confirm_body': 'Энэ үйлдэл буцах боломжгүй бөгөөд таны Eplug акаунт ба холбогдох хувийн мэдээлэл бүрмөсөн устгагдана.',
       'sec_delete_success': 'Таны акаунт амжилттай устгагдлаа.',
 
+      // ---- Шинэчлэлт ----
+      'update_title': 'Шинэ хувилбар гарлаа',
+      'update_title_force': 'Шинэчлэх шаардлагатай',
+      'update_body': 'Eplug-ийн {version} хувилбар бэлэн боллоо. Шинэчилж, сүүлийн үеийн боломжуудыг ашиглана уу.',
+      'update_body_force':
+          'Таны ашиглаж буй хувилбар хуучирсан тул үргэлжлүүлэх боломжгүй. Eplug-ийг {version} хувилбар руу шинэчилнэ үү.',
+      'update_now': 'Шинэчлэх',
+      'update_later': 'Дараа',
+      'update_current_version': 'Одоогийн хувилбар: {version}',
+      'update_store_android': 'Google Play дэлгүүр рүү очно',
+      'update_store_ios': 'App Store руу очно',
+      'update_open_failed': 'Дэлгүүрийг нээж чадсангүй. Гар утсандаа Eplug-ийг хайж шинэчилнэ үү.',
+
       // ---- Shared ----
       'retry': 'Дахин оролдох',
       'save': 'Хадгалах',
@@ -906,6 +919,19 @@ class AppStrings {
       'sec_delete_confirm_title': 'Delete account?',
       'sec_delete_confirm_body': 'This action cannot be undone. Your Eplug account and all associated personal data will be permanently removed.',
       'sec_delete_success': 'Your account has been deleted successfully.',
+
+      // ---- Update ----
+      'update_title': 'A new version is available',
+      'update_title_force': 'Update required',
+      'update_body': 'Eplug {version} is ready. Update to get the latest features and fixes.',
+      'update_body_force':
+          'This version is too old to continue. Please update Eplug to {version}.',
+      'update_now': 'Update',
+      'update_later': 'Later',
+      'update_current_version': 'Current version: {version}',
+      'update_store_android': 'Opens Google Play',
+      'update_store_ios': 'Opens the App Store',
+      'update_open_failed': 'Could not open the store. Search for Eplug on your phone to update.',
 
       // ---- Shared ----
       'retry': 'Try again',

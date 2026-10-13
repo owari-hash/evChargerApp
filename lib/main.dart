@@ -1,15 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'models/app_update.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/mongolia_map_screen.dart';
 import 'screens/quick_controls_screen.dart';
 import 'screens/trips_stations_screen.dart';
+import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'utils/app_info.dart';
 import 'utils/app_strings.dart';
+import 'widgets/app_update_dialog.dart';
 import 'widgets/auth_gate.dart';
 
-void main() {
+void main() async {
+  // The bundle version is read over a platform channel, so the binding has to
+  // exist first. It is awaited rather than fired off, because the sign-in
+  // footer renders the version on the very first frame.
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppInfo.load();
   runApp(const EvChargerApp());
 }
 
@@ -89,7 +100,19 @@ class _MainAppFrameState extends State<MainAppFrame> {
         _bootstrapping = false;
         _activeTabIndex = _mapTab;
       });
+      // After the splash, never during it: a dialog raised over the boot screen
+      // has no Scaffold to anchor its snackbar, and a forced update shown before
+      // the app has drawn looks like a crash.
+      unawaited(_checkForUpdate());
     }
+  }
+
+  /// Asked once per launch. Failure is silent by design — see AppUpdateService.
+  Future<void> _checkForUpdate() async {
+    final AppUpdateInfo? pending = await AppUpdateService.instance
+        .pendingPrompt();
+    if (pending == null || !mounted) return;
+    await AppUpdateDialog.show(context, pending);
   }
 
   /// Signing in from a gated action swaps the tabs from their guest state to

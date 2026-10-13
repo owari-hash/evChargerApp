@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'models/app_update.dart';
+import 'models/charging_session.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/mongolia_map_screen.dart';
@@ -9,6 +10,7 @@ import 'screens/quick_controls_screen.dart';
 import 'screens/trips_stations_screen.dart';
 import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
+import 'services/sessions_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_info.dart';
 import 'utils/app_strings.dart';
@@ -68,6 +70,9 @@ class _MainAppFrameState extends State<MainAppFrame> {
   /// True until a session saved on a previous launch has been checked, so the
   /// app does not flash the sign-in screen at a driver who is already signed in.
   bool _bootstrapping = true;
+
+  /// Guards the update prompt to one attempt per process.
+  bool _updateChecked = false;
   /// 0: Home, 1: Map, 2: Quick Controls, 3: Stations, 4: Account.
   ///
   /// The map is where the app opens, for a guest and a signed-in driver alike:
@@ -107,12 +112,47 @@ class _MainAppFrameState extends State<MainAppFrame> {
     }
   }
 
-  /// Asked once per launch. Failure is silent by design — see AppUpdateService.
+  /// Cold start only.
+  ///
+  /// There is deliberately no polling and no re-check when the app returns from
+  /// the background. A driver who has the app open is usually in the middle of
+  /// something — plugging in, paying, watching a charge — and a modal thrown
+  /// over that, a forced one above all, can leave a session running that they
+  /// can no longer stop. Being one launch late with an update is cheap; an
+  /// interrupted charge is not.
+  ///
+  /// Failure is silent by design — see AppUpdateService.
   Future<void> _checkForUpdate() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+
     final AppUpdateInfo? pending = await AppUpdateService.instance
         .pendingPrompt();
     if (pending == null || !mounted) return;
+
+    // Even on a cold start the driver may have left a charge running. Stay out
+    // of the way and ask again next launch.
+    if (await _hasLiveChargingSession()) return;
+    if (!mounted) return;
+
     await AppUpdateDialog.show(context, pending);
+  }
+
+  /// True when a charge is running on this account right now.
+  ///
+  /// Errs towards "yes": if the answer cannot be established the prompt is
+  /// skipped, because wrongly suppressing an update costs one launch while
+  /// wrongly covering the stop button can cost a driver money.
+  Future<bool> _hasLiveChargingSession() async {
+    if (!_auth.isSignedIn) return false;
+    try {
+      final List<ChargingSession> recent = await SessionsService.instance.list(
+        limit: 5,
+      );
+      return recent.any((ChargingSession session) => session.isActive);
+    } catch (_) {
+      return true;
+    }
   }
 
   /// Signing in from a gated action swaps the tabs from their guest state to

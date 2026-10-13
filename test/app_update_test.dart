@@ -2,6 +2,8 @@ import 'package:evchargerapp/models/app_update.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 import 'package:evchargerapp/widgets/app_update_dialog.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,11 +29,29 @@ AppUpdateInfo _info({
   );
 }
 
+/// WCAG relative luminance.
+double _luminance(Color c) {
+  double channel(double v) =>
+      v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
+}
+
+/// Contrast ratio between two opaque colours, 1.0 (identical) to 21.0.
+double _contrast(Color a, Color b) {
+  final double la = _luminance(a);
+  final double lb = _luminance(b);
+  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+}
+
 /// Pumps the dialog the way the app raises it, so barrier behaviour is real.
-Future<void> _showDialog(WidgetTester tester, AppUpdateInfo info) async {
+Future<void> _showDialog(
+  WidgetTester tester,
+  AppUpdateInfo info, {
+  ThemeData? theme,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: AppTheme.lightTheme,
+      theme: theme ?? AppTheme.lightTheme,
       home: Builder(
         builder: (BuildContext context) => Scaffold(
           body: Center(
@@ -142,6 +162,76 @@ void main() {
       expect(popped, isTrue);
       expect(find.byType(AlertDialog), findsOneWidget);
     });
+  });
+
+  group('readable in both themes', () {
+    // The first cut used `palette.panel` as the dialog surface. Panel is a dark
+    // forest green in BOTH palettes, so near-black `ink` text on it was
+    // invisible in light mode. These pin the surface to `card` and check the
+    // result is actually legible rather than merely different.
+    for (final (String name, ThemeData theme, AppPalette palette) in <
+      (String, ThemeData, AppPalette)
+    >[
+      ('light', AppTheme.lightTheme, AppPalette.light),
+      ('dark', AppTheme.darkTheme, AppPalette.dark),
+    ]) {
+      testWidgets('$name: dialog sits on the card surface', (
+        WidgetTester tester,
+      ) async {
+        await _showDialog(tester, _info(force: false), theme: theme);
+
+        final AlertDialog dialog = tester.widget<AlertDialog>(
+          find.byType(AlertDialog),
+        );
+        expect(dialog.backgroundColor, palette.card);
+        expect(
+          dialog.backgroundColor,
+          isNot(palette.panel),
+          reason: 'panel is a dark feature surface, not a dialog background',
+        );
+      });
+
+      testWidgets('$name: body text is legible on it', (
+        WidgetTester tester,
+      ) async {
+        await _showDialog(tester, _info(force: false), theme: theme);
+
+        final AlertDialog dialog = tester.widget<AlertDialog>(
+          find.byType(AlertDialog),
+        );
+        final Text body = tester.widget<Text>(
+          find.textContaining('1.0.14').first,
+        );
+        final Color ink = body.style?.color ?? palette.ink;
+
+        // Measured against whatever the dialog is ACTUALLY filled with, so
+        // swapping the surface back to `panel` fails here too.
+        expect(
+          _contrast(ink, dialog.backgroundColor!),
+          greaterThanOrEqualTo(4.5),
+          reason: '$name mode body text must clear WCAG AA on the dialog',
+        );
+      });
+
+      testWidgets('$name: release notes box is legible', (
+        WidgetTester tester,
+      ) async {
+        await _showDialog(tester, _info(force: false), theme: theme);
+
+        final Text notes = tester.widget<Text>(
+          find.text('Хэтэвчний алдаа засагдлаа.'),
+        );
+        final Color ink = notes.style?.color ?? palette.ink;
+
+        // The notes sit in an inset box filled with `bg`, not `card`.
+        expect(_contrast(ink, palette.bg), greaterThanOrEqualTo(4.5));
+        expect(
+          _contrast(palette.bg, palette.card),
+          greaterThan(1.0),
+          reason: 'the inset box must be distinguishable from the dialog',
+        );
+      });
+    }
   });
 
   group('language', () {

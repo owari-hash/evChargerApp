@@ -85,8 +85,16 @@ class AppUpdateDialog extends StatelessWidget {
       // A forced update survives the Android back gesture.
       canPop: !forced,
       child: AlertDialog(
-        backgroundColor: palette.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        // `card`, never `panel`: panel is the deliberately dark nav/hero surface
+        // in both themes, and ink-on-panel disappeared in light mode.
+        backgroundColor: palette.card,
+        // Material 3 tints a dialog surface by elevation, which would pull the
+        // colour away from the palette. Keep the token exact.
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: palette.border),
+        ),
         titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
         contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
         actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -143,7 +151,7 @@ class AppUpdateDialog extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: palette.card,
+                  color: palette.bg,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: palette.border),
                 ),

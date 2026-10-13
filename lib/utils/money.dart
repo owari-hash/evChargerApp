@@ -56,6 +56,13 @@ String formatMnt(num amount) => '${formatAmount(amount)}₮';
 /// Leading sign, e.g. `₮15,800.00`. Used by the charging and station screens.
 String formatMntLeading(num amount) => '₮${formatAmount(amount)}';
 
+/// A percentage as shown beside an amount, without a needless `.0`: `5` reads
+/// `5`, `2.5` reads `2.5`.
+String formatPercent(num value) {
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value.toString();
+}
+
 /// Groups digits as the driver types an amount, holding a `.00` on the end.
 ///
 /// Only ever applied to a money field: it throws away everything that is not a

@@ -15,6 +15,12 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
   final double activePowerKw;
   final double? totalCostMnt;
 
+  /// How [totalCostMnt] splits into energy and Eplug's service fee, as the
+  /// backend billed it. Null on sessions from before the fee existed.
+  final double? energyCostMnt;
+  final double? feeAmountMnt;
+  final double? feePercent;
+
   /// Null when the session never reached the real backend (the dashboard's
   /// local simulation) — there is then nothing to request an e-Barimt for.
   final int? transactionId;
@@ -25,6 +31,9 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
     required this.totalEnergyKwh,
     required this.activePowerKw,
     required this.totalCostMnt,
+    this.energyCostMnt,
+    this.feeAmountMnt,
+    this.feePercent,
     this.transactionId,
   });
 
@@ -121,6 +130,25 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
               context,
               AppStrings.get('unit_price'),
               '${formatMntLeading(unitPrice)} / кВт.ц',
+            ),
+          ],
+          if (feeAmountMnt != null && feeAmountMnt! > 0) ...[
+            if (energyCostMnt != null) ...[
+              Divider(height: 20, color: context.palette.border),
+              _buildReceiptRow(
+                context,
+                AppStrings.get('receipt_energy_cost'),
+                formatMntLeading(energyCostMnt!),
+              ),
+            ],
+            Divider(height: 20, color: context.palette.border),
+            _buildReceiptRow(
+              context,
+              AppStrings.get('receipt_service_fee').replaceFirst(
+                '{percent}',
+                feePercent == null ? '—' : formatPercent(feePercent!),
+              ),
+              formatMntLeading(feeAmountMnt!),
             ),
           ],
           const SizedBox(height: 28),

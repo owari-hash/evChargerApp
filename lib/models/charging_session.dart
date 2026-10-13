@@ -15,6 +15,9 @@ class ChargingSession {
     this.startTimestamp,
     this.stopTimestamp,
     this.cost,
+    this.energyCost,
+    this.feeAmount,
+    this.feePercent,
     this.lastPowerW,
     this.lastSocPercent,
     this.stopReason,
@@ -30,7 +33,16 @@ class ChargingSession {
   final DateTime? startTimestamp;
   final DateTime? stopTimestamp;
   final num energyKwh;
+
+  /// Total the driver pays, service fee included.
   final num? cost;
+
+  /// Breakdown of [cost]: energy plus Eplug's service fee. Null on sessions
+  /// from before the fee existed.
+  final num? energyCost;
+  final num? feeAmount;
+  final num? feePercent;
+
   final num? lastPowerW;
   final num? lastSocPercent;
   final String? stopReason;
@@ -67,6 +79,9 @@ class ChargingSession {
       stopTimestamp: _date(json['stopTimestamp']),
       energyKwh: json['energyKwh'] is num ? json['energyKwh'] as num : 0,
       cost: json['cost'] is num ? json['cost'] as num : null,
+      energyCost: json['energyCost'] is num ? json['energyCost'] as num : null,
+      feeAmount: json['feeAmount'] is num ? json['feeAmount'] as num : null,
+      feePercent: json['feePercent'] is num ? json['feePercent'] as num : null,
       lastPowerW: json['lastPowerW'] is num ? json['lastPowerW'] as num : null,
       lastSocPercent: json['lastSocPercent'] is num
           ? json['lastSocPercent'] as num
@@ -92,6 +107,9 @@ class ChargingSession {
       stopTimestamp: stopTimestamp,
       energyKwh: energyKwh,
       cost: cost,
+      energyCost: energyCost,
+      feeAmount: feeAmount,
+      feePercent: feePercent,
       lastPowerW: lastPowerW,
       lastSocPercent: lastSocPercent,
       stopReason: stopReason,
@@ -105,6 +123,8 @@ class ChargingSession {
         return SessionStatus.active;
       case 'rejected':
         return SessionStatus.rejected;
+      case 'refunded':
+        return SessionStatus.refunded;
       default:
         return SessionStatus.completed;
     }
@@ -122,7 +142,8 @@ class ChargingSession {
   }
 }
 
-enum SessionStatus { active, completed, rejected }
+/// `refunded`: the charge was returned to the wallet (Буцаалт).
+enum SessionStatus { active, completed, rejected, refunded }
 
 /// A Mongolian e-Barimt tax receipt for one session, mirroring `EBarimtData`
 /// in evChargerKiosk's `src/lib/types.ts`. Requested after the fact from

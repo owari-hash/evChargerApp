@@ -261,6 +261,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     double energy = _service.totalEnergyKwh;
     final double power = _service.activePowerKw;
     double? cost;
+    double? energyCost;
+    double? feeAmount;
+    double? feePercent;
     String station =
         _service.activeStationName ?? AppStrings.get('station_unknown');
 
@@ -293,6 +296,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         if (finished != null) {
           energy = finished.energyKwh.toDouble();
           cost = finished.cost?.toDouble();
+          energyCost = finished.energyCost?.toDouble();
+          feeAmount = finished.feeAmount?.toDouble();
+          feePercent = finished.feePercent?.toDouble();
           station = finished.displayLocation;
         }
       } on ApiException {
@@ -315,6 +321,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           totalEnergyKwh: energy,
           activePowerKw: power,
           totalCostMnt: cost,
+          energyCostMnt: energyCost,
+          feeAmountMnt: feeAmount,
+          feePercent: feePercent,
           transactionId: finishedTransactionId,
         ),
       );

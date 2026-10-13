@@ -244,6 +244,19 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               ),
             ],
           ),
+          if (station.feePercent > 0) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                AppStrings.get(
+                  'service_fee_included',
+                ).replaceFirst('{percent}', formatPercent(station.feePercent)),
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 11, color: context.palette.inkMuted),
+              ),
+            ),
+          ],
         ],
       ),
     );

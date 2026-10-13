@@ -340,6 +340,10 @@ class _SessionsScreenState extends State<SessionsScreen> {
         AppStrings.get('sess_completed'),
         palette.inkMuted,
       ),
+      SessionStatus.refunded => (
+        AppStrings.get('sess_refunded'),
+        const Color(0xFFB7791F),
+      ),
     };
 
     return Container(

@@ -7,6 +7,7 @@ import '../services/stations_service.dart';
 import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import '../utils/money.dart';
 import '../widgets/ocpp_json_logger_sheet.dart';
 import '../widgets/signed_out_panel.dart';
 import 'mongolia_map_screen.dart';
@@ -343,13 +344,30 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
                           ],
                         ),
                       ),
-                      Text(
-                        '₮${station.pricePerKwh.toInt()}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: context.palette.ink,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            '₮${station.pricePerKwh.round()}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: context.palette.ink,
+                            ),
+                          ),
+                          if (station.feePercent > 0)
+                            Text(
+                              AppStrings.get('service_fee_short').replaceFirst(
+                                '{percent}',
+                                formatPercent(station.feePercent),
+                              ),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: context.palette.inkMuted,
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),

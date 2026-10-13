@@ -42,6 +42,7 @@ class ChargingStationLocation {
     required this.longitude,
     this.connectorTypes = const <String>[],
     this.isOnline = true,
+    this.feePercent = 0,
   });
 
   final String id;
@@ -55,7 +56,12 @@ class ChargingStationLocation {
   final double kwSpeed;
   final int availableConnectors;
   final int totalConnectors;
+
+  /// What the driver pays per kWh, Eplug's service fee already included.
   final double pricePerKwh;
+
+  /// The service fee [pricePerKwh] includes, in percent; 0 when none applies.
+  final double feePercent;
 
   /// What a QR code at the station encodes, and the id the start endpoint is
   /// keyed by — `/app-api/stations/<qrCode>/start`.
@@ -141,6 +147,7 @@ class ChargingStationLocation {
           .where((String type) => type.isNotEmpty)
           .toList(growable: false),
       isOnline: json['isOnline'] != false,
+      feePercent: _toDouble(json['feePercent']) ?? 0,
     );
   }
 
@@ -166,6 +173,7 @@ class ChargingStationLocation {
       longitude: longitude,
       connectorTypes: connectorTypes,
       isOnline: isOnline,
+      feePercent: feePercent,
     );
   }
 

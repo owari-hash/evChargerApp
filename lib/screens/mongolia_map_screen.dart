@@ -989,6 +989,19 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                               color: context.palette.ink,
                             ),
                           ),
+                          if (activeStation.feePercent > 0)
+                            Text(
+                              AppStrings.get(
+                                'service_fee_included',
+                              ).replaceFirst(
+                                '{percent}',
+                                formatPercent(activeStation.feePercent),
+                              ),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.palette.inkMuted,
+                              ),
+                            ),
                         ],
                       ),
                     ],

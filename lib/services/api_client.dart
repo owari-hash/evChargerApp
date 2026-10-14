@@ -82,6 +82,18 @@ class ApiClient {
   Future<bool> get hasSession async =>
       _browserManagesCookies || (await _currentCookie()) != null;
 
+  /// The request headers a plain call through [get]/[post] would send, for a
+  /// caller that needs the raw response stream instead of the buffered JSON
+  /// those return — a streamed chat reply, say.
+  Future<Map<String, String>> streamHeaders() async {
+    final String? cookie = _browserManagesCookies ? null : await _currentCookie();
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      if (cookie != null) 'Cookie': cookie,
+    };
+  }
+
   Future<Map<String, dynamic>> get(String path, {Map<String, String>? query}) =>
       _send('GET', path, query: query);
 

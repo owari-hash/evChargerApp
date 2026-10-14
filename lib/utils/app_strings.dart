@@ -193,6 +193,28 @@ class AppStrings {
       'charge_started': 'Цэнэглэлт эхэллээ',
       'start_charging_cta': 'ЦЭНЭГЛЭЖ ЭХЛЭХ',
       'scan_again': 'Дахин уншуулах',
+      'assistant_label': 'Eplug туслах',
+      'assistant_greeting': 'Сайн байна уу! Цэнэглэлт, хэтэвч, е-баримт эсвэл станцын талаар асуугаарай.',
+      'assistant_placeholder': 'Асуултаа бичнэ үү…',
+      'assistant_thinking': 'Бодож байна…',
+      'assistant_new_chat': 'Шинэ чат',
+      'assistant_signin_hint': 'Өөрийн хэтэвч, цэнэглэлтийн талаар асуухын тулд нэвтэрнэ үү.',
+      'onboarding_step1_title': 'Цэнэглэх станц хайх',
+      'onboarding_step1_body':
+          'Газрын зураг дээрээс сүлжээн дэх бүх станцыг шууд холболтын төлөвтэй, зайгаар эрэмбэлэгдсэнээр харна.',
+      'onboarding_step2_title': 'QR код уншуулах',
+      'onboarding_step2_body':
+          'Станц болон залгуур бүр дээр өөрийн QR стикер байдаг. Камераараа уншуулахад шууд тухайн цэгт очно.',
+      'onboarding_step3_title': 'Хэтэвчээ цэнэглэх',
+      'onboarding_step3_body':
+          'Цэнэглэлт урьдчилан төлбөртэй — QPay-ээр нэг удаа цэнэглээд, дараа нь нэг товчоор эхлүүлнэ.',
+      'onboarding_step4_title': 'Баримтаа аваарай',
+      'onboarding_step4_body':
+          'Цэнэглэлтийн дараа нэг товчоор е-баримт хүсэх боломжтой. Асуудал гарвал туслахаас асуугаарай.',
+      'onboarding_next': 'Дараах',
+      'onboarding_done': 'Эхлэх',
+      'notifications_label': 'Мэдэгдэл',
+      'notifications_empty': 'Одоогоор мэдэгдэл алга.',
       // ---- Sign in / sign up ----
       'auth_login_headline': 'Нэвтрэх',
       'auth_login_sub': 'Утасны дугаар болон PIN кодоороо нэвтэрнэ үү.',
@@ -653,6 +675,28 @@ class AppStrings {
       'charge_started': 'Charging started',
       'start_charging_cta': 'START CHARGING',
       'scan_again': 'Scan again',
+      'assistant_label': 'Eplug assistant',
+      'assistant_greeting': "Hi! Ask me anything about charging, your wallet, e-Barimt or stations.",
+      'assistant_placeholder': 'Type a question…',
+      'assistant_thinking': 'Thinking…',
+      'assistant_new_chat': 'New chat',
+      'assistant_signin_hint': 'Sign in to ask about your own wallet or charging history.',
+      'onboarding_step1_title': 'Find a charger',
+      'onboarding_step1_body':
+          'The map shows every station on the network with live plug status, sorted by distance.',
+      'onboarding_step2_title': 'Scan the QR code',
+      'onboarding_step2_body':
+          'Each station and plug has its own QR sticker. Scan it with your camera to land straight on that charger.',
+      'onboarding_step3_title': 'Top up your wallet',
+      'onboarding_step3_body':
+          'Charging is prepaid — top up with QPay once, then start a charge in one tap.',
+      'onboarding_step4_title': 'Get your receipt',
+      'onboarding_step4_body':
+          'After a charge, request an e-Barimt tax receipt in one tap. Stuck on anything? Ask the assistant.',
+      'onboarding_next': 'Next',
+      'onboarding_done': 'Get started',
+      'notifications_label': 'Notifications',
+      'notifications_empty': 'No notifications yet.',
       // ---- Sign in / sign up ----
       'auth_login_headline': 'Sign in',
       'auth_login_sub': 'Enter your phone number and PIN to continue.',

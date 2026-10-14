@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models/app_update.dart';
 import 'models/charging_session.dart';
+import 'models/wallet.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/mongolia_map_screen.dart';
@@ -11,11 +12,18 @@ import 'screens/trips_stations_screen.dart';
 import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'services/sessions_service.dart';
+import 'services/notifications_store.dart';
+import 'services/wallet_watcher_service.dart';
+import 'utils/money.dart';
+import 'widgets/onboarding_tour.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_info.dart';
 import 'utils/app_strings.dart';
 import 'widgets/app_update_dialog.dart';
+import 'widgets/announcement_dialog.dart';
+import 'widgets/assistant_sheet.dart';
 import 'widgets/auth_gate.dart';
+import 'widgets/notifications_sheet.dart';
 
 void main() async {
   // The bundle version is read over a platform channel, so the binding has to
@@ -90,12 +98,58 @@ class _MainAppFrameState extends State<MainAppFrame> {
     super.initState();
     _auth.currentUser.addListener(_onAuthChanged);
     _restoreSession();
+    if (_isLoggedIn) _startWalletWatcher();
   }
 
   @override
   void dispose() {
     _auth.currentUser.removeListener(_onAuthChanged);
+    WalletWatcherService.instance.stop();
     super.dispose();
+  }
+
+  void _startWalletWatcher() {
+    WalletWatcherService.instance.start(
+      onNewEntry: (entry) {
+        final String label = _walletEntryLabel(entry);
+        final String amount =
+            '${entry.isCredit ? '+' : ''}${formatMntLeading(entry.amount.toDouble())}';
+        unawaited(
+          NotificationsStore.instance.add(
+            kind: NotificationKind.wallet,
+            title: label,
+            body: amount,
+          ),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label $amount'),
+            backgroundColor: entry.isCredit ? AppTheme.sageGreen : null,
+          ),
+        );
+      },
+    );
+  }
+
+  String _walletEntryLabel(WalletEntry entry) {
+    switch (entry.type) {
+      case WalletEntryType.topUp:
+        return AppStrings.get('wallet_entry_topup');
+      case WalletEntryType.charge:
+        return AppStrings.get('wallet_entry_charge');
+      case WalletEntryType.refund:
+        return AppStrings.get('wallet_entry_refund');
+      case WalletEntryType.adjustment:
+        return AppStrings.get('wallet_entry_adjustment');
+      case WalletEntryType.bonus:
+        return AppStrings.get('wallet_entry_bonus');
+    }
+  }
+
+  Future<void> _maybeShowOnboarding() async {
+    if (!mounted) return;
+    await OnboardingTour.showIfFirstLaunch(context);
   }
 
   Future<void> _restoreSession() async {
@@ -107,7 +161,10 @@ class _MainAppFrameState extends State<MainAppFrame> {
       });
       // After the splash, never during it: a dialog raised over the boot screen
       // has no Scaffold to anchor its snackbar, and a forced update shown before
-      // the app has drawn looks like a crash.
+      // the app has drawn looks like a crash. Onboarding goes first — it is the
+      // gentler prompt, and a brand new driver should see it before anything else.
+      await _maybeShowOnboarding();
+      if (_isLoggedIn && mounted) await maybeShowAnnouncement(context);
       unawaited(_checkForUpdate());
     }
   }
@@ -159,6 +216,11 @@ class _MainAppFrameState extends State<MainAppFrame> {
   /// the real thing, so the frame rebuilds whenever the session changes.
   void _onAuthChanged() {
     if (!mounted) return;
+    if (_isLoggedIn) {
+      _startWalletWatcher();
+    } else {
+      WalletWatcherService.instance.stop();
+    }
     setState(() {
       // Signing in on the account tab lands the driver back on the map rather
       // than leaving them looking at the profile form they just filled in.
@@ -302,6 +364,10 @@ class _MainAppFrameState extends State<MainAppFrame> {
                     : AppStrings.get('dark'),
                 onPressed: _toggleTheme,
               ),
+              if (_isLoggedIn) ...[
+                const SizedBox(width: 8),
+                _NotificationBellAction(onOpen: () => showNotificationsSheet(context)),
+              ],
               const SizedBox(width: 10),
               // Guests get the way in; drivers get the way out.
               _isLoggedIn
@@ -325,6 +391,13 @@ class _MainAppFrameState extends State<MainAppFrame> {
       ),
 
       body: IndexedStack(index: _activeTabIndex, children: pages),
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showAssistantSheet(context, page: _currentTabLabel()),
+        backgroundColor: palette.accent,
+        tooltip: AppStrings.get('assistant_label'),
+        child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
+      ),
 
       // Floating Bottom Navigation Bar (Full rounded with space on all sides)
       bottomNavigationBar: SafeArea(
@@ -384,6 +457,14 @@ class _MainAppFrameState extends State<MainAppFrame> {
         ),
       ),
     );
+  }
+
+  /// The active tab's own label, so the assistant's system prompt can stay
+  /// relevant to whatever the driver is actually looking at.
+  String _currentTabLabel() {
+    const keys = ['home', 'map', 'control', 'nav_stations', 'nav_account'];
+    final key = keys[_activeTabIndex.clamp(0, keys.length - 1)];
+    return AppStrings.get(key);
   }
 
   Widget _buildBottomNavItem(int index, IconData icon, String label) {
@@ -542,6 +623,59 @@ class _AppBarAction extends StatelessWidget {
         tooltip: tooltip,
         visualDensity: VisualDensity.compact,
       ),
+    );
+  }
+}
+
+/// The bell in the app bar: wallet changes and announcements the driver has
+/// already seen once as a SnackBar or a modal, kept here so they can find
+/// them again — same role as the kiosk website's bell.
+class _NotificationBellAction extends StatelessWidget {
+  const _NotificationBellAction({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationsStore.instance.unread,
+      builder: (context, unread, _) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: palette.card,
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.border),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.notifications_rounded, color: palette.ink, size: 20),
+                onPressed: onOpen,
+                tooltip: AppStrings.get('notifications_label'),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            if (unread > 0)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

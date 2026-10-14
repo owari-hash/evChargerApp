@@ -21,6 +21,70 @@ enum StationAvailability {
   final Color tone;
 }
 
+/// One physical plug on a station — what the driver calls a "gun".
+///
+/// A station with two connectors can be available on one and occupied on the
+/// other at the same time; `ChargingStationLocation.availableConnectors` is
+/// only ever the count, so picking a specific gun needs this list. Mirrors
+/// `StationConnector` in evChargerKiosk's `src/lib/types.ts`, built from the
+/// same `/app-api/stations` response.
+class StationConnector {
+  const StationConnector({
+    required this.connectorId,
+    required this.status,
+    this.type,
+    this.powerKw,
+    this.label,
+    this.currentTransactionId,
+  });
+
+  /// 1-based, as printed on the gun itself and on its QR sticker.
+  final int connectorId;
+
+  final String status;
+  final String? type;
+  final double? powerKw;
+
+  /// An operator-set name for this gun, e.g. "A" or "Хурдан 1" — shown instead
+  /// of the bare number when set.
+  final String? label;
+
+  final int? currentTransactionId;
+
+  bool get isAvailable => status == 'Available';
+  bool get isCharging => status == 'Charging';
+  bool get isFaulted => status == 'Faulted' || status == 'Unavailable';
+
+  /// What a driver calls this gun on screen: its label if the operator set
+  /// one, otherwise "Залгуур {n}".
+  String displayName(String fallbackPrefix) =>
+      (label != null && label!.trim().isNotEmpty) ? label! : '$fallbackPrefix $connectorId';
+
+  static StationConnector? fromJson(Map<String, dynamic> json) {
+    final int? connectorId = json['connectorId'] is num
+        ? (json['connectorId'] as num).toInt()
+        : int.tryParse(json['connectorId']?.toString() ?? '');
+    if (connectorId == null) return null;
+
+    return StationConnector(
+      connectorId: connectorId,
+      status: (json['status'] ?? 'Unavailable').toString(),
+      type: _textOrNull(json['type']),
+      powerKw: json['powerKw'] is num ? (json['powerKw'] as num).toDouble() : null,
+      label: _textOrNull(json['label']),
+      currentTransactionId: json['currentTransactionId'] is num
+          ? (json['currentTransactionId'] as num).toInt()
+          : null,
+    );
+  }
+
+  static String? _textOrNull(dynamic value) {
+    if (value == null) return null;
+    final String text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
 /// A charge point as the driver sees it on the map and in the stations list.
 ///
 /// This mirrors the `Station` shape that `/app-api/stations` returns, which the
@@ -41,6 +105,7 @@ class ChargingStationLocation {
     required this.latitude,
     required this.longitude,
     this.connectorTypes = const <String>[],
+    this.connectors = const <StationConnector>[],
     this.isOnline = true,
     this.feePercent = 0,
   });
@@ -73,6 +138,11 @@ class ChargingStationLocation {
   /// Plug standards this station offers, as `CONNECTOR_TYPES` codes shared with
   /// the kiosk and the CSMS: CCS2, GBT, CHAdeMO, Type2, Type1, Schuko.
   final List<String> connectorTypes;
+
+  /// Every physical gun on this station, each with its own live status — a
+  /// station showing "1/2 available" has one of these free and one occupied,
+  /// and this is the only place that distinction is readable.
+  final List<StationConnector> connectors;
 
   /// False when the CSMS has lost contact with the charge point. An offline
   /// station still belongs on the map — a driver heading for one deserves to
@@ -146,6 +216,11 @@ class ChargingStationLocation {
           .map((dynamic type) => type.toString())
           .where((String type) => type.isNotEmpty)
           .toList(growable: false),
+      connectors: (json['connectors'] as List<dynamic>? ?? <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .map(StationConnector.fromJson)
+          .whereType<StationConnector>()
+          .toList(growable: false),
       isOnline: json['isOnline'] != false,
       feePercent: _toDouble(json['feePercent']) ?? 0,
     );
@@ -172,6 +247,7 @@ class ChargingStationLocation {
       latitude: latitude,
       longitude: longitude,
       connectorTypes: connectorTypes,
+      connectors: connectors,
       isOnline: isOnline,
       feePercent: feePercent,
     );

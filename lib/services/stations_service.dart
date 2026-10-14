@@ -5,6 +5,50 @@ import 'package:flutter/foundation.dart';
 import '../models/station.dart';
 import 'api_client.dart';
 
+/// What a station/connector QR sticker resolves to — enough to pre-select the
+/// right gun without the driver ever typing a station name.
+class ConnectorLookup {
+  const ConnectorLookup({
+    required this.stationId,
+    required this.stationName,
+    this.address,
+    this.connectorId,
+    this.connectorType,
+    this.powerKw,
+    this.label,
+  });
+
+  final String stationId;
+  final String stationName;
+  final String? address;
+  final int? connectorId;
+  final String? connectorType;
+  final double? powerKw;
+  final String? label;
+
+  static ConnectorLookup? fromJson(Map<String, dynamic> json) {
+    final String stationId = (json['stationId'] ?? '').toString();
+    if (stationId.isEmpty) return null;
+    return ConnectorLookup(
+      stationId: stationId,
+      stationName: (json['stationName'] ?? '').toString(),
+      address: _textOrNull(json['address']),
+      connectorId: json['connectorId'] is num
+          ? (json['connectorId'] as num).toInt()
+          : null,
+      connectorType: _textOrNull(json['connectorType']),
+      powerKw: json['powerKw'] is num ? (json['powerKw'] as num).toDouble() : null,
+      label: _textOrNull(json['label']),
+    );
+  }
+
+  static String? _textOrNull(dynamic value) {
+    if (value == null) return null;
+    final String text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
 /// The live charging network, from `/app-api/stations`.
 ///
 /// The app used to ship a hardcoded list of five Ulaanbaatar stations, which
@@ -102,6 +146,64 @@ class StationsService {
     } finally {
       loading.value = false;
     }
+  }
+
+  /// Resolves a connector's QR short code (e.g. `7PZJYJ`, however it reached
+  /// here — a raw code or the full `eplug.mn/c/<code>` sticker URL) to the
+  /// station and gun it belongs to. Unauthenticated on the server, so this
+  /// works before the driver has signed in.
+  Future<ConnectorLookup> resolveConnectorCode(String raw) async {
+    final String code = _extractCode(raw);
+    if (code.isEmpty) {
+      throw const ApiException(statusCode: 400, message: 'Энэ QR кодыг танисангүй.');
+    }
+    final Map<String, dynamic> body = await _client.get(
+      '/app/connector/${Uri.encodeComponent(code)}',
+    );
+    final ConnectorLookup? lookup = ConnectorLookup.fromJson(body);
+    if (lookup == null) {
+      throw const ApiException(statusCode: 404, message: 'Энэ код олдсонгүй');
+    }
+    return lookup;
+  }
+
+  /// A scanned QR encodes the sticker's full link; the short code is its last
+  /// path segment. A code typed or pasted in directly has no slashes at all.
+  static String _extractCode(String raw) {
+    final String trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final Uri? uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      return uri.pathSegments.last;
+    }
+    return trimmed;
+  }
+
+  /// One station's live detail — tariff, connectors, everything the confirm
+  /// card shows before the driver commits to starting a charge there.
+  Future<ChargingStationLocation> station(String stationId) async {
+    final Map<String, dynamic> body = await _client.get(
+      '/stations/${Uri.encodeComponent(stationId)}',
+    );
+    final ChargingStationLocation? station = ChargingStationLocation.fromJson(
+      (body['station'] as Map<String, dynamic>?) ?? const <String, dynamic>{},
+    );
+    if (station == null) {
+      throw const ApiException(statusCode: 404, message: 'Станц олдсонгүй.');
+    }
+    return station;
+  }
+
+  /// Asks the charge point to begin a session over OCPP, on the signed-in
+  /// driver's own charge tag. The station's own Authorize decides whether that
+  /// tag can actually charge there — a wallet top-up, a Client-sponsored free
+  /// card, or a plain refusal all come back as the same `ApiException`.
+  Future<String> startCharging(String stationId, {int? connectorId}) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/stations/${Uri.encodeComponent(stationId)}/start',
+      body: connectorId != null ? <String, dynamic>{'connectorId': connectorId} : null,
+    );
+    return (body['status'] ?? 'Accepted').toString();
   }
 
   /// Recomputes the display distances against a new origin, without refetching.

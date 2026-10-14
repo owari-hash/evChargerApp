@@ -11,6 +11,11 @@
     <!-- Fingerprint sign-in -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
+    <!-- Scanning a station/connector QR sticker -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+
     <application
         android:label="Eplug"
         android:name="${applicationName}"

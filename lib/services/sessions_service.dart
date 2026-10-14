@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/charging_session.dart';
 import 'api_client.dart';
 
@@ -8,6 +10,15 @@ class SessionsService {
   static final SessionsService instance = SessionsService();
 
   final ApiClient _client;
+
+  /// Ticks whenever a charge was just started somewhere in the app (the QR
+  /// flow, today). The dashboard listens so a session started from another
+  /// screen shows up immediately rather than waiting for its own poll —
+  /// starting a remote session does not create a transaction instantly, so
+  /// there is nothing else to react to until the charge point reports in.
+  final ValueNotifier<int> sessionStarted = ValueNotifier<int>(0);
+
+  void notifySessionStarted() => sessionStarted.value++;
 
   /// Most recent first. Comes back empty when no charge tag is linked yet —
   /// sessions are matched by tag, so an account without one has no history.

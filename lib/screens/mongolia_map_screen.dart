@@ -1004,6 +1004,19 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                             ),
                         ],
                       ),
+                      if (activeStation.connectors.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: activeStation.connectors
+                              .map(
+                                (StationConnector c) =>
+                                    _ConnectorChip(connector: c),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1145,6 +1158,76 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One gun's live status, same pill shape wherever a station lists its
+/// connectors — a station card showing "1/2 Сул байна" says nothing about
+/// *which* plug is free; this is what answers that.
+class _ConnectorChip extends StatelessWidget {
+  const _ConnectorChip({required this.connector});
+
+  final StationConnector connector;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color tone = connector.isAvailable
+        ? AppTheme.sageGreen
+        : connector.isFaulted
+        ? AppTheme.errorRed
+        : AppTheme.warningOrange;
+
+    final String statusLabel = connector.isAvailable
+        ? AppStrings.get('available')
+        : connector.isCharging
+        ? AppStrings.get('charging')
+        : connector.isFaulted
+        ? AppStrings.get('connector_faulted')
+        : AppStrings.get('connector_busy');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tone.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            connector.displayName(AppStrings.get('connector_label')),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: context.palette.ink,
+            ),
+          ),
+          if (connector.type != null) ...[
+            const SizedBox(width: 4),
+            Text(
+              '· ${connector.type}',
+              style: TextStyle(fontSize: 10.5, color: context.palette.inkMuted),
+            ),
+          ],
+          const SizedBox(width: 4),
+          Text(
+            '· $statusLabel',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: tone,
+            ),
+          ),
+        ],
       ),
     );
   }

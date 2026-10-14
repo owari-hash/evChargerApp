@@ -28,6 +28,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Eplug needs the camera to scan a station or connector QR code.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Eplug uses Face ID to sign you in without typing your PIN.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

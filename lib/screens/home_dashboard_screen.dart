@@ -90,9 +90,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void initState() {
     super.initState();
     _auth.currentUser.addListener(_onUserChanged);
+    _sessions.sessionStarted.addListener(_onSessionStartedElsewhere);
     _syncWithDriverApi();
     _loadWallet();
     _loadPhoto();
+  }
+
+  /// A charge was just requested from another screen (the QR scanner). The
+  /// charge point does not report the new transaction instantly, so this
+  /// polls a few more times over the next moments rather than only once.
+  void _onSessionStartedElsewhere() {
+    _syncWithDriverApi();
+    int attempts = 0;
+    Timer.periodic(const Duration(seconds: 4), (Timer timer) {
+      attempts++;
+      if (!mounted || _remoteTransactionId != null || attempts >= 5) {
+        timer.cancel();
+        return;
+      }
+      _syncWithDriverApi();
+    });
   }
 
   /// Looks up a photo of the saved model once per car, not on every rebuild.
@@ -131,6 +148,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   @override
   void dispose() {
     _auth.currentUser.removeListener(_onUserChanged);
+    _sessions.sessionStarted.removeListener(_onSessionStartedElsewhere);
     _liveRefresh?.cancel();
     super.dispose();
   }

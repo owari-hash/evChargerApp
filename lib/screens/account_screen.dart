@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/guided_step.dart';
 import 'login_register_screen.dart';
 import 'security_screen.dart';
 import 'sessions_screen.dart';
@@ -307,6 +308,16 @@ class _AccountScreenState extends State<AccountScreen> {
             AppStrings.get('acct_nav_security'),
             AppStrings.get('acct_nav_security_sub'),
             () => _open(const SecurityScreen()),
+          ),
+          Divider(color: palette.border, height: 1, indent: 60),
+          // Replays the home-screen walkthrough. Never tells the server: a
+          // replay is not the first run, and it is fine to watch it twice.
+          _navRow(
+            palette,
+            Icons.tips_and_updates_outlined,
+            AppStrings.get('guide_replay'),
+            AppStrings.get('guide_replay_sub'),
+            GuidedStep.trigger,
           ),
         ],
       ),

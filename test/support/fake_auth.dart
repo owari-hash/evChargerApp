@@ -34,23 +34,53 @@ const String kTestCode = '123456';
 ///
 /// Pass [startSignedIn] to begin with a stored session, the way a returning
 /// driver launches the app, and [log] to record every request the app sends.
+///
+/// [pendingGuides] is what the stub driver has not been through yet — a new
+/// account has `['app', 'web']`. `POST /account/guides/:id/done` removes one,
+/// or fails as if offline when [guidesDoneFails] is set.
 ApiClient fakeApiClient({
   bool startSignedIn = false,
   List<http.Request>? log,
+  List<String> pendingGuides = const <String>[],
+  bool guidesDoneFails = false,
 }) {
   final SessionStore store = InMemorySessionStore();
   if (startSignedIn) store.write('evapp_session=stub');
-  return ApiClient(sessionStore: store, httpClient: _stubClient(log));
+  return ApiClient(
+    sessionStore: store,
+    httpClient: _stubClient(
+      log,
+      pendingGuides: List<String>.of(pendingGuides),
+      guidesDoneFails: guidesDoneFails,
+    ),
+  );
 }
 
 AuthService fakeAuthService({
   bool startSignedIn = false,
   List<http.Request>? log,
+  List<String> pendingGuides = const <String>[],
+  bool guidesDoneFails = false,
 }) => AuthService(
-  client: fakeApiClient(startSignedIn: startSignedIn, log: log),
+  client: fakeApiClient(
+    startSignedIn: startSignedIn,
+    log: log,
+    pendingGuides: pendingGuides,
+    guidesDoneFails: guidesDoneFails,
+  ),
 );
 
-MockClient _stubClient(List<http.Request>? log) {
+MockClient _stubClient(
+  List<http.Request>? log, {
+  required List<String> pendingGuides,
+  required bool guidesDoneFails,
+}) {
+  // The driver as this stub currently knows them.
+  Map<String, dynamic> user() => <String, dynamic>{
+    ...kTestUser,
+    'pendingGuides': List<String>.of(pendingGuides),
+  };
+
   return MockClient((http.Request request) async {
     log?.add(request);
     final String path = request.url.path;
@@ -81,7 +111,7 @@ MockClient _stubClient(List<http.Request>? log) {
       final bool matches =
           body['phone'] == kTestPhone && body['pin'] == kTestPin;
       return matches
-          ? ok(<String, dynamic>{'user': kTestUser})
+          ? ok(<String, dynamic>{'user': user()})
           : fail(401, 'Утасны дугаар эсвэл PIN код буруу байна');
     }
 
@@ -107,11 +137,11 @@ MockClient _stubClient(List<http.Request>? log) {
 
     if (path.endsWith('/auth/signup/complete') ||
         path.endsWith('/auth/pin/reset')) {
-      return ok(<String, dynamic>{'user': kTestUser});
+      return ok(<String, dynamic>{'user': user()});
     }
 
     if (path.endsWith('/auth/me')) {
-      return ok(<String, dynamic>{'user': kTestUser});
+      return ok(<String, dynamic>{'user': user()});
     }
 
     if (path.endsWith('/auth/logout')) {
@@ -179,12 +209,23 @@ MockClient _stubClient(List<http.Request>? log) {
 
     if (path.endsWith('/account/profile')) {
       return ok(<String, dynamic>{
-        'user': <String, dynamic>{...kTestUser, 'name': 'Шинэ Нэр'},
+        'user': <String, dynamic>{...user(), 'name': 'Шинэ Нэр'},
       });
     }
 
+    final RegExpMatch? guideDone = RegExp(
+      r'/account/guides/([^/]+)/done$',
+    ).firstMatch(path);
+    if (guideDone != null && request.method == 'POST') {
+      if (guidesDoneFails) {
+        return fail(503, 'Сервертэй холбогдож чадсангүй');
+      }
+      pendingGuides.remove(guideDone.group(1));
+      return ok(<String, dynamic>{'ok': true, 'user': user()});
+    }
+
     if (path.endsWith('/account/pin')) {
-      return ok(<String, dynamic>{'ok': true, 'user': kTestUser});
+      return ok(<String, dynamic>{'ok': true, 'user': user()});
     }
 
     return fail(404, 'Хүсэлт олдсонгүй');

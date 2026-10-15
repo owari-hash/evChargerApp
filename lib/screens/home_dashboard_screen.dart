@@ -16,6 +16,7 @@ import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
+import '../widgets/guided_step.dart';
 import '../widgets/swipe_to_slide_button.dart';
 import '../widgets/vehicle_charging_matrix.dart';
 import '../widgets/vehicle_hero_card.dart';
@@ -34,7 +35,12 @@ class HomeDashboardScreen extends StatefulWidget {
     this.sessionsService,
     this.walletService,
     this.photoService,
+    this.guide,
   });
+
+  /// The app guide, owned by the app frame. Its first four steps are the
+  /// sections of this screen; the frame's bottom bar is the fifth.
+  final AppGuideController? guide;
 
   /// Opens the station map, where a real charger is picked to start on.
   final VoidCallback? onFindCharger;
@@ -86,14 +92,119 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   VehiclePhoto? _photo;
   String? _photoFor;
 
+  /// The wallet read has come back, whether or not it worked.
+  bool _walletLoaded = false;
+
+  bool _wasSignedIn = false;
+
+  final ScrollController _scroll = ScrollController();
+
+  /// Waits out the pause before the guide's first step.
+  Timer? _guideStartTimer;
+
+  /// Starts the guide anyway if the first load never finishes.
+  Timer? _guideFallbackTimer;
+
+  /// sukhApp's pause, so the screen has settled before the guide starts.
+  static const Duration _guideDelay = Duration(milliseconds: 1400);
+  static const Duration _guideReplayDelay = Duration(milliseconds: 350);
+  static const Duration _guideLoadCap = Duration(seconds: 6);
+
+  /// The guide points at real numbers, not spinners.
+  bool get _firstLoadDone => _historyLoaded && _walletLoaded;
+
   @override
   void initState() {
     super.initState();
+    _wasSignedIn = _auth.isSignedIn;
     _auth.currentUser.addListener(_onUserChanged);
     _sessions.sessionStarted.addListener(_onSessionStartedElsewhere);
+    widget.guide?.addListener(_onGuideChanged);
     _syncWithDriverApi();
     _loadWallet();
     _loadPhoto();
+    // The frame can ask for the guide in the same frame that first builds
+    // this screen, before it was listening.
+    if (widget.guide?.requested == true) _scheduleGuideStart();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.guide != widget.guide) {
+      oldWidget.guide?.removeListener(_onGuideChanged);
+      widget.guide?.addListener(_onGuideChanged);
+      _cancelGuideTimers();
+      if (widget.guide?.requested == true) _scheduleGuideStart();
+    }
+  }
+
+  void _onGuideChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (widget.guide?.requested == true) {
+      _scheduleGuideStart();
+    } else {
+      _cancelGuideTimers();
+    }
+  }
+
+  void _cancelGuideTimers() {
+    _guideStartTimer?.cancel();
+    _guideStartTimer = null;
+    _guideFallbackTimer?.cancel();
+    _guideFallbackTimer = null;
+  }
+
+  /// Starts the guide once the first load is in (or has taken too long),
+  /// after a short pause. A replay waits less: the data is already there.
+  void _scheduleGuideStart() {
+    final AppGuideController? guide = widget.guide;
+    if (guide == null || !guide.requested || _guideStartTimer != null) return;
+    if (_firstLoadDone || guide.isReplay) {
+      _armGuideStart();
+    } else {
+      _guideFallbackTimer ??= Timer(_guideLoadCap, () {
+        _guideFallbackTimer = null;
+        _armGuideStart();
+      });
+    }
+  }
+
+  void _armGuideStart() {
+    final AppGuideController? guide = widget.guide;
+    if (guide == null || !guide.requested || _guideStartTimer != null) return;
+    _guideFallbackTimer?.cancel();
+    _guideFallbackTimer = null;
+    _guideStartTimer = Timer(
+      guide.isReplay ? _guideReplayDelay : _guideDelay,
+      _beginGuide,
+    );
+  }
+
+  void _beginGuide() {
+    _guideStartTimer = null;
+    final AppGuideController? guide = widget.guide;
+    if (!mounted || guide == null || !guide.requested) return;
+    if (!_auth.isSignedIn) {
+      guide.cancel();
+      return;
+    }
+    // Never underneath a dialog, the QR scanner sheet or a pushed page: wait
+    // for it to close, then start.
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      _guideStartTimer = Timer(const Duration(milliseconds: 500), _beginGuide);
+      return;
+    }
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    guide.begin();
   }
 
   /// A charge was just requested from another screen (the QR scanner). The
@@ -142,6 +253,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       if (mounted) setState(() => _wallet = snapshot);
     } on ApiException {
       // The tile says the balance is unavailable rather than showing ₮0.
+    } finally {
+      _walletLoaded = true;
+      if (mounted && widget.guide?.requested == true) _scheduleGuideStart();
     }
   }
 
@@ -149,15 +263,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void dispose() {
     _auth.currentUser.removeListener(_onUserChanged);
     _sessions.sessionStarted.removeListener(_onSessionStartedElsewhere);
+    widget.guide?.removeListener(_onGuideChanged);
+    _cancelGuideTimers();
+    _scroll.dispose();
     _liveRefresh?.cancel();
     super.dispose();
   }
 
   /// Saving a car on the account page updates the hero straight away.
+  ///
+  /// A sign-in from another tab loads the driver's data here too; it used to
+  /// leave the recent-charges card on a spinner until the app restarted.
   void _onUserChanged() {
     if (!mounted) return;
+    final bool justSignedIn = _auth.isSignedIn && !_wasSignedIn;
+    _wasSignedIn = _auth.isSignedIn;
     setState(() {});
     _loadPhoto();
+    if (justSignedIn) {
+      _syncWithDriverApi();
+      _loadWallet();
+    }
   }
 
   void _scheduleLiveRefresh() {
@@ -213,6 +339,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         );
       });
       _scheduleLiveRefresh();
+      if (widget.guide?.requested == true) _scheduleGuideStart();
     } on ApiException {
       // Offline, or the session list is unavailable. Showing nothing is right;
       // inventing a charge is not.
@@ -225,6 +352,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         _service.clearRemoteSession();
       });
       _scheduleLiveRefresh();
+      if (widget.guide?.requested == true) _scheduleGuideStart();
     }
   }
 
@@ -378,57 +506,114 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         return Scaffold(
           backgroundColor: context.palette.bg,
           body: SingleChildScrollView(
+            controller: _scroll,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Hero View: Hero Car Banner with Particle Matrix FX during Charging
-                VehicleChargingMatrix(
-                  isCharging: isCharging,
-                  child: _buildVehicleHero(isCharging),
+                _guided(
+                  stepIndex: 0,
+                  key: 'hero',
+                  icon: Icons.electric_car_rounded,
+                  borderRadius: 28,
+                  child: VehicleChargingMatrix(
+                    isCharging: isCharging,
+                    child: _buildVehicleHero(isCharging),
+                  ),
                 ),
                 const SizedBox(height: 20),
 
                 // Active Supercharging vs Setup State
-                if (isCharging) ...[
-                  // Stop Charging Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: _handleStopChargingSession,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.stop_circle_rounded, size: 22),
-                      label: Text(
-                        AppStrings.get('stop_charging'),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+                _guided(
+                  stepIndex: 1,
+                  key: 'swipe',
+                  icon: Icons.bolt_rounded,
+                  borderRadius: 30,
+                  child: isCharging
+                      // Stop Charging Button
+                      ? SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton.icon(
+                            onPressed: _handleStopChargingSession,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              foregroundColor: Colors.white,
+                            ),
+                            icon: const Icon(
+                              Icons.stop_circle_rounded,
+                              size: 22,
+                            ),
+                            label: Text(
+                              AppStrings.get('stop_charging'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        )
+                      // Swipe to Start Action Slider (Dribbble Seamless EV Flow)
+                      : SwipeToSlideButton(
+                          onSwipeCompleted: _handleStartChargingSession,
+                          text: AppStrings.get('slide_to_start'),
                         ),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  // Swipe to Start Action Slider (Dribbble Seamless EV Flow)
-                  SwipeToSlideButton(
-                    onSwipeCompleted: _handleStartChargingSession,
-                    text: AppStrings.get('slide_to_start'),
-                  ),
-                ],
+                ),
                 const SizedBox(height: 22),
-                _buildSummaryRow(),
+                _guided(
+                  stepIndex: 2,
+                  key: 'wallet',
+                  icon: Icons.account_balance_wallet_rounded,
+                  borderRadius: 20,
+                  child: _buildSummaryRow(),
+                ),
                 const SizedBox(height: 22),
-                _buildRecentSessions(),
+                _guided(
+                  stepIndex: 3,
+                  key: 'recent',
+                  icon: Icons.history_rounded,
+                  borderRadius: 20,
+                  tipBelow: false,
+                  // The heading sits on the bare page, not in a card.
+                  contentPadding: const EdgeInsets.all(10),
+                  child: _buildRecentSessions(),
+                ),
                 const SizedBox(height: 8),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// One section of the app guide, or the section alone when there is no
+  /// guide to show it in (tests that build the screen on its own).
+  Widget _guided({
+    required int stepIndex,
+    required String key,
+    required IconData icon,
+    required Widget child,
+    double borderRadius = 24,
+    bool tipBelow = true,
+    EdgeInsets contentPadding = EdgeInsets.zero,
+  }) {
+    final AppGuideController? guide = widget.guide;
+    if (guide == null) return child;
+    return GuidedStep.of(
+      key: ValueKey<String>('guide-step-$key'),
+      guide: guide,
+      stepIndex: stepIndex,
+      tag: AppStrings.get('guide_${key}_tag'),
+      title: AppStrings.get('guide_${key}_title'),
+      description: AppStrings.get('guide_${key}_body'),
+      icon: icon,
+      tipBelow: tipBelow,
+      borderRadius: borderRadius,
+      contentPadding: contentPadding,
+      child: child,
     );
   }
 

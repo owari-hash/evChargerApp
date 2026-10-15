@@ -199,20 +199,33 @@ class AppStrings {
       'assistant_thinking': 'Бодож байна…',
       'assistant_new_chat': 'Шинэ чат',
       'assistant_signin_hint': 'Өөрийн хэтэвч, цэнэглэлтийн талаар асуухын тулд нэвтэрнэ үү.',
-      'onboarding_step1_title': 'Цэнэглэх станц хайх',
-      'onboarding_step1_body':
-          'Газрын зураг дээрээс сүлжээн дэх бүх станцыг шууд холболтын төлөвтэй, зайгаар эрэмбэлэгдсэнээр харна.',
-      'onboarding_step2_title': 'QR код уншуулах',
-      'onboarding_step2_body':
-          'Станц болон залгуур бүр дээр өөрийн QR стикер байдаг. Камераараа уншуулахад шууд тухайн цэгт очно.',
-      'onboarding_step3_title': 'Хэтэвчээ цэнэглэх',
-      'onboarding_step3_body':
-          'Цэнэглэлт урьдчилан төлбөртэй — QPay-ээр нэг удаа цэнэглээд, дараа нь нэг товчоор эхлүүлнэ.',
-      'onboarding_step4_title': 'Баримтаа аваарай',
-      'onboarding_step4_body':
-          'Цэнэглэлтийн дараа нэг товчоор е-баримт хүсэх боломжтой. Асуудал гарвал туслахаас асуугаарай.',
-      'onboarding_next': 'Дараах',
-      'onboarding_done': 'Эхлэх',
+      // ---- App guide (first sign-in walkthrough) ----
+      'guide_skip': 'Алгасах',
+      'guide_next': 'Дараах',
+      'guide_done': 'Ойлголоо',
+      'guide_dont_show': 'Дахиж харахгүй',
+      'guide_replay': 'Аппын заавар үзэх',
+      'guide_replay_sub': 'Нүүр хуудасны алхам алхмаар тайлбар',
+      'guide_hero_tag': 'ТАНЫ МАШИН',
+      'guide_hero_title': 'Машин ба батарей',
+      'guide_hero_body':
+          'Бүртгэсэн машин тань энд харагдана. Цэнэглэж байх үед батарейн түвшин, чадал, кВт·ц болон төлбөр шууд шинэчлэгдэнэ. Машинаа «Бүртгэл» цэснээс нэмээрэй.',
+      'guide_swipe_tag': 'ЦЭНЭГЛЭЛТ',
+      'guide_swipe_title': 'Гулсуулаад эхлүүлнэ',
+      'guide_swipe_body':
+          'Товчийг баруун тийш гулсуулахад газрын зураг нээгдэж, цэнэглэгчээ сонгоно. Цэнэглэж байх үед энд зогсоох товч гарна.',
+      'guide_wallet_tag': 'ХЭТЭВЧ',
+      'guide_wallet_title': 'Үлдэгдэл ба энэ сар',
+      'guide_wallet_body':
+          'Цэнэглэлт урьдчилсан төлбөртэй. «Цэнэглэх» дээр дарж QPay-ээр үлдэгдлээ нэмнэ. Хажууд нь энэ сарын кВт·ц, зардал харагдана.',
+      'guide_recent_tag': 'ТҮҮХ',
+      'guide_recent_title': 'Сүүлийн цэнэглэлтүүд',
+      'guide_recent_body':
+          'Сүүлийн гурван цэнэглэлтийн станц, кВт·ц, төлбөр энд гарна. «Бүгд» дээр дарж бүх түүх, баримтаа үзээрэй.',
+      'guide_nav_tag': 'ЦЭС',
+      'guide_nav_title': 'Цэнэглэгч хайх',
+      'guide_nav_body':
+          'Газрын зураг дээрээс ойрын цэнэглэгчээ олж, QR кодыг нь уншуулж эхлүүлнэ. Удирдлага, станцууд, бүртгэлээ доод цэснээс нээнэ.',
       'notifications_label': 'Мэдэгдэл',
       'notifications_empty': 'Одоогоор мэдэгдэл алга.',
       // ---- Sign in / sign up ----
@@ -681,20 +694,33 @@ class AppStrings {
       'assistant_thinking': 'Thinking…',
       'assistant_new_chat': 'New chat',
       'assistant_signin_hint': 'Sign in to ask about your own wallet or charging history.',
-      'onboarding_step1_title': 'Find a charger',
-      'onboarding_step1_body':
-          'The map shows every station on the network with live plug status, sorted by distance.',
-      'onboarding_step2_title': 'Scan the QR code',
-      'onboarding_step2_body':
-          'Each station and plug has its own QR sticker. Scan it with your camera to land straight on that charger.',
-      'onboarding_step3_title': 'Top up your wallet',
-      'onboarding_step3_body':
-          'Charging is prepaid — top up with QPay once, then start a charge in one tap.',
-      'onboarding_step4_title': 'Get your receipt',
-      'onboarding_step4_body':
-          'After a charge, request an e-Barimt tax receipt in one tap. Stuck on anything? Ask the assistant.',
-      'onboarding_next': 'Next',
-      'onboarding_done': 'Get started',
+      // ---- App guide (first sign-in walkthrough) ----
+      'guide_skip': 'Skip',
+      'guide_next': 'Next',
+      'guide_done': 'Got it',
+      'guide_dont_show': "Don't show again",
+      'guide_replay': 'App guide',
+      'guide_replay_sub': 'A step-by-step tour of the home screen',
+      'guide_hero_tag': 'YOUR CAR',
+      'guide_hero_title': 'Your car and battery',
+      'guide_hero_body':
+          'The car you saved shows here. While it charges, battery level, power, kWh and cost update live. Add your car under Account.',
+      'guide_swipe_tag': 'CHARGING',
+      'guide_swipe_title': 'Slide to start',
+      'guide_swipe_body':
+          'Slide the button to the right and the map opens so you can pick a charger. While charging, a stop button shows here instead.',
+      'guide_wallet_tag': 'WALLET',
+      'guide_wallet_title': 'Balance and this month',
+      'guide_wallet_body':
+          "Charging is prepaid. Tap Top up to add funds with QPay. Next to it you see this month's kWh and spending.",
+      'guide_recent_tag': 'HISTORY',
+      'guide_recent_title': 'Recent charges',
+      'guide_recent_body':
+          'Your last three charges with station, kWh and cost. Tap See all for the full history and receipts.',
+      'guide_nav_tag': 'MENU',
+      'guide_nav_title': 'Find a charger',
+      'guide_nav_body':
+          'Find a nearby charger on the map and scan its QR code to start. Controls, stations and your account open from the bottom bar.',
       'notifications_label': 'Notifications',
       'notifications_empty': 'No notifications yet.',
       // ---- Sign in / sign up ----

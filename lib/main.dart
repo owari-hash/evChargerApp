@@ -15,7 +15,6 @@ import 'services/sessions_service.dart';
 import 'services/notifications_store.dart';
 import 'services/wallet_watcher_service.dart';
 import 'utils/money.dart';
-import 'widgets/onboarding_tour.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_info.dart';
 import 'utils/app_strings.dart';
@@ -23,6 +22,7 @@ import 'widgets/app_update_dialog.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/assistant_sheet.dart';
 import 'widgets/auth_gate.dart';
+import 'widgets/guided_step.dart';
 import 'widgets/notifications_sheet.dart';
 
 void main() async {
@@ -35,10 +35,13 @@ void main() async {
 }
 
 class EvChargerApp extends StatelessWidget {
-  const EvChargerApp({super.key, this.authService});
+  const EvChargerApp({super.key, this.authService, this.startupPrompts});
 
   /// Injectable so tests can run the app against a stubbed driver API.
   final AuthService? authService;
+
+  /// Replaces the cold-start update and announcement prompts. Tests only.
+  final Future<void> Function(BuildContext context)? startupPrompts;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +57,10 @@ class EvChargerApp extends StatelessWidget {
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: mode,
-              home: MainAppFrame(authService: authService),
+              home: MainAppFrame(
+                authService: authService,
+                startupPrompts: startupPrompts,
+              ),
             );
           },
         );
@@ -64,9 +70,12 @@ class EvChargerApp extends StatelessWidget {
 }
 
 class MainAppFrame extends StatefulWidget {
-  const MainAppFrame({super.key, this.authService});
+  const MainAppFrame({super.key, this.authService, this.startupPrompts});
 
   final AuthService? authService;
+
+  /// Replaces the cold-start update and announcement prompts. Tests only.
+  final Future<void> Function(BuildContext context)? startupPrompts;
 
   @override
   State<MainAppFrame> createState() => _MainAppFrameState();
@@ -88,15 +97,36 @@ class _MainAppFrameState extends State<MainAppFrame> {
   /// that needs no account.
   int _activeTabIndex = _mapTab;
 
+  static const int _homeTab = 0;
   static const int _mapTab = 1;
   static const int _accountTab = 4;
+
+  /// The server's id for this app's walkthrough in `pendingGuides`.
+  static const String _appGuide = 'app';
+
+  /// Four steps on the dashboard, the last on the bottom bar.
+  static const int _navGuideStep = 4;
+
+  final AppGuideController _guide = AppGuideController(totalSteps: 5);
+
+  /// Whether a driver was signed in at the last auth change, so the guide is
+  /// considered on a sign-in and not on every profile update.
+  bool _wasSignedIn = false;
+
+  /// False until the cold-start update and announcement prompts are done, so
+  /// a sign-in cannot start the guide underneath one of them.
+  bool _startupPromptsDone = false;
 
   bool get _isLoggedIn => _auth.isSignedIn;
 
   @override
   void initState() {
     super.initState();
+    _wasSignedIn = _isLoggedIn;
     _auth.currentUser.addListener(_onAuthChanged);
+    _guide.addListener(_onGuideChanged);
+    _guide.onFinished = _onGuideFinished;
+    GuidedStep.onTriggerGuide = _replayGuide;
     _restoreSession();
     if (_isLoggedIn) _startWalletWatcher();
   }
@@ -104,8 +134,56 @@ class _MainAppFrameState extends State<MainAppFrame> {
   @override
   void dispose() {
     _auth.currentUser.removeListener(_onAuthChanged);
+    _guide.removeListener(_onGuideChanged);
+    _guide.dispose();
+    if (GuidedStep.onTriggerGuide == _replayGuide) {
+      GuidedStep.onTriggerGuide = null;
+    }
     WalletWatcherService.instance.stop();
     super.dispose();
+  }
+
+  /// The bottom-bar step lives here, the rest on the dashboard.
+  void _onGuideChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Shows the walkthrough to a driver the server still lists it for — a new
+  /// account. Runs after a launch with a saved session and after a sign-in or
+  /// sign-up; a guest never gets here.
+  void _maybeStartGuide() {
+    if (!mounted || !_isLoggedIn) return;
+    if (_auth.shouldShowGuide(_appGuide)) {
+      _startGuide(replay: false);
+    } else {
+      // A "done" that failed offline earlier gets another go.
+      unawaited(_auth.retryGuideDone(_appGuide));
+    }
+  }
+
+  /// From «Аппын заавар үзэх»: ignores the server flag and never writes it.
+  void _replayGuide() {
+    if (!mounted || !_isLoggedIn) return;
+    _startGuide(replay: true);
+  }
+
+  /// The steps point at the dashboard, so go there first. The dashboard
+  /// starts the guide itself once its first load is in and nothing modal is
+  /// on top of it.
+  void _startGuide({required bool replay}) {
+    setState(() => _activeTabIndex = _homeTab);
+    _guide.request(replay: replay);
+  }
+
+  /// Ticked «Дахиж харахгүй», or went through to «Ойлголоо»: the server is
+  /// told, so it never shows again. A plain skip only hides it until the next
+  /// launch or sign-in.
+  void _onGuideFinished({required bool markDone}) {
+    if (markDone) {
+      unawaited(_auth.markGuideDone(_appGuide));
+    } else {
+      _auth.dismissGuideForSession(_appGuide);
+    }
   }
 
   void _startWalletWatcher() {
@@ -147,11 +225,6 @@ class _MainAppFrameState extends State<MainAppFrame> {
     }
   }
 
-  Future<void> _maybeShowOnboarding() async {
-    if (!mounted) return;
-    await OnboardingTour.showIfFirstLaunch(context);
-  }
-
   Future<void> _restoreSession() async {
     await _auth.restoreSession();
     if (mounted) {
@@ -161,11 +234,22 @@ class _MainAppFrameState extends State<MainAppFrame> {
       });
       // After the splash, never during it: a dialog raised over the boot screen
       // has no Scaffold to anchor its snackbar, and a forced update shown before
-      // the app has drawn looks like a crash. Onboarding goes first — it is the
-      // gentler prompt, and a brand new driver should see it before anything else.
-      await _maybeShowOnboarding();
-      if (_isLoggedIn && mounted) await maybeShowAnnouncement(context);
-      unawaited(_checkForUpdate());
+      // the app has drawn looks like a crash.
+      //
+      // One prompt at a time, each waiting for the last to be dismissed:
+      // update, then announcement, then the guide. A forced update is never
+      // dismissed, so nothing is stacked on top of it.
+      final Future<void> Function(BuildContext)? prompts =
+          widget.startupPrompts;
+      if (prompts != null) {
+        await prompts(context);
+      } else {
+        await _checkForUpdate();
+        if (_isLoggedIn && mounted) await maybeShowAnnouncement(context);
+      }
+      if (!mounted) return;
+      _startupPromptsDone = true;
+      _maybeStartGuide();
     }
   }
 
@@ -216,10 +300,13 @@ class _MainAppFrameState extends State<MainAppFrame> {
   /// the real thing, so the frame rebuilds whenever the session changes.
   void _onAuthChanged() {
     if (!mounted) return;
+    final bool justSignedIn = _isLoggedIn && !_wasSignedIn;
+    _wasSignedIn = _isLoggedIn;
     if (_isLoggedIn) {
       _startWalletWatcher();
     } else {
       WalletWatcherService.instance.stop();
+      _guide.cancel();
     }
     setState(() {
       // Signing in on the account tab lands the driver back on the map rather
@@ -230,6 +317,8 @@ class _MainAppFrameState extends State<MainAppFrame> {
         _activeTabIndex = _mapTab;
       }
     });
+    // A saved-session launch is handled once the startup prompts are done.
+    if (justSignedIn && _startupPromptsDone) _maybeStartGuide();
   }
 
   void _openQrScannerModal(BuildContext context) {
@@ -298,6 +387,7 @@ class _MainAppFrameState extends State<MainAppFrame> {
     final List<Widget> pages = [
       HomeDashboardScreen(
         authService: widget.authService,
+        guide: _guide,
         onNavigateToQuickControls: () {
           setState(() => _activeTabIndex = 2);
         },
@@ -392,12 +482,20 @@ class _MainAppFrameState extends State<MainAppFrame> {
 
       body: IndexedStack(index: _activeTabIndex, children: pages),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showAssistantSheet(context, page: _currentTabLabel()),
-        backgroundColor: palette.accent,
-        tooltip: AppStrings.get('assistant_label'),
-        child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
-      ),
+      // Out of the way while the guide runs: it sits over the very sections
+      // the guide is pointing at.
+      floatingActionButton: _guide.isActive
+          ? null
+          : FloatingActionButton(
+              onPressed: () =>
+                  showAssistantSheet(context, page: _currentTabLabel()),
+              backgroundColor: palette.accent,
+              tooltip: AppStrings.get('assistant_label'),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+              ),
+            ),
 
       // Floating Bottom Navigation Bar (Full rounded with space on all sides)
       bottomNavigationBar: SafeArea(
@@ -408,53 +506,68 @@ class _MainAppFrameState extends State<MainAppFrame> {
             bottom: 16,
             top: 4,
           ),
-          child: Container(
-            height: 66,
-            decoration: BoxDecoration(
-              color: palette.panel,
-              borderRadius: BorderRadius.circular(36),
-              boxShadow: [
-                BoxShadow(
-                  color: palette.shadow,
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBottomNavItem(
-                  0,
-                  Icons.home_rounded,
-                  AppStrings.get('home'),
-                ),
-                _buildBottomNavItem(
-                  1,
-                  Icons.map_rounded,
-                  AppStrings.get('map'),
-                ),
-                _buildBottomNavItem(
-                  2,
-                  Icons.tune_rounded,
-                  AppStrings.get('control'),
-                ),
-                _buildBottomNavItem(
-                  3,
-                  Icons.ev_station_rounded,
-                  AppStrings.get('nav_stations'),
-                ),
-                _buildBottomNavItem(
-                  4,
-                  Icons.person_rounded,
-                  AppStrings.get('nav_account'),
-                ),
-              ],
-            ),
+          child: GuidedStep.of(
+            guide: _guide,
+            stepIndex: _navGuideStep,
+            tag: AppStrings.get('guide_nav_tag'),
+            title: AppStrings.get('guide_nav_title'),
+            description: AppStrings.get('guide_nav_body'),
+            icon: Icons.map_rounded,
+            tipBelow: false,
+            borderRadius: 36,
+            child: _buildBottomNavBar(palette),
           ),
         ),
+      ),
+    );
+  }
+
+  /// The floating pill of five tabs.
+  Widget _buildBottomNavBar(AppPalette palette) {
+    return Container(
+      height: 66,
+      decoration: BoxDecoration(
+        color: palette.panel,
+        borderRadius: BorderRadius.circular(36),
+        boxShadow: [
+          BoxShadow(
+            color: palette.shadow,
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildBottomNavItem(
+            0,
+            Icons.home_rounded,
+            AppStrings.get('home'),
+          ),
+          _buildBottomNavItem(
+            1,
+            Icons.map_rounded,
+            AppStrings.get('map'),
+          ),
+          _buildBottomNavItem(
+            2,
+            Icons.tune_rounded,
+            AppStrings.get('control'),
+          ),
+          _buildBottomNavItem(
+            3,
+            Icons.ev_station_rounded,
+            AppStrings.get('nav_stations'),
+          ),
+          _buildBottomNavItem(
+            4,
+            Icons.person_rounded,
+            AppStrings.get('nav_account'),
+          ),
+        ],
       ),
     );
   }

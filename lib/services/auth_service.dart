@@ -44,6 +44,70 @@ class AuthService {
 
   bool get isSignedIn => currentUser.value != null;
 
+  /// Guides finished on this device whose "done" did not reach the server
+  /// (offline, say), as `userId:guide`. They are not shown again this run;
+  /// the request is re-sent the next time they would have been.
+  final Set<String> _guidesDoneUnsent = <String>{};
+
+  /// Guides skipped without «Дахиж харахгүй» since this driver signed in.
+  /// Cleared on sign-out, so the guide comes back on the next sign-in or
+  /// launch while the server still has it pending.
+  final Set<String> _guidesDismissed = <String>{};
+
+  String? _guideKey(String guide) {
+    final AuthUser? user = currentUser.value;
+    return user == null ? null : '${user.id}:$guide';
+  }
+
+  /// Whether to show [guide] to the signed-in driver now: the server still
+  /// lists it as pending and it has not been closed on this device already.
+  /// Always false signed out.
+  bool shouldShowGuide(String guide) {
+    final String? key = _guideKey(guide);
+    if (key == null) return false;
+    if (!currentUser.value!.pendingGuides.contains(guide)) return false;
+    return !_guidesDoneUnsent.contains(key) && !_guidesDismissed.contains(key);
+  }
+
+  /// A plain skip: hidden for the rest of this sign-in, nothing sent.
+  void dismissGuideForSession(String guide) {
+    final String? key = _guideKey(guide);
+    if (key != null) _guidesDismissed.add(key);
+  }
+
+  /// Re-sends a "done" that failed earlier, if the server still has [guide]
+  /// pending. A no-op otherwise.
+  Future<void> retryGuideDone(String guide) async {
+    final String? key = _guideKey(guide);
+    if (key == null || !_guidesDoneUnsent.contains(key)) return;
+    if (!currentUser.value!.pendingGuides.contains(guide)) {
+      _guidesDoneUnsent.remove(key);
+      return;
+    }
+    await markGuideDone(guide);
+  }
+
+  /// Tells the server the driver has been through [guide], so it is not
+  /// shown again on any device. Never throws: a failure is remembered and
+  /// retried later rather than holding the driver up.
+  Future<void> markGuideDone(String guide) async {
+    final String? key = _guideKey(guide);
+    if (key == null) return;
+    _guidesDoneUnsent.add(key);
+    try {
+      final Map<String, dynamic> body = await _client.post(
+        '/account/guides/${Uri.encodeComponent(guide)}/done',
+      );
+      // The driver may have signed out while this was in flight.
+      if (_guideKey(guide) != key) return;
+      _guidesDoneUnsent.remove(key);
+      if (body['user'] is Map<String, dynamic>) _adopt(body['user']);
+    } catch (_) {
+      // Offline or a server hiccup. Remembered in _guidesDoneUnsent and
+      // retried by retryGuideDone; the driver is not held up over it.
+    }
+  }
+
   /// The API normalises the number, so local input like `9911 8844` is fine.
   Future<AuthUser> signIn({required String phone, required String pin}) async {
     final Map<String, dynamic> body = await _client.post(
@@ -159,6 +223,7 @@ class AuthService {
       /* Signing out locally is what matters. */
     } finally {
       await _client.clearSession();
+      _guidesDismissed.clear();
       currentUser.value = null;
     }
   }

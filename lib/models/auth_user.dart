@@ -15,6 +15,7 @@ class AuthUser {
     this.lastLoginAt,
     this.vehicleBrand,
     this.vehicleModel,
+    this.pendingGuides = const <String>[],
   });
 
   final String id;
@@ -43,6 +44,12 @@ class AuthUser {
   /// so it can be shown next to the station and start time of a live session.
   final String? vehicleBrand;
   final String? vehicleModel;
+
+  /// Walkthroughs this driver has not been through yet: `app` for this app's
+  /// guide, `web` for the kiosk website's. New accounts start with both;
+  /// accounts from before guides existed, and servers that predate them,
+  /// send none.
+  final List<String> pendingGuides;
 
   /// First name, for greeting the driver. Falls back to the address' local
   /// part, then the phone number, so the greeting is never empty.
@@ -80,6 +87,12 @@ class AuthUser {
       lastLoginAt: _dateOrNull(json['lastLoginAt']),
       vehicleBrand: _stringOrNull(json['vehicleBrand']),
       vehicleModel: _stringOrNull(json['vehicleModel']),
+      pendingGuides: json['pendingGuides'] is List
+          ? (json['pendingGuides'] as List<dynamic>)
+                .whereType<Object>()
+                .map((Object guide) => guide.toString())
+                .toList(growable: false)
+          : const <String>[],
     );
   }
 

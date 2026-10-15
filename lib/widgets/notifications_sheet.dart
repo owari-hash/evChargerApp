@@ -56,7 +56,8 @@ class NotificationsSheet extends StatelessWidget {
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
-        color: palette.panel,
+        // Follows the theme: light card in light mode, dark in dark mode.
+        color: palette.card,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
@@ -70,12 +71,12 @@ class NotificationsSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       AppStrings.get('notifications_label'),
-                      style: TextStyle(color: palette.onPanel, fontSize: 17, fontWeight: FontWeight.w800),
+                      style: TextStyle(color: palette.ink, fontSize: 17, fontWeight: FontWeight.w800),
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close_rounded, color: palette.onPanel),
+                    icon: Icon(Icons.close_rounded, color: palette.ink),
                   ),
                 ],
               ),
@@ -128,7 +129,7 @@ class NotificationsSheet extends StatelessWidget {
                                   Text(
                                     item.title,
                                     style: TextStyle(
-                                      color: palette.onPanel,
+                                      color: palette.ink,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -217,10 +218,10 @@ class _KindIcon extends StatelessWidget {
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: started ? palette.accent : palette.onPanel.withValues(alpha: 0.12),
+        color: started ? palette.accent : palette.ink.withValues(alpha: 0.12),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: started ? Colors.white : palette.onPanel, size: 18),
+      child: Icon(icon, color: started ? Colors.white : palette.ink, size: 18),
     );
   }
 }

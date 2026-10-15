@@ -23,6 +23,7 @@ import 'utils/app_strings.dart';
 import 'widgets/app_update_dialog.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/assistant_sheet.dart';
+import 'widgets/draggable_assistant_button.dart';
 import 'widgets/auth_gate.dart';
 import 'widgets/charge_notifications.dart';
 import 'widgets/guided_step.dart';
@@ -642,22 +643,22 @@ class _MainAppFrameState extends State<MainAppFrame>
         ),
       ),
 
-      body: IndexedStack(index: _activeTabIndex, children: pages),
-
-      // Out of the way while the guide runs: it sits over the very sections
-      // the guide is pointing at.
-      floatingActionButton: _guide.isActive
-          ? null
-          : FloatingActionButton(
-              onPressed: () =>
-                  showAssistantSheet(context, page: _currentTabLabel()),
-              backgroundColor: palette.accent,
-              tooltip: AppStrings.get('assistant_label'),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                color: Colors.white,
+      body: Stack(
+        children: <Widget>[
+          IndexedStack(index: _activeTabIndex, children: pages),
+          // A button the driver can drag aside: as a fixed FAB it covered the
+          // map's own controls. Hidden while the guide runs, which points at
+          // the very sections it would sit over.
+          if (!_guide.isActive)
+            Positioned.fill(
+              child: DraggableAssistantButton(
+                tooltip: AppStrings.get('assistant_label'),
+                onPressed: () =>
+                    showAssistantSheet(context, page: _currentTabLabel()),
               ),
             ),
+        ],
+      ),
 
       // Floating Bottom Navigation Bar (Full rounded with space on all sides)
       bottomNavigationBar: SafeArea(

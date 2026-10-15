@@ -29,6 +29,21 @@ void showNotificationsSheet(
 bool notificationOpens(AppNotification item) =>
     item.kind == NotificationKind.chargeStarted || item.kind == NotificationKind.chargeStopped;
 
+/// When [at] happened, as a driver reads it: "Өнөөдөр 14:05",
+/// "Өчигдөр 09:12", or the date for anything older.
+String notificationTime(DateTime at, {DateTime? now}) {
+  final DateTime local = at.toLocal();
+  final DateTime today = DateUtils.dateOnly(now ?? DateTime.now());
+  final DateTime day = DateUtils.dateOnly(local);
+  String two(int v) => v.toString().padLeft(2, '0');
+  final String clock = '${two(local.hour)}:${two(local.minute)}';
+  if (day == today) return '${AppStrings.get('notif_today')} $clock';
+  if (day == today.subtract(const Duration(days: 1))) {
+    return '${AppStrings.get('notif_yesterday')} $clock';
+  }
+  return '${local.year}.${two(local.month)}.${two(local.day)} $clock';
+}
+
 class NotificationsSheet extends StatelessWidget {
   const NotificationsSheet({super.key, this.onOpen});
 
@@ -124,6 +139,15 @@ class NotificationsSheet extends StatelessWidget {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    notificationTime(item.at),
+                                    style: TextStyle(
+                                      color: palette.inkMuted.withValues(alpha: 0.75),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ],
                               ),

@@ -8,6 +8,7 @@ import '../models/ocpp_models.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/ocpp_mock_service.dart';
+import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
 import '../services/vehicle_photo_service.dart';
 import '../services/wallet_service.dart';
@@ -306,6 +307,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (!_auth.isSignedIn) return;
     try {
       final List<ChargingSession> sessions = await _sessions.list(limit: 50);
+      // The charge-started/finished pop-ups share this poll rather than
+      // waiting up to 15 s for their own.
+      SessionWatcherService.instance.ingest(sessions);
       ChargingSession? active;
       for (final ChargingSession session in sessions) {
         if (session.isActive) {
@@ -427,6 +431,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       }
       _remoteTransactionId = null;
       finishedTransactionId = remote;
+      // The receipt below is this stop's confirmation; the watcher only
+      // files it in the bell.
+      SessionWatcherService.instance.noteLocalStop(
+        remote,
+        confirmedInApp: true,
+      );
 
       // The charge point's own meter is the real number; local telemetry was
       // only ever an estimate while the session was still running.

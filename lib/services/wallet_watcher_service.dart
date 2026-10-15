@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/wallet.dart';
@@ -19,53 +20,85 @@ class WalletWatcherService {
 
   static final WalletWatcherService instance = WalletWatcherService();
 
-  static const String _lastSeenKey = 'wallet_watcher_last_seen_entry';
+  /// Per account: a device-wide marker made the next driver to sign in on
+  /// the same phone get a pop-up for their own latest entry on the first
+  /// poll, because it never matched the previous driver's.
+  static const String _legacyLastSeenKey = 'wallet_watcher_last_seen_entry';
+
+  static String lastSeenKeyFor(String userId) => '$_legacyLastSeenKey:$userId';
   static const Duration _pollInterval = Duration(seconds: 20);
 
   final WalletService _wallet;
   final FlutterSecureStorage _storage;
 
   Timer? _timer;
+  String? _userId;
   String? _lastSeenId;
   bool _primed = false;
+  bool _legacyCleared = false;
 
-  /// Starts polling. Safe to call repeatedly — a second call while already
-  /// running is a no-op, so the app shell can just call this in `initState`.
-  void start({required void Function(WalletEntry entry) onNewEntry}) {
-    if (_timer != null) return;
+  /// Bumped on every start and stop, so a poll still in flight from before
+  /// cannot report into the next run — another driver's, say.
+  int _run = 0;
+
+  /// Starts polling [userId]'s wallet. Safe to call repeatedly — a second
+  /// call for the same driver while already running is a no-op, so the app
+  /// shell can just call this on every auth change.
+  void start({required String userId, required void Function(WalletEntry entry) onNewEntry}) {
+    if (_timer != null && _userId == userId) return;
+    stop();
+    _userId = userId;
     _lastSeenId = null;
     _primed = false;
-    unawaited(_poll(onNewEntry));
-    _timer = Timer.periodic(_pollInterval, (_) => _poll(onNewEntry));
+    final int run = _run;
+    unawaited(_poll(run, userId, onNewEntry));
+    _timer = Timer.periodic(_pollInterval, (_) => _poll(run, userId, onNewEntry));
   }
 
   void stop() {
+    _run++;
     _timer?.cancel();
     _timer = null;
   }
 
-  Future<void> _poll(void Function(WalletEntry entry) onNewEntry) async {
+  /// One poll, for tests.
+  @visibleForTesting
+  Future<void> pollOnce({required String userId, required void Function(WalletEntry entry) onNewEntry}) {
+    if (_userId != userId) {
+      _userId = userId;
+      _lastSeenId = null;
+      _primed = false;
+    }
+    return _poll(_run, userId, onNewEntry);
+  }
+
+  Future<void> _poll(int run, String userId, void Function(WalletEntry entry) onNewEntry) async {
     try {
+      if (!_legacyCleared) {
+        _legacyCleared = true;
+        await _storage.delete(key: _legacyLastSeenKey);
+      }
       if (!_primed) {
-        _lastSeenId = await _storage.read(key: _lastSeenKey);
+        _lastSeenId = await _storage.read(key: lastSeenKeyFor(userId));
         _primed = true;
       }
 
       final WalletSnapshot snapshot = await _wallet.load(entryLimit: 1);
+      if (run != _run || userId != _userId) return;
       final WalletEntry? latest = snapshot.entries.isNotEmpty ? snapshot.entries.first : null;
       if (latest == null) return;
 
       if (_lastSeenId == null) {
-        // First poll this run: record the baseline silently so history from
-        // before the app opened never pops a notification.
+        // This driver's first poll on this device: record the baseline
+        // silently so history from before never pops a notification.
         _lastSeenId = latest.id;
-        await _storage.write(key: _lastSeenKey, value: latest.id);
+        await _storage.write(key: lastSeenKeyFor(userId), value: latest.id);
         return;
       }
 
       if (latest.id != _lastSeenId) {
         _lastSeenId = latest.id;
-        await _storage.write(key: _lastSeenKey, value: latest.id);
+        await _storage.write(key: lastSeenKeyFor(userId), value: latest.id);
         onNewEntry(latest);
       }
     } catch (_) {

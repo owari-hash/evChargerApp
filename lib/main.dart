@@ -8,11 +8,13 @@ import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/mongolia_map_screen.dart';
 import 'screens/quick_controls_screen.dart';
+import 'screens/sessions_screen.dart';
 import 'screens/trips_stations_screen.dart';
 import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'services/sessions_service.dart';
 import 'services/notifications_store.dart';
+import 'services/session_watcher_service.dart';
 import 'services/wallet_watcher_service.dart';
 import 'utils/money.dart';
 import 'theme/app_theme.dart';
@@ -22,6 +24,7 @@ import 'widgets/app_update_dialog.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/assistant_sheet.dart';
 import 'widgets/auth_gate.dart';
+import 'widgets/charge_notifications.dart';
 import 'widgets/guided_step.dart';
 import 'widgets/notifications_sheet.dart';
 
@@ -81,7 +84,19 @@ class MainAppFrame extends StatefulWidget {
   State<MainAppFrame> createState() => _MainAppFrameState();
 }
 
-class _MainAppFrameState extends State<MainAppFrame> {
+/// A pop-up held back while the first-run guide is on screen.
+class _QueuedBanner {
+  const _QueuedBanner({required this.show, this.transactionId});
+
+  final VoidCallback show;
+
+  /// Set for a charge's pop-up, so a finish queued behind its own start
+  /// replaces it instead of the driver getting both, stale, afterwards.
+  final int? transactionId;
+}
+
+class _MainAppFrameState extends State<MainAppFrame>
+    with WidgetsBindingObserver {
   AuthService get _auth => widget.authService ?? AuthService.instance;
 
   /// True until a session saved on a previous launch has been checked, so the
@@ -119,20 +134,37 @@ class _MainAppFrameState extends State<MainAppFrame> {
 
   bool get _isLoggedIn => _auth.isSignedIn;
 
+  /// Pop-ups waiting for the guide to close.
+  final List<_QueuedBanner> _queuedBanners = <_QueuedBanner>[];
+
+  /// When a charge's end was last put in front of the driver — a «Цэнэглэлт
+  /// дууслаа» pop-up or the dashboard's receipt. The wallet debit for that
+  /// same charge lands a moment later and says nothing new, so it only goes
+  /// in the bell.
+  DateTime? _chargeEndShownAt;
+
+  /// When the wallet watcher last popped up a charge debit, so a «Цэнэглэлт
+  /// дууслаа» right behind it replaces it instead of stacking.
+  DateTime? _debitShownAt;
+
+  static const Duration _sameChargeWindow = Duration(minutes: 2);
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _wasSignedIn = _isLoggedIn;
     _auth.currentUser.addListener(_onAuthChanged);
     _guide.addListener(_onGuideChanged);
     _guide.onFinished = _onGuideFinished;
     GuidedStep.onTriggerGuide = _replayGuide;
     _restoreSession();
-    if (_isLoggedIn) _startWalletWatcher();
+    if (_isLoggedIn) _startWatchers();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _auth.currentUser.removeListener(_onAuthChanged);
     _guide.removeListener(_onGuideChanged);
     _guide.dispose();
@@ -140,12 +172,60 @@ class _MainAppFrameState extends State<MainAppFrame> {
       GuidedStep.onTriggerGuide = null;
     }
     WalletWatcherService.instance.stop();
+    SessionWatcherService.instance.stop();
     super.dispose();
+  }
+
+  /// Polling only while the app is in front; coming back checks straight
+  /// away, so a charge that finished in the meantime is reported then.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (_isLoggedIn) _startWatchers();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        WalletWatcherService.instance.stop();
+        SessionWatcherService.instance.stop();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   /// The bottom-bar step lives here, the rest on the dashboard.
   void _onGuideChanged() {
     if (mounted) setState(() {});
+    if (!_guideOnScreen) _flushBanners();
+  }
+
+  /// Requested counts too: the dashboard starts it a moment later, and a
+  /// pop-up raised in between would sit on top of its first step.
+  bool get _guideOnScreen => _guide.isActive || _guide.requested;
+
+  /// Shows [show] now, or once the guide has closed — a SnackBar over the
+  /// guide covers the step it is pointing at.
+  void _presentBanner(VoidCallback show, {int? transactionId}) {
+    if (!_guideOnScreen) {
+      show();
+      return;
+    }
+    if (transactionId != null) {
+      _queuedBanners.removeWhere(
+        (_QueuedBanner b) => b.transactionId == transactionId,
+      );
+    }
+    _queuedBanners.add(_QueuedBanner(show: show, transactionId: transactionId));
+  }
+
+  void _flushBanners() {
+    if (_queuedBanners.isEmpty || !mounted) return;
+    final List<_QueuedBanner> queued = List<_QueuedBanner>.of(_queuedBanners);
+    _queuedBanners.clear();
+    // ScaffoldMessenger shows them one after another.
+    for (final _QueuedBanner banner in queued) {
+      banner.show();
+    }
   }
 
   /// Shows the walkthrough to a driver the server still lists it for — a new
@@ -186,28 +266,105 @@ class _MainAppFrameState extends State<MainAppFrame> {
     }
   }
 
-  void _startWalletWatcher() {
+  /// Wallet and charge watchers, and the bell's history, for whoever is
+  /// signed in now. Safe to call on every auth change and every resume.
+  void _startWatchers() {
+    final String? userId = _auth.currentUser.value?.id;
+    if (userId == null) return;
+    unawaited(NotificationsStore.instance.setUser(userId));
     WalletWatcherService.instance.start(
-      onNewEntry: (entry) {
-        final String label = _walletEntryLabel(entry);
-        final String amount =
-            '${entry.isCredit ? '+' : ''}${formatMntLeading(entry.amount.toDouble())}';
-        unawaited(
-          NotificationsStore.instance.add(
-            kind: NotificationKind.wallet,
-            title: label,
-            body: amount,
-          ),
-        );
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$label $amount'),
-            backgroundColor: entry.isCredit ? AppTheme.sageGreen : null,
-          ),
-        );
-      },
+      userId: userId,
+      onNewEntry: _onWalletEntry,
     );
+    SessionWatcherService.instance.start(
+      userId: userId,
+      onEvent: _onSessionEvent,
+    );
+  }
+
+  /// Signed out: nothing of this driver's may show for the next one.
+  void _stopWatchersForSignOut() {
+    WalletWatcherService.instance.stop();
+    SessionWatcherService.instance.signOut();
+    unawaited(NotificationsStore.instance.setUser(null));
+    _queuedBanners.clear();
+    _chargeEndShownAt = null;
+    _debitShownAt = null;
+  }
+
+  bool _within(DateTime? at, Duration window) =>
+      at != null && DateTime.now().difference(at) <= window;
+
+  void _onWalletEntry(WalletEntry entry) {
+    final String label = _walletEntryLabel(entry);
+    final String amount =
+        '${entry.isCredit ? '+' : ''}${formatMntLeading(entry.amount.toDouble())}';
+    unawaited(
+      NotificationsStore.instance.add(
+        kind: NotificationKind.wallet,
+        title: label,
+        body: amount,
+      ),
+    );
+    if (!mounted) return;
+    final bool isChargeDebit = entry.type == WalletEntryType.charge;
+    // The charge's own pop-up or receipt already gave the cost.
+    if (isChargeDebit && _within(_chargeEndShownAt, _sameChargeWindow)) return;
+    _presentBanner(() {
+      if (!mounted) return;
+      if (isChargeDebit) _debitShownAt = DateTime.now();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$label $amount'),
+          backgroundColor: entry.isCredit ? AppTheme.sageGreen : null,
+        ),
+      );
+    });
+  }
+
+  void _onSessionEvent(SessionEvent event) {
+    final ({String title, String body}) text = chargeNotificationText(event);
+    unawaited(
+      NotificationsStore.instance.add(
+        kind: chargeNotificationKind(event),
+        title: text.title,
+        body: text.body,
+        transactionId: event.session.transactionId,
+      ),
+    );
+    final bool stopped = event.type == SessionEventType.stopped;
+    if (stopped) _chargeEndShownAt = DateTime.now();
+    // The QR flow's own snackbar or the dashboard's receipt already said so.
+    if (event.confirmedInApp || !mounted) return;
+    _presentBanner(() {
+      if (!mounted) return;
+      final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+      if (stopped && _within(_debitShownAt, _sameChargeWindow)) {
+        // Replaces the debit pop-up for the same charge: this one says more.
+        messenger.hideCurrentSnackBar();
+        _debitShownAt = null;
+      }
+      messenger.showSnackBar(
+        chargeSnackBar(
+          context,
+          event,
+          onView: () => _openCharge(chargeNotificationKind(event)),
+        ),
+      );
+    }, transactionId: event.session.transactionId);
+  }
+
+  /// A charge in progress is on the dashboard; a finished one is in the
+  /// history, with its receipt.
+  void _openCharge(NotificationKind kind) {
+    if (!mounted) return;
+    if (kind == NotificationKind.chargeStarted) {
+      setState(() => _activeTabIndex = _homeTab);
+    } else if (kind == NotificationKind.chargeStopped) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const SessionsScreen()),
+      );
+    }
   }
 
   String _walletEntryLabel(WalletEntry entry) {
@@ -303,9 +460,9 @@ class _MainAppFrameState extends State<MainAppFrame> {
     final bool justSignedIn = _isLoggedIn && !_wasSignedIn;
     _wasSignedIn = _isLoggedIn;
     if (_isLoggedIn) {
-      _startWalletWatcher();
+      _startWatchers();
     } else {
-      WalletWatcherService.instance.stop();
+      _stopWatchersForSignOut();
       _guide.cancel();
     }
     setState(() {
@@ -456,7 +613,12 @@ class _MainAppFrameState extends State<MainAppFrame> {
               ),
               if (_isLoggedIn) ...[
                 const SizedBox(width: 8),
-                _NotificationBellAction(onOpen: () => showNotificationsSheet(context)),
+                _NotificationBellAction(
+                  onOpen: () => showNotificationsSheet(
+                    context,
+                    onOpen: (AppNotification item) => _openCharge(item.kind),
+                  ),
+                ),
               ],
               const SizedBox(width: 10),
               // Guests get the way in; drivers get the way out.
@@ -740,9 +902,10 @@ class _AppBarAction extends StatelessWidget {
   }
 }
 
-/// The bell in the app bar: wallet changes and announcements the driver has
-/// already seen once as a SnackBar or a modal, kept here so they can find
-/// them again — same role as the kiosk website's bell.
+/// The bell in the app bar: wallet changes, announcements and charges
+/// starting or finishing that the driver has already seen once as a SnackBar
+/// or a modal, kept here so they can find them again — same role as the
+/// kiosk website's bell.
 class _NotificationBellAction extends StatelessWidget {
   const _NotificationBellAction({required this.onOpen});
 

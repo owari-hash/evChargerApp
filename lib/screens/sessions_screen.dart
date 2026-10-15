@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/charging_session.dart';
 import '../models/wallet.dart' show formatMnt;
 import '../services/api_client.dart';
+import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
@@ -42,6 +43,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     });
     try {
       final List<ChargingSession> list = await _sessions.list();
+      SessionWatcherService.instance.ingest(list);
       if (!mounted) return;
       setState(() {
         _list = list;
@@ -83,6 +85,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
     setState(() => _stopping = session.transactionId);
     try {
       final String status = await _sessions.stop(session.transactionId);
+      // This screen only says the charger took the request, so the
+      // watcher's «Цэнэглэлт дууслаа» still pops up once it has stopped.
+      SessionWatcherService.instance.noteLocalStop(session.transactionId);
       if (!mounted) return;
       setState(() => _stopping = null);
 

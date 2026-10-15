@@ -38,11 +38,17 @@ const String kTestCode = '123456';
 /// [pendingGuides] is what the stub driver has not been through yet — a new
 /// account has `['app', 'web']`. `POST /account/guides/:id/done` removes one,
 /// or fails as if offline when [guidesDoneFails] is set.
+///
+/// [sessions], when given, is read on every `GET /sessions`, so a test can
+/// change what the driver's history says between polls. [walletEntries]
+/// does the same for the wallet's ledger.
 ApiClient fakeApiClient({
   bool startSignedIn = false,
   List<http.Request>? log,
   List<String> pendingGuides = const <String>[],
   bool guidesDoneFails = false,
+  List<Map<String, dynamic>> Function()? sessions,
+  List<Map<String, dynamic>> Function()? walletEntries,
 }) {
   final SessionStore store = InMemorySessionStore();
   if (startSignedIn) store.write('evapp_session=stub');
@@ -52,6 +58,8 @@ ApiClient fakeApiClient({
       log,
       pendingGuides: List<String>.of(pendingGuides),
       guidesDoneFails: guidesDoneFails,
+      sessions: sessions,
+      walletEntries: walletEntries,
     ),
   );
 }
@@ -74,6 +82,8 @@ MockClient _stubClient(
   List<http.Request>? log, {
   required List<String> pendingGuides,
   required bool guidesDoneFails,
+  List<Map<String, dynamic>> Function()? sessions,
+  List<Map<String, dynamic>> Function()? walletEntries,
 }) {
   // The driver as this stub currently knows them.
   Map<String, dynamic> user() => <String, dynamic>{
@@ -174,7 +184,7 @@ MockClient _stubClient(
           'maxTopUp': 5000000,
           'minStartBalance': 1000,
         },
-        'entries': <Map<String, dynamic>>[
+        'entries': walletEntries?.call() ?? <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'e_1',
             'type': 'TOPUP',
@@ -190,7 +200,7 @@ MockClient _stubClient(
 
     if (path.endsWith('/sessions')) {
       return ok(<String, dynamic>{
-        'sessions': <Map<String, dynamic>>[
+        'sessions': sessions?.call() ?? <Map<String, dynamic>>[
           <String, dynamic>{
             'transactionId': 42,
             'chargePointId': 'CP-DEMO-001',

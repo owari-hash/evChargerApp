@@ -2,7 +2,6 @@ import 'package:evchargerapp/main.dart';
 import 'package:evchargerapp/models/auth_user.dart';
 import 'package:evchargerapp/screens/home_dashboard_screen.dart';
 import 'package:evchargerapp/services/auth_service.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 import 'package:evchargerapp/widgets/guided_step.dart';
 import 'package:flutter/material.dart';
@@ -58,7 +57,6 @@ int _activeTab(WidgetTester tester) {
 
 void main() {
   setUp(() {
-    OcppMockService.enablePeriodicTimer = false;
     AppStrings.currentLanguage = AppLanguage.mn;
   });
 
@@ -309,7 +307,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HomeDashboardScreen(
-          onNavigateToQuickControls: () {},
           authService: fakeAuthService(),
         ),
       ),

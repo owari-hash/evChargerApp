@@ -39,9 +39,19 @@ class _DraggableAssistantButtonState extends State<DraggableAssistantButton> {
     p.dy.clamp(_margin, area.height - _size - _margin),
   );
 
-  /// Bottom-left by default: the map keeps its zoom and location controls on
-  /// the right and its station card along the bottom centre.
-  Offset _initial(Size area) => Offset(_margin, area.height * 0.62);
+  /// Bottom-right by default, just above the tab bar. It used to start on
+  /// the left at 62% height, right over the home screen's balance tile. Here
+  /// it sits below the map's zoom and locate buttons, beside its scan button
+  /// (which stops short of this corner), and under the end of the home
+  /// screen's scroll padding.
+  ///
+  /// [bottomInset] is that corner's distance from the bottom of the body.
+  static const double bottomInset = 20;
+
+  Offset _initial(Size area) => Offset(
+    area.width - _size - _margin,
+    area.height - _size - bottomInset,
+  );
 
   void _snap(Size area) {
     final Offset p = _position!;

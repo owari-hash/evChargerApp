@@ -1,101 +1,112 @@
 import 'package:flutter/material.dart';
 
-import '../services/announcement_service.dart';
-import '../services/notifications_store.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
-/// Shows the newest Мэдээ this device has not dismissed yet, as a modal with
-/// its image (if any), title and body. Closing it files the announcement
-/// into the notification bell's history instead of losing it outright —
-/// mirrors the kiosk website's announcement modal.
-Future<void> maybeShowAnnouncement(BuildContext context) async {
-  Announcement? announcement;
-  try {
-    announcement = await AnnouncementService.instance.nextUnseen();
-  } catch (_) {
-    return;
-  }
-  if (announcement == null || !context.mounted) return;
-
-  await showDialog<void>(
+/// Shows one Мэдээ: its image (if any), title and body.
+///
+/// The announcement watcher marks it seen and files it in the bell before
+/// this opens, so the close button, a tap outside and the back button all
+/// dismiss it the same way. The body scrolls: operators can write up to
+/// 4000 characters, which used to run off the bottom of the screen.
+Future<void> showAnnouncementDialog(
+  BuildContext context, {
+  required String title,
+  required String body,
+  String? imageUrl,
+}) {
+  return showDialog<void>(
     context: context,
-    builder: (context) => _AnnouncementDialog(announcement: announcement!),
+    builder: (BuildContext context) =>
+        AnnouncementDialog(title: title, body: body, imageUrl: imageUrl),
   );
 }
 
-class _AnnouncementDialog extends StatelessWidget {
-  const _AnnouncementDialog({required this.announcement});
+class AnnouncementDialog extends StatelessWidget {
+  const AnnouncementDialog({
+    super.key,
+    required this.title,
+    required this.body,
+    this.imageUrl,
+  });
 
-  final Announcement announcement;
-
-  Future<void> _close(BuildContext context) async {
-    await AnnouncementService.instance.markSeen(announcement.id);
-    await NotificationsStore.instance.add(
-      kind: NotificationKind.announcement,
-      title: announcement.title,
-      body: announcement.body,
-      imageUrl: announcement.imageUrl,
-    );
-    if (context.mounted) Navigator.of(context).pop();
-  }
+  final String title;
+  final String body;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    final double maxHeight = MediaQuery.of(context).size.height * 0.8;
 
     return Dialog(
-      backgroundColor: palette.panel,
+      backgroundColor: palette.card,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Stack(
-              children: [
-                if (announcement.imageUrl != null)
-                  Image.network(
-                    announcement.imageUrl!,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                  ),
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: GestureDetector(
-                    onTap: () => _close(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        shape: BoxShape.circle,
+            if (imageUrl != null)
+              Image.network(
+                imageUrl!,
+                height: 180,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppStrings.get('announcement_tag'),
+                      style: TextStyle(
+                        color: palette.accent,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
                       ),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: palette.ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      body,
+                      style: TextStyle(
+                        color: palette.inkMuted,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    announcement.title,
-                    style: TextStyle(color: palette.onPanel, fontSize: 17, fontWeight: FontWeight.w800),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.accent,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    announcement.body,
-                    style: TextStyle(color: palette.inkMuted, fontSize: 14, height: 1.4),
-                  ),
-                ],
+                ),
+                child: Text(AppStrings.get('guide_done')),
               ),
             ),
           ],

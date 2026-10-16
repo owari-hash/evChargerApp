@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../models/station.dart';
+import '../utils/app_strings.dart';
 import 'api_client.dart';
 
 /// What a station/connector QR sticker resolves to — enough to pre-select the
@@ -66,10 +67,16 @@ class StationsService {
 
   final ApiClient _client;
 
-  /// Last-known network. Starts at the offline fallback so the first frame has
-  /// something to draw, and is replaced the moment a fetch lands.
+  /// Last-known live network. Empty until the first fetch lands; a failed
+  /// fetch keeps whatever was already here and sets [error] instead.
+  ///
+  /// It used to start on five invented Ulaanbaatar stations, with made-up
+  /// prices and free plugs, which offline drivers could not tell from the
+  /// real thing.
   final ValueNotifier<List<ChargingStationLocation>> stations =
-      ValueNotifier<List<ChargingStationLocation>>(fallbackStations);
+      ValueNotifier<List<ChargingStationLocation>>(
+        const <ChargingStationLocation>[],
+      );
 
   /// True while a fetch is in flight, for the screens that show a spinner.
   final ValueNotifier<bool> loading = ValueNotifier<bool>(false);
@@ -77,10 +84,6 @@ class StationsService {
   /// Set when the last fetch failed, so a screen can say the list may be stale
   /// rather than quietly presenting cached stations as live.
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
-
-  /// True while [stations] is the built-in fallback rather than live data.
-  bool get isFallback => _isFallback;
-  bool _isFallback = true;
 
   Future<void>? _inFlight;
 
@@ -139,7 +142,6 @@ class StationsService {
       }
 
       stations.value = parsed;
-      _isFallback = false;
       error.value = null;
     } on ApiException catch (err) {
       error.value = err.message;
@@ -194,16 +196,40 @@ class StationsService {
     return station;
   }
 
+  /// Live connector states for one station, from `/stations/:id/live` —
+  /// lighter than [station], for refreshing an open station sheet.
+  Future<List<StationConnector>> liveConnectors(String stationId) async {
+    final Map<String, dynamic> body = await _client.get(
+      '/stations/${Uri.encodeComponent(stationId)}/live',
+    );
+    return (body['connectors'] as List<dynamic>? ?? <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .map(StationConnector.fromJson)
+        .whereType<StationConnector>()
+        .toList(growable: false);
+  }
+
   /// Asks the charge point to begin a session over OCPP, on the signed-in
   /// driver's own charge tag. The station's own Authorize decides whether that
   /// tag can actually charge there — a wallet top-up, a Client-sponsored free
   /// card, or a plain refusal all come back as the same `ApiException`.
-  Future<String> startCharging(String stationId, {int? connectorId}) async {
+  ///
+  /// The charge point answers RemoteStartTransaction with `Accepted` or
+  /// `Rejected`. Anything but `Accepted` — a missing status included — is
+  /// thrown as an [ApiException]: it used to be reported as "charge started"
+  /// while nothing was charging.
+  Future<void> startCharging(String stationId, {int? connectorId}) async {
     final Map<String, dynamic> body = await _client.post(
       '/stations/${Uri.encodeComponent(stationId)}/start',
       body: connectorId != null ? <String, dynamic>{'connectorId': connectorId} : null,
     );
-    return (body['status'] ?? 'Accepted').toString();
+    final String status = (body['status'] ?? '').toString();
+    if (status != 'Accepted') {
+      throw ApiException(
+        statusCode: 409,
+        message: AppStrings.get('start_rejected'),
+      );
+    }
   }
 
   /// Recomputes the display distances against a new origin, without refetching.
@@ -251,80 +277,4 @@ class StationsService {
   }
 
   static double _radians(double degrees) => degrees * math.pi / 180.0;
-
-  /// Shown only when the network cannot be reached — an empty map is worse than
-  /// a stale one, and every screen labels these as unverified.
-  static const List<ChargingStationLocation> fallbackStations =
-      <ChargingStationLocation>[
-        ChargingStationLocation(
-          id: 'UB-001',
-          name: 'Шангри-Ла Молл Цэнэглэгч',
-          address: 'Улаанбаатар, Сүхбаатар дүүрэг, 1-р хороо',
-          distance: '0.8 км',
-          kwSpeed: 180.0,
-          availableConnectors: 3,
-          totalConnectors: 4,
-          pricePerKwh: 450.0,
-          qrCode: 'EV-UB-SHANGRILA',
-          latitude: 47.9150,
-          longitude: 106.9205,
-          connectorTypes: <String>['CCS2', 'Type2', 'GBT'],
-        ),
-        ChargingStationLocation(
-          id: 'UB-002',
-          name: 'Зайсан Хилл Цогцолбор',
-          address: 'Улаанбаатар, Хан-Уул дүүрэг, 11-р хороо',
-          distance: '2.4 км',
-          kwSpeed: 120.0,
-          availableConnectors: 2,
-          totalConnectors: 4,
-          pricePerKwh: 420.0,
-          qrCode: 'EV-UB-ZAISAN',
-          latitude: 47.8864,
-          longitude: 106.9058,
-          connectorTypes: <String>['CCS2', 'GBT', 'CHAdeMO'],
-        ),
-        ChargingStationLocation(
-          id: 'UB-003',
-          name: 'Улсын Их Дэлгүүр Станц',
-          address: 'Улаанбаатар, Чингэлтэй дүүрэг, 3-р хороо',
-          distance: '1.1 км',
-          kwSpeed: 60.0,
-          availableConnectors: 4,
-          totalConnectors: 6,
-          pricePerKwh: 380.0,
-          qrCode: 'EV-UB-DEPTSTORE',
-          latitude: 47.9171,
-          longitude: 106.9068,
-          connectorTypes: <String>['Type2', 'GBT', 'Schuko'],
-        ),
-        ChargingStationLocation(
-          id: 'UB-004',
-          name: 'Үндэсний Цэцэрлэгт Хүрээлэн',
-          address: 'Улаанбаатар, Баянзүрх дүүрэг, 26-р хороо',
-          distance: '3.5 км',
-          kwSpeed: 150.0,
-          availableConnectors: 4,
-          totalConnectors: 4,
-          pricePerKwh: 400.0,
-          qrCode: 'EV-UB-NATIONALPARK',
-          latitude: 47.9080,
-          longitude: 106.9450,
-          connectorTypes: <String>['CCS2', 'CHAdeMO', 'Type2'],
-        ),
-        ChargingStationLocation(
-          id: 'UB-005',
-          name: 'Сүхбаатарын Талбай Станц',
-          address: 'Улаанбаатар, Сүхбаатар дүүрэг, Төв талбай',
-          distance: '0.3 км',
-          kwSpeed: 200.0,
-          availableConnectors: 2,
-          totalConnectors: 4,
-          pricePerKwh: 480.0,
-          qrCode: 'EV-UB-SUKHBAATAR',
-          latitude: 47.9188,
-          longitude: 106.9176,
-          connectorTypes: <String>['CCS2', 'Type2', 'CHAdeMO', 'GBT'],
-        ),
-      ];
 }

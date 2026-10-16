@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/screens/quick_controls_screen.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 import 'package:evchargerapp/screens/login_register_screen.dart';
-import 'package:evchargerapp/widgets/swipe_to_slide_button.dart';
+import 'package:evchargerapp/models/station.dart';
+import 'package:evchargerapp/services/api_client.dart';
+import 'package:evchargerapp/services/session_store.dart';
+import 'package:evchargerapp/services/stations_service.dart';
+import 'package:evchargerapp/widgets/station_sheet.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 /// Screen widths worth caring about: iPhone SE through Pro Max.
 const List<Size> _phones = <Size>[
@@ -20,14 +25,32 @@ Future<void> _pumpFrames(WidgetTester tester, [int frames = 4]) async {
   }
 }
 
-Widget _host(Widget child, ThemeData theme) => MaterialApp(
-  theme: theme,
-  home: Scaffold(body: SingleChildScrollView(child: child)),
+const ChargingStationLocation _sampleStation = ChargingStationLocation(
+  id: 'cp1',
+  name: 'Сүхбаатарын талбайн цэнэглэх станц',
+  address: 'Улаанбаатар, Сүхбаатар дүүрэг, 1-р хороо, Энхтайваны өргөн чөлөө',
+  distance: '1.2 км',
+  kwSpeed: 120,
+  availableConnectors: 1,
+  totalConnectors: 3,
+  pricePerKwh: 1234.56,
+  feePercent: 5,
+  qrCode: 'cp1',
+  latitude: 47.9188,
+  longitude: 106.9176,
+  connectors: <StationConnector>[
+    StationConnector(connectorId: 1, status: 'Available', type: 'CCS2', powerKw: 120),
+    StationConnector(connectorId: 2, status: 'Charging', type: 'GBT', powerKw: 60),
+    StationConnector(connectorId: 3, status: 'Faulted', type: 'Type2', powerKw: 22),
+  ],
+);
+
+ApiClient _offlineClient() => ApiClient(
+  sessionStore: InMemorySessionStore(),
+  httpClient: MockClient((http.Request r) async => http.Response('{}', 404)),
 );
 
 void main() {
-  setUp(() => OcppMockService.enablePeriodicTimer = false);
-
   for (final ThemeData theme in <ThemeData>[
     AppTheme.lightTheme,
     AppTheme.darkTheme,
@@ -35,7 +58,7 @@ void main() {
     final String mode = theme.brightness == Brightness.dark ? 'dark' : 'light';
 
     for (final Size size in _phones) {
-      testWidgets('slide-to-start fits ${size.width.toInt()}pt ($mode)', (
+      testWidgets('station sheet fits ${size.width.toInt()}pt ($mode)', (
         WidgetTester tester,
       ) async {
         tester.view.physicalSize = size * 2;
@@ -43,19 +66,23 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
 
         await tester.pumpWidget(
-          _host(
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: const SwipeToSlideButton(
-                onSwipeCompleted: _decline,
-                text: 'Цэнэглэж эхлэхийн тулд гулсуулна уу',
+          MaterialApp(
+            theme: theme,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: StationSheet(
+                  station: _sampleStation,
+                  onRoute: _noop,
+                  stationsService: StationsService(client: _offlineClient()),
+                ),
               ),
             ),
-            theme,
           ),
         );
         await _pumpFrames(tester);
         expect(tester.takeException(), isNull);
+        expect(find.text('Хошуу 1'), findsOneWidget);
       });
 
       testWidgets('quick controls fits ${size.width.toInt()}pt ($mode)', (
@@ -145,4 +172,3 @@ void main() {
 
 void _noop() {}
 
-bool _decline() => false;

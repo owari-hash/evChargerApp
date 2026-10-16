@@ -4,16 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/station.dart';
 import '../services/api_client.dart';
-import '../services/ocpp_mock_service.dart';
+import '../services/auth_service.dart';
 import '../services/sessions_service.dart';
 import '../services/stations_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
-import '../widgets/account_widgets.dart';
-import '../widgets/auth_gate.dart';
-import 'wallet_screen.dart';
+import '../widgets/charge_start_panel.dart';
+import '../widgets/station_sheet.dart';
 
+/// Opens the camera QR scanner — the quickest way to start a charge when the
+/// driver is standing at the charger.
+Future<void> showQrScannerSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (BuildContext context) => const QrScannerSheet(),
+  );
+}
+
+/// The stations tab: the live network as a list. Tapping one opens the same
+/// station sheet as the map.
 class TripsStationsScreen extends StatefulWidget {
   const TripsStationsScreen({super.key});
 
@@ -22,7 +34,6 @@ class TripsStationsScreen extends StatefulWidget {
 }
 
 class _TripsStationsScreenState extends State<TripsStationsScreen> {
-  final OcppMockService _service = OcppMockService.instance;
   final StationsService _stations = StationsService.instance;
 
   @override
@@ -44,31 +55,24 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
     if (mounted) setState(() {});
   }
 
-  void _openQrScannerModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const _QrScannerCheckoutSheet(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final List<ChargingStationLocation> all = _stations.stations.value;
+    final bool loading = _stations.loading.value;
+    final String? error = _stations.error.value;
+
     return Scaffold(
       backgroundColor: context.palette.bg,
       appBar: AppBar(
-        toolbarHeight: 76,
+        toolbarHeight: 64,
         automaticallyImplyLeading: false,
         title: Text(
-          AppStrings.get('nearby_stations'),
-          maxLines: 2,
+          AppStrings.get('stations'),
           style: TextStyle(
-            fontSize: 17,
+            fontSize: 22,
             fontWeight: FontWeight.w900,
             color: context.palette.ink,
             letterSpacing: -0.4,
-            height: 1.15,
           ),
         ),
         actions: [
@@ -76,9 +80,9 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
             icon: Icon(
               Icons.qr_code_scanner_rounded,
               color: context.palette.ink,
-              size: 28,
+              size: 26,
             ),
-            onPressed: () => _openQrScannerModal(context),
+            onPressed: () => showQrScannerSheet(context),
             tooltip: AppStrings.get('scan_qr'),
           ),
           const SizedBox(width: 8),
@@ -86,27 +90,59 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () => _stations.load(force: true),
-        child: SingleChildScrollView(
+        child: ListView(
           // Always scrollable, or pull-to-refresh does nothing on a short list.
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Say so when the list is the built-in fallback, rather than
-              // letting stale stations pass for the live network.
-              // TEMPORARY: suppressed during App Store capture. Remove.
-              if (_stations.isFallback &&
-                  !_stations.loading.value &&
-                  !bool.fromEnvironment('SCREENSHOT_MODE'))
-                _buildOfflineNotice(context),
-
-              ..._service.nearbyStations.map(
-                (station) => _buildStationCard(station, context),
-              ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          children: [
+            if (all.isEmpty && loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+              )
+            else if (all.isEmpty)
+              _buildEmpty(context, error)
+            else ...[
+              // The list is the last one that loaded; say so when it could not
+              // be refreshed rather than passing it off as live.
+              if (error != null && !loading) _buildOfflineNotice(context),
+              ...all.map((station) => _buildStationCard(station, context)),
             ],
-          ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context, String? error) {
+    final AppPalette palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 12),
+      child: Column(
+        children: <Widget>[
+          Icon(Icons.cloud_off_rounded, size: 44, color: palette.inkMuted),
+          const SizedBox(height: 12),
+          Text(
+            AppStrings.get('stations_empty_title'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: palette.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            error ?? AppStrings.get('stations_empty_body'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: palette.inkMuted),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => _stations.load(force: true),
+            child: Text(AppStrings.get('retry')),
+          ),
+        ],
       ),
     );
   }
@@ -146,154 +182,158 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
     ChargingStationLocation station,
     BuildContext context,
   ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: context.palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final AppPalette palette = context.palette;
+    final StationAvailability availability = station.availability;
+    final String status = availability == StationAvailability.offline
+        ? AppStrings.get('station_status_offline')
+        : AppStrings.get('plugs_free')
+              .replaceFirst('{free}', '${station.availableConnectors}')
+              .replaceFirst('{total}', '${station.totalConnectors}');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => showStationSheet(context, station: station),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: palette.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      station.name,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: context.palette.ink,
+                    Expanded(
+                      child: Text(
+                        station.name,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          color: palette.ink,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      station.address,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.palette.inkMuted,
-                      ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: palette.inkMuted,
                     ),
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: context.palette.bg,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.ev_station_rounded,
-                  color: context.palette.ink,
-                  size: 18,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.palette.accent.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${station.kwSpeed.toInt()} кВт Супер',
-                    maxLines: 1,
+                if (station.address.trim().isNotEmpty ||
+                    station.distance.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    <String>[
+                      if (station.address.trim().isNotEmpty)
+                        station.address.trim(),
+                      if (station.distance.isNotEmpty) station.distance,
+                    ].join(' · '),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppTheme.sageGreen,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                    style: TextStyle(fontSize: 12, color: palette.inkMuted),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: availability.tone,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    // Takes the slack and ellipsises rather than pushing the
+                    // price off the card on a narrow phone.
+                    Expanded(
+                      child: Text(
+                        <String>[
+                          status,
+                          if (station.kwSpeed > 0)
+                            '${station.kwSpeed.toStringAsFixed(0)} ${AppStrings.get('unit_kw')}',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: palette.inkMuted),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (station.pricePerKwh > 0)
+                      Text(
+                        '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: palette.ink,
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Takes the slack and ellipsises rather than pushing the price
-              // off the card: a Spacer cannot shrink, so on a narrow phone the
-              // Mongolian label used to overflow the row.
-              Expanded(
-                child: Text(
-                  '${station.availableConnectors}/${station.totalConnectors} Сул байна',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.palette.inkMuted,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${formatMntLeading(station.pricePerKwh)}/кВт.ц',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: context.palette.ink,
-                ),
-              ),
-            ],
-          ),
-          if (station.feePercent > 0) ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                AppStrings.get(
-                  'service_fee_included',
-                ).replaceFirst('{percent}', formatPercent(station.feePercent)),
-                textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 11, color: context.palette.inkMuted),
-              ),
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
 }
 
 /// Which step the sheet is on, from camera to a started charge.
-enum _ScanStage { scanning, resolving, confirming, starting }
+enum _ScanStage { scanning, resolving, confirming }
 
-/// Real camera QR Scanner → connector lookup → start-charging sheet.
+/// Builds the camera view. Injectable so tests can feed codes without one.
+typedef QrScannerViewBuilder =
+    Widget Function(
+      BuildContext context,
+      MobileScannerController controller,
+      void Function(BarcodeCapture capture) onDetect,
+    );
+
+/// Camera QR scanner → sticker lookup → the shared [ChargeStartPanel].
 ///
-/// It used to collect a made-up deposit on a hardcoded station. A QR sticker
-/// only ever identifies a connector; the station's own Authorize decides
-/// whether the scanning driver's tag can charge there, for free or otherwise
-/// — this sheet has nothing to say about price.
-class _QrScannerCheckoutSheet extends StatefulWidget {
-  const _QrScannerCheckoutSheet();
+/// A QR sticker only ever identifies a gun; the station's own Authorize
+/// decides whether the scanning driver's tag can charge there.
+class QrScannerSheet extends StatefulWidget {
+  const QrScannerSheet({
+    super.key,
+    this.controller,
+    this.scannerBuilder,
+    this.stationsService,
+    this.sessionsService,
+    this.authService,
+  });
+
+  final MobileScannerController? controller;
+  final QrScannerViewBuilder? scannerBuilder;
+  final StationsService? stationsService;
+  final SessionsService? sessionsService;
+  final AuthService? authService;
 
   @override
-  State<_QrScannerCheckoutSheet> createState() =>
-      _QrScannerCheckoutSheetState();
+  State<QrScannerSheet> createState() => _QrScannerSheetState();
 }
 
-class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
-  final StationsService _stations = StationsService.instance;
-  final SessionsService _sessions = SessionsService.instance;
-  final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
+class _QrScannerSheetState extends State<QrScannerSheet> {
+  StationsService get _stations =>
+      widget.stationsService ?? StationsService.instance;
+
+  late final MobileScannerController _controller =
+      widget.controller ??
+      MobileScannerController(detectionSpeed: DetectionSpeed.noDuplicates);
 
   _ScanStage _stage = _ScanStage.scanning;
 
   /// Set the moment a frame decodes, so the dozens of frames still in flight
-  /// behind it do not each try to resolve the same code again.
+  /// behind it do not each try to resolve the same code again. Cleared again
+  /// whenever the sheet goes back to scanning.
   bool _handledDetection = false;
 
   ConnectorLookup? _lookup;
@@ -317,8 +357,16 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
     }
     if (value == null || value.isEmpty) return;
     _handledDetection = true;
-    unawaited(_controller.stop());
+    unawaited(_safely(_controller.stop));
     _resolve(value);
+  }
+
+  Future<void> _safely(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      // A camera that is already stopped or started is not a problem here.
+    }
   }
 
   Future<void> _resolve(String scanned) async {
@@ -330,9 +378,9 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
       final ConnectorLookup lookup = await _stations.resolveConnectorCode(
         scanned,
       );
-      // The tariff and live connector status are worth showing before the
-      // driver commits, but a station that fails to load a second time
-      // should not block starting on what the code already resolved.
+      // The guns' live states are worth showing before the driver commits,
+      // but a station that fails to load should not block starting on what
+      // the code already resolved.
       ChargingStationLocation? station;
       try {
         station = await _stations.station(lookup.stationId);
@@ -347,136 +395,119 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
       });
     } on ApiException catch (err) {
       if (!mounted) return;
-      setState(() {
-        _errorMessage = err.message;
-        _stage = _ScanStage.scanning;
-      });
+      // Back to the camera, ready for the next code: it used to stay stopped
+      // with the detection latch still set, so one unrecognised sticker left
+      // the scanner dead until the sheet was closed.
+      _backToScanning(error: err.message);
     }
   }
 
-  void _rescan() {
+  void _backToScanning({String? error}) {
     setState(() {
       _stage = _ScanStage.scanning;
       _lookup = null;
       _station = null;
-      _errorMessage = null;
+      _errorMessage = error;
       _handledDetection = false;
     });
-    unawaited(_controller.start());
+    unawaited(_safely(_controller.start));
   }
 
-  Future<void> _startCharging() async {
-    final ConnectorLookup? lookup = _lookup;
-    if (lookup == null) return;
-
-    // Starting a charge is the account-based half of the app, so this is
-    // where an account is finally asked for. Signing in returns here and the
-    // charge goes ahead — the driver taps once, not twice.
-    final bool signedIn = await AuthGate.require(
-      context,
-      reason: AppStrings.get('signin_required_charge'),
+  void _onStarted() {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(AppStrings.get('charge_started')),
+        backgroundColor: AppTheme.sageGreen,
+        duration: const Duration(seconds: 3),
+      ),
     );
-    if (!signedIn || !mounted) return;
-
-    setState(() => _stage = _ScanStage.starting);
-
-    try {
-      await _stations.startCharging(
-        lookup.stationId,
-        connectorId: lookup.connectorId,
-      );
-      _sessions.notifySessionStarted();
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppStrings.get('charge_started')),
-          backgroundColor: AppTheme.sageGreen,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } on ApiException catch (err) {
-      if (!mounted) return;
-      if (err.statusCode == 402) {
-        setState(() => _stage = _ScanStage.confirming);
-        await showStartBlockedDialog(
-          context,
-          message: err.message,
-          onTopUp: () {
-            Navigator.pop(context);
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (BuildContext context) => const WalletScreen(),
-              ),
-            );
-          },
-        );
-        return;
-      }
-      setState(() {
-        _stage = _ScanStage.confirming;
-        _errorMessage = err.message;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool confirming =
-        _stage == _ScanStage.confirming || _stage == _ScanStage.starting;
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F1722),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
+    // The camera reads best on dark, and the confirm view stays in the same
+    // sheet, so the whole sheet uses the dark palette.
+    return Theme(
+      data: AppTheme.darkTheme,
+      child: Builder(
+        builder: (BuildContext context) {
+          final AppPalette palette = context.palette;
+          final bool confirming = _stage == _ScanStage.confirming;
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            child: Column(
               children: [
-                const Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: AppTheme.sageGreen,
-                  size: 24,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  confirming
-                      ? AppStrings.get('confirm_payment')
-                      : AppStrings.get('scan_qr'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        confirming
+                            ? Icons.ev_station_rounded
+                            : Icons.qr_code_scanner_rounded,
+                        color: palette.accent,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          AppStrings.get(
+                            confirming ? 'confirm_start_title' : 'scan_qr',
+                          ),
+                          style: TextStyle(
+                            color: palette.ink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: palette.ink),
+                        tooltip: AppStrings.get('close'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
+                Expanded(
+                  child: confirming
+                      ? _buildConfirmView(context)
+                      : _buildScannerView(context),
                 ),
               ],
             ),
-          ),
-
-          Expanded(
-            child: confirming ? _buildConfirmView() : _buildScannerView(),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildScannerView() {
+  Widget _buildScannerView(BuildContext context) {
+    final AppPalette palette = context.palette;
     final bool resolving = _stage == _ScanStage.resolving;
+    final QrScannerViewBuilder builder =
+        widget.scannerBuilder ??
+        (BuildContext context, MobileScannerController controller,
+                void Function(BarcodeCapture) onDetect) =>
+            MobileScanner(controller: controller, onDetect: onDetect);
     return Column(
       children: [
-        const SizedBox(height: 10),
-        Text(
-          AppStrings.get('scan_qr_desc'),
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            AppStrings.get('scan_qr_desc'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.inkMuted, fontSize: 13),
+          ),
         ),
         const SizedBox(height: 20),
         Center(
@@ -490,13 +521,23 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
                 border: Border.all(color: AppTheme.sageGreen, width: 3),
                 color: Colors.black,
               ),
-              child: resolving
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.sageGreen,
+              // The camera stays mounted while a code resolves, so going back
+              // to scanning only has to restart it, not rebuild it.
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  builder(context, _controller, _onDetect),
+                  if (resolving)
+                    const ColoredBox(
+                      color: Colors.black54,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.sageGreen,
+                        ),
                       ),
-                    )
-                  : MobileScanner(controller: _controller, onDetect: _onDetect),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -506,6 +547,7 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               _errorMessage!,
+              key: const ValueKey<String>('scan-error'),
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppTheme.warningOrange, fontSize: 13),
             ),
@@ -515,115 +557,100 @@ class _QrScannerCheckoutSheetState extends State<_QrScannerCheckoutSheet> {
     );
   }
 
-  Widget _buildConfirmView() {
-    final ConnectorLookup? lookup = _lookup;
+  Widget _buildConfirmView(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final ConnectorLookup lookup = _lookup!;
     final ChargingStationLocation? station = _station;
-    final bool starting = _stage == _ScanStage.starting;
-    final String title =
-        station?.name ?? lookup?.stationName ?? AppStrings.get('station_unknown');
-    final String? address = station?.address ?? lookup?.address;
-    final String connectorLabel = lookup?.connectorId != null
-        ? (lookup!.label?.trim().isNotEmpty == true
-              ? lookup.label!
-              : '${AppStrings.get('connector_label')} ${lookup.connectorId}')
-        : AppStrings.get('connector_any');
-    final String? tariff = station != null
-        ? '${formatMntLeading(station.pricePerKwh)}/кВт.ц'
+    final String title = station?.name ?? lookup.stationName;
+    final String? address = station?.address ?? lookup.address;
+    final String? tariff = station != null && station.pricePerKwh > 0
+        ? '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}'
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+    // Without the station detail, the gun the sticker named is all there is
+    // to show; its live state is then unknown, and the station decides.
+    final List<StationConnector> connectors =
+        station?.connectors.isNotEmpty == true
+        ? station!.connectors
+        : (lookup.connectorId == null
+              ? const <StationConnector>[]
+              : <StationConnector>[
+                  StationConnector(
+                    connectorId: lookup.connectorId!,
+                    status: 'Available',
+                    type: lookup.connectorType,
+                    powerKw: lookup.powerKw,
+                    label: lookup.label,
+                  ),
+                ]);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white12,
+              color: palette.bg,
               borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: palette.border),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Icon(
-                  Icons.ev_station_rounded,
-                  color: AppTheme.sageGreen,
-                  size: 32,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (address != null && address.isNotEmpty)
-                        Text(
-                          address,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      Text(
-                        tariff != null ? '$connectorLabel • $tariff' : connectorLabel,
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
+                Text(
+                  title.isEmpty ? AppStrings.get('station_unknown') : title,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+                if (address != null && address.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      address,
+                      style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
+                    ),
+                  ),
+                if (tariff != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      tariff,
+                      style: TextStyle(
+                        color: palette.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 14),
-            Text(
-              _errorMessage!,
-              style: const TextStyle(color: AppTheme.warningOrange, fontSize: 13),
-            ),
-          ],
-          const Spacer(),
-
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: starting ? null : _startCharging,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.sageGreen,
-              ),
-              icon: starting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.bolt_rounded, size: 22),
-              label: Text(
-                starting
-                    ? AppStrings.get('scanning')
-                    : AppStrings.get('start_charging_cta'),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          const SizedBox(height: 18),
+          ChargeStartPanel(
+            stationId: lookup.stationId,
+            connectors: connectors,
+            initialConnectorId: lookup.connectorId,
+            stationOnline: station?.isOnline ?? true,
+            onStarted: _onStarted,
+            stationsService: widget.stationsService,
+            sessionsService: widget.sessionsService,
+            authService: widget.authService,
+            footer: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: TextButton(
+                onPressed: _backToScanning,
+                child: Text(
+                  AppStrings.get('scan_again'),
+                  style: TextStyle(color: palette.inkMuted, fontSize: 13),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          TextButton(
-            onPressed: starting ? null : _rescan,
-            child: Text(
-              AppStrings.get('scan_again'),
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 10),
         ],
       ),
     );

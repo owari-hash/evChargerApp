@@ -1,6 +1,25 @@
+import 'dart:convert';
+
 import 'package:evchargerapp/models/station.dart';
+import 'package:evchargerapp/services/api_client.dart';
+import 'package:evchargerapp/services/session_store.dart';
 import 'package:evchargerapp/services/stations_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+ApiClient _client(http.Response Function(http.Request request) handler) =>
+    ApiClient(
+      sessionStore: InMemorySessionStore(),
+      httpClient: MockClient((http.Request r) async => handler(r)),
+    );
+
+http.Response _json(Map<String, dynamic> body, [int status = 200]) =>
+    http.Response(
+      jsonEncode(body),
+      status,
+      headers: <String, String>{'content-type': 'application/json'},
+    );
 
 void main() {
   group('ChargingStationLocation.fromJson', () {
@@ -124,24 +143,38 @@ void main() {
   });
 
   group('StationsService', () {
-    test('starts on the built-in fallback so the map is never blank', () {
+    test('starts empty rather than on invented stations', () {
       final StationsService service = StationsService();
-      expect(service.isFallback, isTrue);
-      expect(service.stations.value, isNotEmpty);
-      expect(service.stations.value, StationsService.fallbackStations);
+      expect(service.stations.value, isEmpty);
     });
 
-    test('every fallback station is plottable and priced', () {
-      for (final ChargingStationLocation s
-          in StationsService.fallbackStations) {
-        expect(
-          ChargingStationLocation.isInServiceArea(s.latitude, s.longitude),
-          isTrue,
-        );
-        expect(s.pricePerKwh, greaterThan(0));
-        expect(s.totalConnectors, greaterThanOrEqualTo(s.availableConnectors));
-        expect(s.connectorTypes, isNotEmpty);
-      }
+    test('a failed fetch keeps the list empty and says why', () async {
+      final StationsService service = StationsService(
+        client: _client((http.Request r) => _json(<String, dynamic>{
+          'error': 'Сервертэй холбогдож чадсангүй',
+        }, 503)),
+      );
+      await service.load();
+      expect(service.stations.value, isEmpty);
+      expect(service.error.value, isNotNull);
+    });
+
+    test('startCharging succeeds only on Accepted', () async {
+      String status = 'Accepted';
+      final StationsService service = StationsService(
+        client: _client((http.Request r) {
+          expect(r.url.path, endsWith('/stations/cp1/start'));
+          expect(jsonDecode(r.body), <String, dynamic>{'connectorId': 2});
+          return _json(<String, dynamic>{'status': status});
+        }),
+      );
+      await service.startCharging('cp1', connectorId: 2);
+
+      status = 'Rejected';
+      await expectLater(
+        service.startCharging('cp1', connectorId: 2),
+        throwsA(isA<ApiException>()),
+      );
     });
 
     test('haversine measures a known Ulaanbaatar hop', () {
@@ -158,10 +191,21 @@ void main() {
 
     test('reprojecting rewrites distances against a new origin', () {
       final StationsService service = StationsService();
-      service.reprojectDistances(latitude: 47.9188, longitude: 106.9176);
+      service.stations.value = <ChargingStationLocation>[
+        ChargingStationLocation.fromJson(<String, dynamic>{
+          'id': 'UB-005',
+          'latitude': 47.9188,
+          'longitude': 106.9176,
+        })!,
+        ChargingStationLocation.fromJson(<String, dynamic>{
+          'id': 'ZAISAN',
+          'latitude': 47.8864,
+          'longitude': 106.9058,
+        })!,
+      ];
+      service.reprojectDistances(latitude: 47.9188, longitude: 106.9177);
 
-      // Sükhbaatar Square itself is in the fallback list, so measuring from it
-      // must put that station within a few metres.
+      // Measured from the square itself, its station is a few metres away.
       final ChargingStationLocation square = service.stations.value.firstWhere(
         (ChargingStationLocation s) => s.id == 'UB-005',
       );

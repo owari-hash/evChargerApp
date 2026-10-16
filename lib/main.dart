@@ -10,6 +10,8 @@ import 'screens/mongolia_map_screen.dart';
 import 'screens/quick_controls_screen.dart';
 import 'screens/sessions_screen.dart';
 import 'screens/trips_stations_screen.dart';
+import 'services/announcement_service.dart';
+import 'services/announcement_watcher_service.dart';
 import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'services/sessions_service.dart';
@@ -150,6 +152,11 @@ class _MainAppFrameState extends State<MainAppFrame>
 
   static const Duration _sameChargeWindow = Duration(minutes: 2);
 
+  /// The newest unseen Мэдээ, waiting for a moment it can be shown in.
+  Announcement? _pendingAnnouncement;
+  bool _announcementShowing = false;
+  Timer? _announcementRetry;
+
   @override
   void initState() {
     super.initState();
@@ -174,6 +181,8 @@ class _MainAppFrameState extends State<MainAppFrame>
     }
     WalletWatcherService.instance.stop();
     SessionWatcherService.instance.stop();
+    AnnouncementWatcherService.instance.stop();
+    _announcementRetry?.cancel();
     super.dispose();
   }
 
@@ -188,6 +197,7 @@ class _MainAppFrameState extends State<MainAppFrame>
       case AppLifecycleState.paused:
         WalletWatcherService.instance.stop();
         SessionWatcherService.instance.stop();
+        AnnouncementWatcherService.instance.stop();
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
         break;
@@ -281,14 +291,22 @@ class _MainAppFrameState extends State<MainAppFrame>
       userId: userId,
       onEvent: _onSessionEvent,
     );
+    AnnouncementWatcherService.instance.start(
+      userId: userId,
+      accountCreatedAt: _auth.currentUser.value?.createdAt,
+      onNew: _onAnnouncements,
+    );
   }
 
   /// Signed out: nothing of this driver's may show for the next one.
   void _stopWatchersForSignOut() {
     WalletWatcherService.instance.stop();
     SessionWatcherService.instance.signOut();
+    AnnouncementWatcherService.instance.signOut();
     unawaited(NotificationsStore.instance.setUser(null));
     _queuedBanners.clear();
+    _pendingAnnouncement = null;
+    _announcementRetry?.cancel();
     _chargeEndShownAt = null;
     _debitShownAt = null;
   }
@@ -355,8 +373,70 @@ class _MainAppFrameState extends State<MainAppFrame>
     }, transactionId: event.session.transactionId);
   }
 
+  /// New Мэдээ, newest first. All of them go in the bell; the newest is put
+  /// in front of the driver — after the cold-start prompts, never under the
+  /// guide, and never over a sheet, dialog or page they are busy in.
+  void _onAnnouncements(List<Announcement> fresh) {
+    for (final Announcement a in fresh.reversed) {
+      unawaited(
+        NotificationsStore.instance.add(
+          kind: NotificationKind.announcement,
+          title: a.title,
+          body: a.body,
+          imageUrl: a.imageUrl,
+        ),
+      );
+    }
+    _pendingAnnouncement = fresh.first;
+    if (_startupPromptsDone) {
+      _presentBanner(() => unawaited(_showPendingAnnouncement()));
+    }
+  }
+
+  Future<void> _showPendingAnnouncement() async {
+    final Announcement? announcement = _pendingAnnouncement;
+    if (announcement == null || !mounted || _announcementShowing) return;
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      _announcementRetry?.cancel();
+      _announcementRetry = Timer(
+        const Duration(seconds: 2),
+        () => _presentBanner(() => unawaited(_showPendingAnnouncement())),
+      );
+      return;
+    }
+    _pendingAnnouncement = null;
+    _announcementShowing = true;
+    try {
+      await showAnnouncementDialog(
+        context,
+        title: announcement.title,
+        body: announcement.body,
+        imageUrl: announcement.imageUrl,
+      );
+    } finally {
+      _announcementShowing = false;
+    }
+  }
+
   /// A charge in progress is on the dashboard; a finished one is in the
-  /// history, with its receipt.
+  /// history, with its receipt. An announcement opens in full.
+  void _openNotification(AppNotification item) {
+    if (!mounted) return;
+    if (item.kind == NotificationKind.announcement) {
+      unawaited(
+        showAnnouncementDialog(
+          context,
+          title: item.title,
+          body: item.body,
+          imageUrl: item.imageUrl,
+        ),
+      );
+      return;
+    }
+    _openCharge(item.kind);
+  }
+
   void _openCharge(NotificationKind kind) {
     if (!mounted) return;
     if (kind == NotificationKind.chargeStarted) {
@@ -403,7 +483,10 @@ class _MainAppFrameState extends State<MainAppFrame>
         await prompts(context);
       } else {
         await _checkForUpdate();
-        if (_isLoggedIn && mounted) await maybeShowAnnouncement(context);
+        if (_isLoggedIn && mounted) {
+          await AnnouncementWatcherService.instance.checkNow();
+          await _showPendingAnnouncement();
+        }
       }
       if (!mounted) return;
       _startupPromptsDone = true;
@@ -479,13 +562,10 @@ class _MainAppFrameState extends State<MainAppFrame>
     if (justSignedIn && _startupPromptsDone) _maybeStartGuide();
   }
 
+  /// The camera scanner itself. This used to open the stations list in a
+  /// sheet, one more tap away from the camera.
   void _openQrScannerModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const TripsStationsScreen(),
-    );
+    unawaited(showQrScannerSheet(context));
   }
 
   void _toggleTheme() {
@@ -546,9 +626,7 @@ class _MainAppFrameState extends State<MainAppFrame>
       HomeDashboardScreen(
         authService: widget.authService,
         guide: _guide,
-        onNavigateToQuickControls: () {
-          setState(() => _activeTabIndex = 2);
-        },
+        onScanQr: () => _openQrScannerModal(context),
         onFindCharger: () => setState(() => _activeTabIndex = _mapTab),
         onAddVehicle: () => setState(() => _activeTabIndex = _accountTab),
       ),
@@ -617,7 +695,7 @@ class _MainAppFrameState extends State<MainAppFrame>
                 _NotificationBellAction(
                   onOpen: () => showNotificationsSheet(
                     context,
-                    onOpen: (AppNotification item) => _openCharge(item.kind),
+                    onOpen: _openNotification,
                   ),
                 ),
               ],

@@ -1,25 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:evchargerapp/models/ocpp_models.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
+import 'package:evchargerapp/services/active_session_state.dart';
 
 void main() {
-  late OcppMockService service;
+  final ActiveSessionState session = ActiveSessionState.instance;
 
-  setUp(() {
-    OcppMockService.enablePeriodicTimer = false;
-    service = OcppMockService.instance;
-    service.clearRemoteSession();
-  });
+  setUp(session.clear);
 
-  test('no state of charge or cost is shown until the network reports one', () {
-    // Regression: the dashboard greeted every driver with a 62% battery and
-    // priced energy at an invented 450 ₮/kWh.
-    expect(service.batteryLevel, isNull);
-    expect(service.sessionCostMnt, isNull);
+  test('nothing is charging until the network reports a session', () {
+    // Regression: the dashboard greeted every driver with a 62% battery, a
+    // charge in progress and energy priced at an invented 450 ₮/kWh.
+    expect(session.isCharging, isFalse);
+    expect(session.socPercent, isNull);
+    expect(session.costMnt, isNull);
+    expect(session.powerKw, 0);
+    expect(session.stationName, isNull);
   });
 
   test('a real session brings its own numbers and leaves none behind', () {
-    service.adoptRemoteSession(
+    session.adoptRemoteSession(
       transactionId: 7,
       stationName: 'Test',
       energyKwh: 4.2,
@@ -27,13 +25,15 @@ void main() {
       socPercent: 54,
       costMnt: 1890,
     );
-    expect(service.connectorStatuses[1], ConnectorStatus.charging);
-    expect(service.batteryLevel, 54);
-    expect(service.sessionCostMnt, 1890);
+    expect(session.isCharging, isTrue);
+    expect(session.socPercent, 54);
+    expect(session.costMnt, 1890);
+    expect(session.energyKwh, 4.2);
 
-    service.clearRemoteSession();
-    expect(service.batteryLevel, isNull);
-    expect(service.sessionCostMnt, isNull);
-    expect(service.totalEnergyKwh, 0.0);
+    session.clear();
+    expect(session.isCharging, isFalse);
+    expect(session.socPercent, isNull);
+    expect(session.costMnt, isNull);
+    expect(session.energyKwh, 0);
   });
 }

@@ -52,6 +52,10 @@ class StationConnector {
   final int? currentTransactionId;
 
   bool get isAvailable => status == 'Available';
+
+  /// What the driver API's own `startable()` accepts: free, or with a car
+  /// already plugged in and waiting (`Preparing`).
+  bool get isStartable => status == 'Available' || status == 'Preparing';
   bool get isCharging => status == 'Charging';
   bool get isFaulted => status == 'Faulted' || status == 'Unavailable';
 

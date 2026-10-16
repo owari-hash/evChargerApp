@@ -49,10 +49,10 @@ void main() {
     );
     await tester.pump();
 
-    // The name shows in the header; the address in the header and again in
-    // the status card.
+    // The name and address show once, in the header; verification lives on
+    // the security page.
     expect(find.text('Бат Болд'), findsOneWidget);
-    expect(find.text('bat@example.com'), findsNWidgets(2));
+    expect(find.text('bat@example.com'), findsOneWidget);
 
     // Every sub-page is reachable from here.
     expect(find.text(AppStrings.get('acct_nav_wallet')), findsOneWidget);

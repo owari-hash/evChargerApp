@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import '../models/auth_user.dart';
 import '../models/charging_session.dart';
 import '../models/wallet.dart';
-import '../models/ocpp_models.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
-import '../services/ocpp_mock_service.dart';
+import '../services/active_session_state.dart';
 import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
 import '../services/vehicle_photo_service.dart';
@@ -18,18 +17,15 @@ import '../widgets/account_widgets.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/guided_step.dart';
-import '../widgets/swipe_to_slide_button.dart';
 import '../widgets/vehicle_charging_matrix.dart';
 import '../widgets/vehicle_hero_card.dart';
 import 'sessions_screen.dart';
 import 'wallet_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
-  final VoidCallback onNavigateToQuickControls;
-
   const HomeDashboardScreen({
     super.key,
-    required this.onNavigateToQuickControls,
+    this.onScanQr,
     this.onFindCharger,
     this.onAddVehicle,
     this.authService,
@@ -43,7 +39,10 @@ class HomeDashboardScreen extends StatefulWidget {
   /// sections of this screen; the frame's bottom bar is the fifth.
   final AppGuideController? guide;
 
-  /// Opens the station map, where a real charger is picked to start on.
+  /// Opens the camera QR scanner, where a charge is actually started.
+  final VoidCallback? onScanQr;
+
+  /// Opens the station map.
   final VoidCallback? onFindCharger;
 
   /// Opens the account page, where the driver saves their car.
@@ -60,7 +59,7 @@ class HomeDashboardScreen extends StatefulWidget {
 }
 
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
-  final OcppMockService _service = OcppMockService.instance;
+  final ActiveSessionState _session = ActiveSessionState.instance;
 
   AuthService get _auth => widget.authService ?? AuthService.instance;
   SessionsService get _sessions =>
@@ -69,7 +68,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       widget.walletService ?? WalletService.instance;
 
   /// The transaction id of a real session, when the API reports one running.
-  /// Null means anything on screen is local demo state.
+  /// Null means nothing is charging.
   int? _remoteTransactionId;
 
   /// When the real session now charging actually started, for the hero label.
@@ -301,8 +300,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   /// Asks the driver API what is actually charging right now.
   ///
-  /// Without this the dashboard showed whatever the local mock service held,
-  /// which greeted every driver with a charge in progress they had not started.
+  /// Nothing on the dashboard comes from anywhere else: it once showed a
+  /// simulated charge to every driver who signed in.
   Future<void> _syncWithDriverApi() async {
     if (!_auth.isSignedIn) return;
     try {
@@ -328,12 +327,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         if (active == null) {
           _remoteTransactionId = null;
           _sessionStart = null;
-          _service.clearRemoteSession();
+          _session.clear();
           return;
         }
         _remoteTransactionId = active.transactionId;
         _sessionStart = active.startTimestamp;
-        _service.adoptRemoteSession(
+        _session.adoptRemoteSession(
           transactionId: active.transactionId,
           stationName: active.displayLocation,
           energyKwh: active.energyKwh.toDouble(),
@@ -353,29 +352,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         _historyFailed = true;
         _remoteTransactionId = null;
         _sessionStart = null;
-        _service.clearRemoteSession();
+        _session.clear();
       });
       _scheduleLiveRefresh();
       if (widget.guide?.requested == true) _scheduleGuideStart();
     }
   }
 
-  /// Returns whether a charge went ahead, so the slider can spring back when
-  /// it did not.
+  /// «QR уншуулж цэнэглэх»: checks the wallet, then opens the camera.
   ///
-  /// A charge is started on a particular charger, so once the wallet can pay
-  /// for one this hands over to the map. It used to start a pretend session
-  /// on a hard-coded station with a made-up ₮25,000 deposit.
-  Future<bool> _handleStartChargingSession() async {
-    // A prepaid network has nothing to bill the session to on an empty
-    // wallet, so this is checked before the swipe does anything rather than
-    // letting the driver find out at the station.
+  /// A prepaid network has nothing to bill the session to on an empty
+  /// wallet, so the driver hears about it here rather than at the station.
+  Future<void> _handleScanToCharge() async {
     try {
       final String? reason = WalletService.startBlockReason(
         await _walletService.load(),
       );
       if (reason != null) {
-        if (!mounted) return false;
+        if (!mounted) return;
         await showStartBlockedDialog(
           context,
           message: reason,
@@ -385,19 +379,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
           ),
         );
-        return false;
+        return;
       }
     } on ApiException {
       // Offline, or the wallet is unavailable. The station's own OCPP
       // authorize is the real gate, so a charge is not blocked on this.
     }
-
-    if (!mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.get('pick_charger_hint'))),
-    );
-    widget.onFindCharger?.call();
-    return false;
+    if (!mounted) return;
+    widget.onScanQr?.call();
   }
 
   String _formatClock(DateTime time) {
@@ -408,14 +397,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   void _handleStopChargingSession() async {
-    double energy = _service.totalEnergyKwh;
-    final double power = _service.activePowerKw;
+    double energy = _session.energyKwh;
     double? cost;
     double? energyCost;
     double? feeAmount;
     double? feePercent;
-    String station =
-        _service.activeStationName ?? AppStrings.get('station_unknown');
+    String station = _session.stationName ?? AppStrings.get('station_unknown');
 
     final int? remote = _remoteTransactionId;
     int? finishedTransactionId;
@@ -463,8 +450,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       }
     }
 
-    await _service.stopUserChargingSession();
-    _service.clearRemoteSession();
+    _session.clear();
     _scheduleLiveRefresh();
 
     if (mounted) {
@@ -475,7 +461,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         builder: (context) => ChargingSessionReceiptSheet(
           stationName: station,
           totalEnergyKwh: energy,
-          activePowerKw: power,
           totalCostMnt: cost,
           energyCostMnt: energyCost,
           feeAmountMnt: feeAmount,
@@ -507,95 +492,133 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
     }
 
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: _service.telemetryStream,
-      builder: (context, snapshot) {
-        final bool isCharging =
-            _service.connectorStatuses[1] == ConnectorStatus.charging;
+    // Rebuilt by every sync with the driver API (every 10 s while charging).
+    final bool isCharging = _session.isCharging;
+    return Scaffold(
+      backgroundColor: context.palette.bg,
+      body: SingleChildScrollView(
+        controller: _scroll,
+        // The bottom gap lets the last card scroll clear of the assistant
+        // button resting in the bottom-right corner.
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 84),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hero View: Hero Car Banner with Particle Matrix FX during Charging
+            _guided(
+              stepIndex: 0,
+              key: 'hero',
+              icon: Icons.electric_car_rounded,
+              borderRadius: 28,
+              child: VehicleChargingMatrix(
+                isCharging: isCharging,
+                child: _buildVehicleHero(isCharging),
+              ),
+            ),
+            const SizedBox(height: 20),
 
-        return Scaffold(
-          backgroundColor: context.palette.bg,
-          body: SingleChildScrollView(
-            controller: _scroll,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Hero View: Hero Car Banner with Particle Matrix FX during Charging
-                _guided(
-                  stepIndex: 0,
-                  key: 'hero',
-                  icon: Icons.electric_car_rounded,
-                  borderRadius: 28,
-                  child: VehicleChargingMatrix(
-                    isCharging: isCharging,
-                    child: _buildVehicleHero(isCharging),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Active Supercharging vs Setup State
-                _guided(
-                  stepIndex: 1,
-                  key: 'swipe',
-                  icon: Icons.bolt_rounded,
-                  borderRadius: 30,
-                  child: isCharging
-                      // Stop Charging Button
-                      ? SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleStopChargingSession,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent,
-                              foregroundColor: Colors.white,
-                            ),
-                            icon: const Icon(
-                              Icons.stop_circle_rounded,
-                              size: 22,
-                            ),
-                            label: Text(
-                              AppStrings.get('stop_charging'),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        )
-                      // Swipe to Start Action Slider (Dribbble Seamless EV Flow)
-                      : SwipeToSlideButton(
-                          onSwipeCompleted: _handleStartChargingSession,
-                          text: AppStrings.get('slide_to_start'),
+            // Start a charge, or stop the one running.
+            _guided(
+              stepIndex: 1,
+              key: 'start',
+              icon: Icons.qr_code_scanner_rounded,
+              borderRadius: 20,
+              child: isCharging
+                  // Stop Charging Button
+                  ? SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleStopChargingSession,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
                         ),
-                ),
-                const SizedBox(height: 22),
-                _guided(
-                  stepIndex: 2,
-                  key: 'wallet',
-                  icon: Icons.account_balance_wallet_rounded,
-                  borderRadius: 20,
-                  child: _buildSummaryRow(),
-                ),
-                const SizedBox(height: 22),
-                _guided(
-                  stepIndex: 3,
-                  key: 'recent',
-                  icon: Icons.history_rounded,
-                  borderRadius: 20,
-                  tipBelow: false,
-                  // The heading sits on the bare page, not in a card.
-                  contentPadding: const EdgeInsets.all(10),
-                  child: _buildRecentSessions(),
-                ),
-                const SizedBox(height: 8),
-              ],
+                        icon: const Icon(Icons.stop_circle_rounded, size: 22),
+                        label: Text(
+                          AppStrings.get('stop_charging'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    )
+                  : _buildStartActions(),
+            ),
+            const SizedBox(height: 22),
+            _guided(
+              stepIndex: 2,
+              key: 'wallet',
+              icon: Icons.account_balance_wallet_rounded,
+              borderRadius: 20,
+              child: _buildSummaryRow(),
+            ),
+            const SizedBox(height: 22),
+            _guided(
+              stepIndex: 3,
+              key: 'recent',
+              icon: Icons.history_rounded,
+              borderRadius: 20,
+              tipBelow: false,
+              // The heading sits on the bare page, not in a card.
+              contentPadding: const EdgeInsets.all(10),
+              child: _buildRecentSessions(),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The main way in: scan the charger's QR code. Finding a station is the
+  /// quieter second choice.
+  Widget _buildStartActions() {
+    final AppPalette palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          height: 56,
+          child: ElevatedButton.icon(
+            key: const ValueKey<String>('home-scan-qr'),
+            onPressed: _handleScanToCharge,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.sageGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: 24),
+            label: Text(
+              AppStrings.get('scan_to_charge'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton.icon(
+            key: const ValueKey<String>('home-find-station'),
+            onPressed: widget.onFindCharger,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: palette.ink,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: Icon(Icons.map_outlined, size: 20, color: palette.accent),
+            label: Text(
+              AppStrings.get('find_station'),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -638,12 +661,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       // Only what the charge point reports: the car's own charge if it sent
       // one, and the meter's power, energy and bill.
       charge = ChargeStatus(
-        socPercent: _service.batteryLevel,
-        powerKw: _service.activePowerKw,
-        energyKwh: _service.totalEnergyKwh,
-        costMnt: _service.sessionCostMnt,
+        socPercent: _session.socPercent,
+        powerKw: _session.powerKw,
+        energyKwh: _session.energyKwh,
+        costMnt: _session.costMnt,
         detail: [
-          if (_service.activeStationName != null) _service.activeStationName!,
+          if (_session.stationName != null) _session.stationName!,
           if (_sessionStart != null)
             AppStrings.get(
               'charging_since',
@@ -679,9 +702,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       brand: user?.vehicleBrand?.trim() ?? '',
       model: user?.vehicleModel?.trim() ?? '',
       isCharging: isCharging,
-      statusLabel: isCharging
-          ? '${AppStrings.get('charging')} · ${_service.activePowerKw.toStringAsFixed(0)} кВт'
-          : AppStrings.get('idle'),
+      // The power is in the charge panel right below; once is enough.
+      statusLabel: AppStrings.get(isCharging ? 'charging' : 'idle'),
       facts: facts,
       charge: charge,
       onAddVehicle: widget.onAddVehicle,

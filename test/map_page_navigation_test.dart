@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/screens/quick_controls_screen.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/services/auth_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
+import 'package:evchargerapp/utils/app_strings.dart';
 
 import 'support/fake_auth.dart';
 
@@ -14,8 +14,6 @@ Future<void> _pumpFrames(WidgetTester tester, [int frames = 5]) async {
 }
 
 void main() {
-  setUp(() => OcppMockService.enablePeriodicTimer = false);
-
   testWidgets('map opens as a page whose back button clears the status bar', (
     WidgetTester tester,
   ) async {
@@ -41,7 +39,7 @@ void main() {
     );
     await _pumpFrames(tester);
 
-    await tester.tap(find.byIcon(Icons.open_in_full_rounded));
+    await tester.tap(find.widgetWithText(TextButton, AppStrings.get('map')));
     await _pumpFrames(tester, 8);
 
     // The map page is up.

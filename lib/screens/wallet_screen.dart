@@ -105,8 +105,6 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
           ),
         const SizedBox(height: 12),
-        _tagsCard(palette, snapshot.wallet),
-        const SizedBox(height: 12),
         _historyCard(palette, snapshot.entries),
       ],
     );
@@ -150,15 +148,17 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            AppStrings.get(debt ? 'wallet_debt_hint' : 'wallet_balance_hint'),
-            style: TextStyle(
-              color: palette.onPanel.withValues(alpha: 0.62),
-              fontSize: 12,
-              height: 1.4,
+          if (debt) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              AppStrings.get('wallet_debt_hint'),
+              style: TextStyle(
+                color: palette.onPanel.withValues(alpha: 0.62),
+                fontSize: 12,
+                height: 1.4,
+              ),
             ),
-          ),
+          ],
           if (low) ...<Widget>[
             const SizedBox(height: 10),
             Text(
@@ -243,52 +243,6 @@ class _WalletScreenState extends State<WalletScreen> {
       title: AppStrings.get('topup_title'),
       subtitle: AppStrings.get('wallet_subtitle'),
       child: _TopUpForm(config: config, wallets: _wallets, onPaid: _load),
-    );
-  }
-
-  Widget _tagsCard(AppPalette palette, Wallet wallet) {
-    return SectionCard(
-      title: AppStrings.get('wallet_linked_tags'),
-      child: wallet.idTags.isEmpty
-          ? Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                AppStrings.get('wallet_no_linked_tags'),
-                style: TextStyle(
-                  color: palette.inkMuted,
-                  fontSize: 12.5,
-                  height: 1.4,
-                ),
-              ),
-            )
-          : Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: wallet.idTags
-                  .map(
-                    (String tag) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.bg,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: palette.border),
-                      ),
-                      child: Text(
-                        tag,
-                        style: TextStyle(
-                          color: palette.ink,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
     );
   }
 

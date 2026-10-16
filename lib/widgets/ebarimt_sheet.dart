@@ -148,7 +148,9 @@ class _EbarimtSheetState extends State<EbarimtSheet> {
                   _summaryRow(
                     palette,
                     'Нийт төлбөр',
-                    formatMnt(widget.session.cost ?? 0),
+                    widget.session.cost == null
+                        ? '—'
+                        : formatMnt(widget.session.cost!),
                     emphasis: true,
                   ),
                 ],

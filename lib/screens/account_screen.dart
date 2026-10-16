@@ -151,8 +151,9 @@ class _AccountScreenState extends State<AccountScreen> {
           children: <Widget>[
             _identityHeader(palette, user),
             const SizedBox(height: 16),
-            _statusCard(palette, user),
-            const SizedBox(height: 12),
+            // Email and phone, and whether each is verified, live on the
+            // security page with the actions for them; repeating them here
+            // put the same address on screen twice.
             _navCard(palette),
             const SizedBox(height: 12),
             _vehicleCard(palette),
@@ -212,71 +213,6 @@ class _AccountScreenState extends State<AccountScreen> {
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _statusCard(AppPalette palette, AuthUser user) {
-    return SectionCard(
-      title: AppStrings.get('acct_status'),
-      child: Column(
-        children: <Widget>[
-          _statusRow(
-            palette,
-            Icons.alternate_email_rounded,
-            AppStrings.get('acct_email_label'),
-            user.email ?? AppStrings.get('acct_no_email'),
-            user.emailVerified,
-          ),
-          Divider(color: palette.border, height: 22),
-          _statusRow(
-            palette,
-            Icons.phone_iphone_rounded,
-            AppStrings.get('acct_mobile_label'),
-            user.phone ?? AppStrings.get('acct_no_number'),
-            user.phoneVerified,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusRow(
-    AppPalette palette,
-    IconData icon,
-    String label,
-    String value,
-    bool verified,
-  ) {
-    return Row(
-      children: <Widget>[
-        Icon(icon, size: 18, color: palette.inkMuted),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                label,
-                style: TextStyle(color: palette.inkMuted, fontSize: 11),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.ink,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        VerifiedChip(verified: verified),
       ],
     );
   }

@@ -95,11 +95,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
       // has already stopped — say so rather than implying it is done.
       showSnack(
         context,
-        status.toLowerCase() == 'accepted'
-            ? AppStrings.get('sess_stop_accepted')
-            : AppStrings.get(
-                'sess_stop_replied',
-              ).replaceFirst('{status}', status),
+        // Anything else is the charger's raw OCPP word, which tells a
+        // driver nothing; say plainly that it did not stop.
+        AppStrings.get(
+          status.toLowerCase() == 'accepted'
+              ? 'sess_stop_accepted'
+              : 'sess_stop_refused',
+        ),
       );
       await _load();
     } on ApiException catch (error) {

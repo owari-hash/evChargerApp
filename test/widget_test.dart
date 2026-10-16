@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/main.dart';
 import 'package:evchargerapp/screens/login_register_screen.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 
 import 'support/fake_auth.dart';
 
 void main() {
   setUp(() {
-    OcppMockService.enablePeriodicTimer = false;
   });
 
   testWidgets('a guest lands on the map, and signing in keeps them there', (

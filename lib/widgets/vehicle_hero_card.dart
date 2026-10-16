@@ -159,7 +159,7 @@ class _HeroCardBody extends StatelessWidget {
   final String model;
   final bool isCharging;
 
-  /// "Бэлэн", or "Цэнэглэж байна · 22 кВт" while a session runs.
+  /// "Бэлэн", or "Цэнэглэж байна" while a session runs.
   final String statusLabel;
 
   /// At most three; fewer are fine, none hides the strip.

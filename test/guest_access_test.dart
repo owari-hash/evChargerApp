@@ -4,7 +4,6 @@ import 'package:evchargerapp/main.dart';
 import 'package:evchargerapp/screens/login_register_screen.dart';
 import 'package:evchargerapp/screens/mongolia_map_screen.dart';
 import 'package:evchargerapp/screens/trips_stations_screen.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 import 'package:evchargerapp/widgets/signed_out_panel.dart';
 
@@ -30,7 +29,6 @@ Future<void> _openTab(WidgetTester tester, int index) async {
 
 void main() {
   setUp(() {
-    OcppMockService.enablePeriodicTimer = false;
     AppStrings.currentLanguage = AppLanguage.mn;
   });
 
@@ -70,7 +68,13 @@ void main() {
       ),
       findsNothing,
     );
-    expect(find.text(AppStrings.get('nearby_stations')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TripsStationsScreen),
+        matching: find.text(AppStrings.get('stations')),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('account-based tabs offer sign-in instead of a wall', (

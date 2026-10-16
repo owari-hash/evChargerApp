@@ -618,15 +618,16 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
     setState(() => _deletingAccount = true);
     try {
-      await _bio.disable();
       await _account.deleteAccount();
+      await _bio.disable();
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
       showSnack(context, AppStrings.get('sec_delete_success'));
-    } catch (_) {
+    } catch (error) {
+      // This used to say «устгагдлаа» even when the delete had failed.
       if (!mounted) return;
       setState(() => _deletingAccount = false);
-      showSnack(context, AppStrings.get('sec_delete_success'));
+      showApiSnack(context, error);
     }
   }
 }

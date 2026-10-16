@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evchargerapp/main.dart';
-import 'package:evchargerapp/services/ocpp_mock_service.dart';
 import 'package:evchargerapp/theme/app_theme.dart';
 import 'package:evchargerapp/utils/app_strings.dart';
 
@@ -28,7 +27,6 @@ Future<void> _login(WidgetTester tester) async {
 
 void main() {
   setUp(() {
-    OcppMockService.enablePeriodicTimer = false;
     ThemeController.mode.value = ThemeMode.light;
   });
 

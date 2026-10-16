@@ -6,32 +6,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/connector_types.dart';
 import '../models/station.dart';
-import '../services/ocpp_mock_service.dart';
 import '../services/stations_service.dart';
 import '../services/route_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
-import '../utils/money.dart';
 import '../widgets/station_filter_sheet.dart';
-
-/// Whether an incoming GPS fix is allowed to write the driver's position.
-///
-/// A simulated route owns that position while it runs. Letting real GPS fixes
-/// write it at the same time snaps the driver back to their true location once
-/// a second, so the route never advances and turn-by-turn appears frozen.
-@visibleForTesting
-bool gpsFixOwnsPosition({required bool isNavigatingRoute}) =>
-    !isNavigatingRoute;
-
-/// One step of the simulated drive: closes [fraction] of the remaining gap
-/// between [from] and [to].
-@visibleForTesting
-LatLng stepTowardsDestination(LatLng from, LatLng to, double fraction) {
-  return LatLng(
-    from.latitude + (to.latitude - from.latitude) * fraction,
-    from.longitude + (to.longitude - from.longitude) * fraction,
-  );
-}
+import '../widgets/station_sheet.dart';
 
 /// Which label the primary route button shows. Extracted so the start/stop
 /// behaviour is verifiable without driving the map widget.
@@ -87,7 +67,6 @@ class MongoliaMapScreen extends StatefulWidget {
 
 class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     with SingleTickerProviderStateMixin {
-  final OcppMockService _service = OcppMockService.instance;
   final MapController _mapController = MapController();
 
   /// Where the map opens before GPS reports in. Same coordinates the kiosk
@@ -130,8 +109,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     _stations.stations.addListener(_onStationsChanged);
     _stations.loading.addListener(_onStationsChanged);
     _initUserGpsLocation();
-    // Draw the fallback immediately, then swap in the live network. Waiting for
-    // the fetch would open the map on empty tiles.
     _stations.load();
   }
 
@@ -150,14 +127,23 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(
-                Icons.ev_station_outlined,
-                size: 56,
-                color: palette.inkMuted,
-              ),
+              // The first load, not a failure: there is no built-in list to
+              // show meanwhile any more.
+              if (_stations.loading.value && _stations.error.value == null)
+                const CircularProgressIndicator(strokeWidth: 2.5)
+              else
+                Icon(
+                  Icons.ev_station_outlined,
+                  size: 56,
+                  color: palette.inkMuted,
+                ),
               const SizedBox(height: 16),
               Text(
-                AppStrings.get('stations_empty_title'),
+                AppStrings.get(
+                  _stations.loading.value && _stations.error.value == null
+                      ? 'loading'
+                      : 'stations_empty_title',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
@@ -337,7 +323,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     );
     if (metres > 30) return;
 
-    _stopSimulatedNavigation();
+    _stopNavigation();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -365,7 +351,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
   }
 
   /// Ends the running route and clears everything it owns.
-  void _stopSimulatedNavigation() {
+  void _stopNavigation() {
     if (!mounted) return;
     setState(() {
       _isNavigatingRoute = false;
@@ -380,7 +366,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
   /// Stations matching the search box and [filter], in map order.
   List<ChargingStationLocation> _stationsMatching(StationFilter filter) {
     final String query = _searchQuery.trim().toLowerCase();
-    return _service.nearbyStations.where((ChargingStationLocation st) {
+    return _stations.stations.value.where((ChargingStationLocation st) {
       if (!filter.matches(st.connectorTypes)) return false;
       if (query.isEmpty) return true;
       return st.name.toLowerCase().contains(query) ||
@@ -462,6 +448,19 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     );
   }
 
+  /// The station's own sheet: details, its guns, directions and starting
+  /// a charge.
+  void _openStation(ChargingStationLocation station) {
+    final LatLng pos = LatLng(station.latitude, station.longitude);
+    showStationSheet(
+      context,
+      station: station,
+      onRoute: () => _startNavigation(pos),
+      onExternalMaps: () =>
+          _launchExternalGpsNavigation(station.latitude, station.longitude),
+    );
+  }
+
   void _zoomIn() {
     final double currentZoom = _mapController.camera.zoom;
     _mapController.move(_mapController.camera.center, currentZoom + 0.5);
@@ -507,7 +506,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
 
   @override
   Widget build(BuildContext context) {
-    final List<ChargingStationLocation> all = _service.nearbyStations;
+    final List<ChargingStationLocation> all = _stations.stations.value;
 
     // Nothing to centre on, select or navigate to. Every readout below reads
     // off a station, so bail out to an explicit empty state rather than
@@ -646,6 +645,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                             }
                           });
                           _mapController.move(pos, 15.0);
+                          _openStation(station);
                         },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -786,7 +786,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                         color: Colors.white,
                       ),
                       tooltip: AppStrings.get('stop_route'),
-                      onPressed: _stopSimulatedNavigation,
+                      onPressed: _stopNavigation,
                     ),
                   ],
                 ),
@@ -871,224 +871,52 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
             ),
           ),
 
-          // 4. Bottom Active Station Card & Navigation Actions
+          // 4. Bottom action: scan to charge, or end the running route.
+          // Station details open as a sheet when a pin is tapped.
           Positioned(
             bottom: 20,
             left: 16,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Active Station Preview Card
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: context.palette.card,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
+            // Stops short of the bottom-right corner, where the assistant
+            // button rests by default.
+            right: 80,
+            child: SizedBox(
+              height: 52,
+              child: _isNavigatingRoute
+                  ? ElevatedButton.icon(
+                      onPressed: _stopNavigation,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.errorRed,
+                        foregroundColor: Colors.white,
+                        elevation: 4,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: context.palette.accent.withValues(
-                                alpha: 0.16,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.ev_station_rounded,
-                              color: AppTheme.sageGreen,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  activeStation.name,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.palette.ink,
-                                  ),
-                                ),
-                                Text(
-                                  activeStation.address,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: context.palette.inkMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            '${navDistanceKm.toStringAsFixed(1)} ${AppStrings.get('unit_km')}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.sageGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // A Wrap rather than a Row: the power badge and the price
-                      // together already fill a 393pt card, and once the price
-                      // carries decimals they no longer fit on one line. Every
-                      // item here is information a driver is choosing on, so
-                      // the line breaks rather than any of them ellipsising.
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: <Widget>[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.palette.panel,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${activeStation.kwSpeed.toInt()} ${AppStrings.get('kw_super')}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '${activeStation.availableConnectors}/${activeStation.totalConnectors} ${AppStrings.get('available')}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.palette.inkMuted,
-                            ),
-                          ),
-                          Text(
-                            '${formatMntLeading(activeStation.pricePerKwh)}/кВт.ц',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: context.palette.ink,
-                            ),
-                          ),
-                          if (activeStation.feePercent > 0)
-                            Text(
-                              AppStrings.get(
-                                'service_fee_included',
-                              ).replaceFirst(
-                                '{percent}',
-                                formatPercent(activeStation.feePercent),
-                              ),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: context.palette.inkMuted,
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (activeStation.connectors.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: activeStation.connectors
-                              .map(
-                                (StationConnector c) =>
-                                    _ConnectorChip(connector: c),
-                              )
-                              .toList(growable: false),
+                      icon: const Icon(Icons.stop_rounded, size: 20),
+                      label: Text(
+                        AppStrings.get(
+                          routeActionLabelKey(isNavigating: true),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Navigation & Launch Options Dual Action Buttons
-                Row(
-                  children: [
-                    // Start Real-Time Turn-by-Turn Route Guidance
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton.icon(
-                          // Tapping this while a route ran used to restart it,
-                          // and the only way out was a small X in the HUD.
-                          onPressed: _isNavigatingRoute
-                              ? _stopSimulatedNavigation
-                              : () => _startNavigation(destinationPos),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isNavigatingRoute
-                                ? AppTheme.errorRed
-                                : AppTheme.sageGreen,
-                            foregroundColor: Colors.white,
-                            elevation: 4,
-                          ),
-                          icon: Icon(
-                            _isNavigatingRoute
-                                ? Icons.stop_rounded
-                                : Icons.navigation_rounded,
-                            size: 20,
-                          ),
-                          label: Text(
-                            AppStrings.get(
-                              routeActionLabelKey(
-                                isNavigating: _isNavigatingRoute,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      key: const ValueKey<String>('map-scan-qr'),
+                      onPressed: widget.onOpenQrScanner,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.sageGreen,
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                      ),
+                      icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
+                      label: Text(
+                        AppStrings.get('scan_to_charge'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-
-                    // Launch External Google / Apple Maps GPS
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _launchExternalGpsNavigation(
-                            activeStation.latitude,
-                            activeStation.longitude,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.palette.panel,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                        ),
-                        child: const Icon(
-                          Icons.map_rounded,
-                          size: 20,
-                          color: AppTheme.sageGreen,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
         ],
@@ -1158,76 +986,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// One gun's live status, same pill shape wherever a station lists its
-/// connectors — a station card showing "1/2 Сул байна" says nothing about
-/// *which* plug is free; this is what answers that.
-class _ConnectorChip extends StatelessWidget {
-  const _ConnectorChip({required this.connector});
-
-  final StationConnector connector;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color tone = connector.isAvailable
-        ? AppTheme.sageGreen
-        : connector.isFaulted
-        ? AppTheme.errorRed
-        : AppTheme.warningOrange;
-
-    final String statusLabel = connector.isAvailable
-        ? AppStrings.get('available')
-        : connector.isCharging
-        ? AppStrings.get('charging')
-        : connector.isFaulted
-        ? AppStrings.get('connector_faulted')
-        : AppStrings.get('connector_busy');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: tone.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            connector.displayName(AppStrings.get('connector_label')),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: context.palette.ink,
-            ),
-          ),
-          if (connector.type != null) ...[
-            const SizedBox(width: 4),
-            Text(
-              '· ${connector.type}',
-              style: TextStyle(fontSize: 10.5, color: context.palette.inkMuted),
-            ),
-          ],
-          const SizedBox(width: 4),
-          Text(
-            '· $statusLabel',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: tone,
-            ),
-          ),
-        ],
       ),
     );
   }

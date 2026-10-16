@@ -25,9 +25,12 @@ void showNotificationsSheet(
   );
 }
 
-/// Whether tapping [item] in the list leads anywhere.
+/// Whether tapping [item] in the list leads anywhere. An announcement opens
+/// in full: the list cuts its body at two lines.
 bool notificationOpens(AppNotification item) =>
-    item.kind == NotificationKind.chargeStarted || item.kind == NotificationKind.chargeStopped;
+    item.kind == NotificationKind.chargeStarted ||
+    item.kind == NotificationKind.chargeStopped ||
+    item.kind == NotificationKind.announcement;
 
 /// When [at] happened, as a driver reads it: "Өнөөдөр 14:05",
 /// "Өчигдөр 09:12", or the date for anything older.

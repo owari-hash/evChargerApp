@@ -12,7 +12,6 @@ import 'ebarimt_sheet.dart';
 class ChargingSessionReceiptSheet extends StatelessWidget {
   final String stationName;
   final double totalEnergyKwh;
-  final double activePowerKw;
   final double? totalCostMnt;
 
   /// How [totalCostMnt] splits into energy and Eplug's service fee, as the
@@ -21,15 +20,14 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
   final double? feeAmountMnt;
   final double? feePercent;
 
-  /// Null when the session never reached the real backend (the dashboard's
-  /// local simulation) — there is then nothing to request an e-Barimt for.
+  /// Null when the stop could not be matched to a backend session — there is
+  /// then nothing to request an e-Barimt for.
   final int? transactionId;
 
   const ChargingSessionReceiptSheet({
     super.key,
     required this.stationName,
     required this.totalEnergyKwh,
-    required this.activePowerKw,
     required this.totalCostMnt,
     this.energyCostMnt,
     this.feeAmountMnt,
@@ -39,10 +37,6 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double? unitPrice = (totalCostMnt != null && totalEnergyKwh > 0)
-        ? totalCostMnt! / totalEnergyKwh
-        : null;
-
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -115,23 +109,9 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
           Divider(height: 20, color: context.palette.border),
           _buildReceiptRow(
             context,
-            AppStrings.get('power'),
-            '${activePowerKw.toInt()} кВт',
-          ),
-          Divider(height: 20, color: context.palette.border),
-          _buildReceiptRow(
-            context,
             AppStrings.get('energy_delivered'),
             '${totalEnergyKwh.toStringAsFixed(2)} кВт.ц',
           ),
-          if (unitPrice != null) ...[
-            Divider(height: 20, color: context.palette.border),
-            _buildReceiptRow(
-              context,
-              AppStrings.get('unit_price'),
-              '${formatMntLeading(unitPrice)} / кВт.ц',
-            ),
-          ],
           if (feeAmountMnt != null && feeAmountMnt! > 0) ...[
             if (energyCostMnt != null) ...[
               Divider(height: 20, color: context.palette.border),

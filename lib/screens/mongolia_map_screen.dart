@@ -57,9 +57,9 @@ String navigationInstruction(double metres, double bearing) {
 }
 
 class MongoliaMapScreen extends StatefulWidget {
-  final VoidCallback onOpenQrScanner;
+  final VoidCallback? onOpenQrScanner;
 
-  const MongoliaMapScreen({super.key, required this.onOpenQrScanner});
+  const MongoliaMapScreen({super.key, this.onOpenQrScanner});
 
   @override
   State<MongoliaMapScreen> createState() => _MongoliaMapScreenState();
@@ -875,54 +875,36 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
             ),
           ),
 
-          // 4. Bottom action: scan to charge, or end the running route.
-          // Station details open as a sheet when a pin is tapped.
-          Positioned(
-            bottom: 20,
-            left: 16,
-            // Stops short of the bottom-right corner, where the assistant
-            // button rests by default.
-            right: 80,
-            child: SizedBox(
-              height: 52,
-              child: _isNavigatingRoute
-                  ? ElevatedButton.icon(
-                      onPressed: _stopNavigation,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.errorRed,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                      ),
-                      icon: const Icon(Icons.stop_rounded, size: 20),
-                      label: Text(
-                        AppStrings.get(
-                          routeActionLabelKey(isNavigating: true),
-                        ),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    )
-                  : ElevatedButton.icon(
-                      key: const ValueKey<String>('map-scan-qr'),
-                      onPressed: widget.onOpenQrScanner,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.sageGreen,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                      ),
-                      icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
-                      label: Text(
-                        AppStrings.get('scan_to_charge'),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+          // 4. Bottom action: end the running route when navigating.
+          if (_isNavigatingRoute)
+            Positioned(
+              bottom: 20,
+              left: 16,
+              // Stops short of the bottom-right corner, where the assistant
+              // button rests by default.
+              right: 80,
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _stopNavigation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.errorRed,
+                    foregroundColor: Colors.white,
+                    elevation: 4,
+                  ),
+                  icon: const Icon(Icons.stop_rounded, size: 20),
+                  label: Text(
+                    AppStrings.get(
+                      routeActionLabelKey(isNavigating: true),
                     ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );

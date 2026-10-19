@@ -93,12 +93,9 @@ void main() {
     expect(find.byType(SignedOutPanel), findsOneWidget);
     expect(find.text(AppStrings.get('guest_vehicle_title')), findsOneWidget);
 
-    // Charging controls likewise.
-    await _openTab(tester, 2);
-    expect(find.byType(SignedOutPanel), findsOneWidget);
-    expect(find.text(AppStrings.get('guest_controls_title')), findsOneWidget);
-
-    // Both are still reachable — nothing has blocked the rest of the app.
+    // Tab 2 is now the QR scanner action — tapping it opens a camera modal
+    // rather than switching to a SignedOutPanel.  No assertion needed here;
+    // the map should still be reachable from the nav bar.
     await _openTab(tester, 1);
     expect(find.byType(MongoliaMapScreen), findsOneWidget);
   });
@@ -118,5 +115,30 @@ void main() {
     // The app bar swaps the way in for the way out.
     expect(find.byTooltip(AppStrings.get('logout')), findsOneWidget);
     expect(find.byTooltip(AppStrings.get('login')), findsNothing);
+  });
+
+  testWidgets('unauthorized/guest users can use the QR scanner from the bottom nav', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1179, 2556);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await _launchAsGuest(tester);
+
+    // Tap tab 2 (QR action) as an unauthorized guest user
+    await _openTab(tester, 2);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The QR scanner sheet is displayed without requiring sign-in
+    expect(find.byType(QrScannerSheet), findsOneWidget);
+    expect(find.text(AppStrings.get('scan_qr')), findsOneWidget);
+
+    // Guest can dismiss the scanner
+    await tester.tap(find.byTooltip(AppStrings.get('close')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(QrScannerSheet), findsNothing);
   });
 }

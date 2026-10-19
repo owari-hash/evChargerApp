@@ -7,7 +7,7 @@ import 'models/wallet.dart';
 import 'screens/account_screen.dart';
 import 'screens/home_dashboard_screen.dart';
 import 'screens/mongolia_map_screen.dart';
-import 'screens/quick_controls_screen.dart';
+
 import 'screens/sessions_screen.dart';
 import 'screens/trips_stations_screen.dart';
 import 'services/announcement_service.dart';
@@ -630,7 +630,9 @@ class _MainAppFrameState extends State<MainAppFrame>
         onAddVehicle: () => setState(() => _activeTabIndex = _accountTab),
       ),
       MongoliaMapScreen(onOpenQrScanner: () => _openQrScannerModal(context)),
-      QuickControlsScreen(authService: widget.authService),
+      // Tab 2 is the QR scanner action — it opens a modal, so this
+      // placeholder is never shown.
+      const SizedBox.shrink(),
       TripsStationsScreen(),
       AccountScreen(authService: widget.authService),
     ];
@@ -783,8 +785,8 @@ class _MainAppFrameState extends State<MainAppFrame>
           ),
           _buildBottomNavItem(
             2,
-            Icons.tune_rounded,
-            AppStrings.get('control'),
+            Icons.qr_code_scanner_rounded,
+            'QR',
           ),
           _buildBottomNavItem(
             3,
@@ -821,7 +823,13 @@ class _MainAppFrameState extends State<MainAppFrame>
       // appears inside the tab's own content.
       key: ValueKey<String>('nav-tab-$index'),
       child: GestureDetector(
-        onTap: () => setState(() => _activeTabIndex = index),
+        onTap: () {
+          if (index == 2) {
+            _openQrScannerModal(context);
+          } else {
+            setState(() => _activeTabIndex = index);
+          }
+        },
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),

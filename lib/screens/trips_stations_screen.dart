@@ -75,18 +75,7 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
             letterSpacing: -0.4,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.qr_code_scanner_rounded,
-              color: context.palette.ink,
-              size: 26,
-            ),
-            onPressed: () => showQrScannerSheet(context),
-            tooltip: AppStrings.get('scan_qr'),
-          ),
-          const SizedBox(width: 8),
-        ],
+        actions: const [SizedBox(width: 16)],
       ),
       body: RefreshIndicator(
         onRefresh: () => _stations.load(force: true),

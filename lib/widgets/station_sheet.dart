@@ -11,6 +11,7 @@ import '../services/stations_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import '../screens/trips_stations_screen.dart';
 import 'charge_start_panel.dart';
 
 /// Opens [station]'s detail sheet — the app's version of the website's
@@ -267,6 +268,10 @@ class _StationSheetState extends State<StationSheet> {
                 connectors: _connectors,
                 stationOnline: s.isOnline,
                 onStarted: _onStarted,
+                onScanQr: () {
+                  Navigator.of(context).pop();
+                  showQrScannerSheet(context);
+                },
                 stationsService: widget.stationsService,
                 sessionsService: widget.sessionsService,
                 authService: widget.authService,
@@ -373,8 +378,8 @@ class _FactsRow extends StatelessWidget {
             child: _Fact(
               icon: Icons.payments_outlined,
               label: AppStrings.get('price'),
-              value: station.pricePerKwh > 0
-                  ? '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}'
+              value: station.basePricePerKwh > 0
+                  ? '${formatMntLeading(station.basePricePerKwh)}/${AppStrings.get('unit_kwh')}'
                   : notPublished,
             ),
           ),

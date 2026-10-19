@@ -85,6 +85,32 @@ class StationsService {
   /// rather than quietly presenting cached stations as live.
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
 
+  /// Looks up a friendly human-readable name for a station id or chargePointId.
+  String resolveStationName(String idOrName) {
+    final String trimmed = idOrName.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final bool isHexId = RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(trimmed);
+
+    for (final ChargingStationLocation s in stations.value) {
+      if (s.id == trimmed || s.qrCode == trimmed) {
+        if (s.name.isNotEmpty && !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
+          return s.name.trim();
+        }
+        if (s.address.isNotEmpty) return s.address.trim();
+      }
+    }
+
+    if (isHexId) {
+      for (final ChargingStationLocation s in stations.value) {
+        if (s.name.isNotEmpty && !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
+          return s.name.trim();
+        }
+      }
+    }
+
+    return trimmed;
+  }
+
   Future<void>? _inFlight;
 
   /// Fetches the network, at most once at a time.

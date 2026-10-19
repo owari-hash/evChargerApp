@@ -26,7 +26,6 @@ import 'widgets/app_update_dialog.dart';
 import 'widgets/announcement_dialog.dart';
 import 'widgets/assistant_sheet.dart';
 import 'widgets/draggable_assistant_button.dart';
-import 'widgets/auth_gate.dart';
 import 'widgets/charge_notifications.dart';
 import 'widgets/guided_step.dart';
 import 'widgets/notifications_sheet.dart';
@@ -698,24 +697,13 @@ class _MainAppFrameState extends State<MainAppFrame>
                     onOpen: _openNotification,
                   ),
                 ),
+                const SizedBox(width: 10),
+                _AppBarAction(
+                  icon: Icons.logout_rounded,
+                  tooltip: AppStrings.get('logout'),
+                  onPressed: _confirmLogout,
+                ),
               ],
-              const SizedBox(width: 10),
-              // Guests get the way in; drivers get the way out.
-              _isLoggedIn
-                  ? _AppBarAction(
-                      icon: Icons.logout_rounded,
-                      tooltip: AppStrings.get('logout'),
-                      onPressed: _confirmLogout,
-                    )
-                  : _AppBarAction(
-                      icon: Icons.login_rounded,
-                      tooltip: AppStrings.get('login'),
-                      onPressed: () => AuthGate.require(
-                        context,
-                        reason: AppStrings.get('signin_required_account'),
-                        authService: widget.authService,
-                      ),
-                    ),
             ],
           ),
         ),

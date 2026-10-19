@@ -48,6 +48,7 @@ class ChargeStartPanel extends StatefulWidget {
     this.initialConnectorId,
     this.stationOnline = true,
     this.footer,
+    this.onScanQr,
     this.stationsService,
     this.sessionsService,
     this.authService,
@@ -66,6 +67,9 @@ class ChargeStartPanel extends StatefulWidget {
 
   /// Called after an `Accepted` start.
   final VoidCallback onStarted;
+
+  /// Optional QR scan callback: if provided, the CTA button prompts to scan QR to charge.
+  final VoidCallback? onScanQr;
 
   /// Shown under the start button (the scanner's «Дахин уншуулах»).
   final Widget? footer;
@@ -137,6 +141,22 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     );
     if (!signedIn || !mounted) return;
 
+    // Check if connector is plugged in. In OCPP, an unplugged connector is 'Available'.
+    // When connected to an EV, it changes to 'Preparing'.
+    final StationConnector? chosen = widget.connectors
+        .cast<StationConnector?>()
+        .firstWhere(
+          (StationConnector? c) => c?.connectorId == _selected,
+          orElse: () => null,
+        );
+    if (chosen != null && chosen.status == 'Available') {
+      setState(() {
+        _starting = false;
+        _error = 'Та холболтоо дахин шалгана уу';
+      });
+      return;
+    }
+
     setState(() {
       _starting = true;
       _error = null;
@@ -164,7 +184,12 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
         );
         return;
       }
-      setState(() => _error = err.message);
+      final String msg = (err.statusCode == 409 ||
+              err.message.contains('хүлээж аваагүй') ||
+              err.message.contains('залгасан'))
+          ? 'Та холболтоо дахин шалгана уу'
+          : err.message;
+      setState(() => _error = msg);
     }
   }
 
@@ -239,55 +264,101 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
                   : null,
             ),
         if (_error != null) ...<Widget>[
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Icon(
-                Icons.error_outline_rounded,
-                size: 18,
-                color: AppTheme.warningOrange,
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.errorRed.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.errorRed.withValues(alpha: 0.35),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _error!,
-                  key: const ValueKey<String>('charge-start-error'),
-                  style: const TextStyle(
-                    color: AppTheme.warningOrange,
-                    fontSize: 13,
-                    height: 1.3,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 20,
+                  color: AppTheme.errorRed,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Амжилтгүй',
+                        style: TextStyle(
+                          color: AppTheme.errorRed,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _error!,
+                        key: const ValueKey<String>('charge-start-error'),
+                        style: const TextStyle(
+                          color: AppTheme.errorRed,
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
         const SizedBox(height: 16),
         SizedBox(
           height: 54,
-          child: ElevatedButton.icon(
-            key: const ValueKey<String>('charge-start-button'),
-            onPressed: _canStart ? _start : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.sageGreen,
-              foregroundColor: Colors.white,
-            ),
-            icon: _starting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          child: widget.onScanQr != null
+              ? ElevatedButton.icon(
+                  key: const ValueKey<String>('charge-qr-button'),
+                  onPressed: widget.stationOnline ? widget.onScanQr : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.sageGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
+                  label: Text(
+                    AppStrings.get('scan_to_charge'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                     ),
-                  )
-                : const Icon(Icons.bolt_rounded, size: 22),
-            label: Text(
-              AppStrings.get(_starting ? 'starting' : 'start_charging_cta'),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-            ),
-          ),
+                  ),
+                )
+              : ElevatedButton.icon(
+                  key: const ValueKey<String>('charge-start-button'),
+                  onPressed: _canStart ? _start : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.sageGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: _starting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.bolt_rounded, size: 22),
+                  label: Text(
+                    AppStrings.get(
+                      _starting ? 'starting' : 'start_charging_cta',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
         ),
         if (!widget.stationOnline) ...<Widget>[
           const SizedBox(height: 8),

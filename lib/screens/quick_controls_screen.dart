@@ -332,9 +332,9 @@ class _QuickControlsScreenState extends State<QuickControlsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          if (station.pricePerKwh > 0)
+                          if (station.basePricePerKwh > 0)
                             Text(
-                              '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}',
+                              '${formatMntLeading(station.basePricePerKwh)}/${AppStrings.get('unit_kwh')}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,

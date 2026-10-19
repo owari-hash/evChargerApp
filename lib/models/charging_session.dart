@@ -1,3 +1,5 @@
+import '../services/stations_service.dart';
+
 /// One charging session, mirroring `ChargingSession` in evChargerKiosk's
 /// `src/lib/types.ts`.
 ///
@@ -51,9 +53,12 @@ class ChargingSession {
   bool get isActive => status == SessionStatus.active;
 
   /// Where the session happened, preferring the station's name over its id.
-  String get displayLocation => (stationName != null && stationName!.isNotEmpty)
-      ? stationName!
-      : chargePointId;
+  String get displayLocation {
+    final String candidate = (stationName != null && stationName!.isNotEmpty)
+        ? stationName!
+        : chargePointId;
+    return StationsService.instance.resolveStationName(candidate);
+  }
 
   /// How long it ran — to now while still charging.
   Duration? get duration {

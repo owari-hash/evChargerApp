@@ -112,6 +112,7 @@ class ChargingStationLocation {
     this.connectors = const <StationConnector>[],
     this.isOnline = true,
     this.feePercent = 0,
+    this.baseTariffPerKwh,
   });
 
   final String id;
@@ -131,6 +132,20 @@ class ChargingStationLocation {
 
   /// The service fee [pricePerKwh] includes, in percent; 0 when none applies.
   final double feePercent;
+
+  /// Base tariff per kWh before service fee markup.
+  final double? baseTariffPerKwh;
+
+  /// Tariff to show on the UI: base price without the 1% fee markup (e.g. 1000₮ instead of 1010₮).
+  double get basePricePerKwh {
+    if (baseTariffPerKwh != null && baseTariffPerKwh! > 0) {
+      return baseTariffPerKwh!;
+    }
+    if (feePercent > 0 && pricePerKwh > 0) {
+      return (pricePerKwh / (1 + feePercent / 100)).roundToDouble();
+    }
+    return pricePerKwh;
+  }
 
   /// What a QR code at the station encodes, and the id the start endpoint is
   /// keyed by — `/app-api/stations/<qrCode>/start`.
@@ -227,6 +242,7 @@ class ChargingStationLocation {
           .toList(growable: false),
       isOnline: json['isOnline'] != false,
       feePercent: _toDouble(json['feePercent']) ?? 0,
+      baseTariffPerKwh: _toDouble(json['baseTariffPerKwh']),
     );
   }
 
@@ -254,6 +270,7 @@ class ChargingStationLocation {
       connectors: connectors,
       isOnline: isOnline,
       feePercent: feePercent,
+      baseTariffPerKwh: baseTariffPerKwh,
     );
   }
 

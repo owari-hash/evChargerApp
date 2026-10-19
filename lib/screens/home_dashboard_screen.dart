@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/active_session_state.dart';
 import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
+import '../services/stations_service.dart';
 import '../services/vehicle_photo_service.dart';
 import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
@@ -119,13 +120,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _wasSignedIn = _auth.isSignedIn;
     _auth.currentUser.addListener(_onUserChanged);
     _sessions.sessionStarted.addListener(_onSessionStartedElsewhere);
+    StationsService.instance.stations.addListener(_onStationsChanged);
     widget.guide?.addListener(_onGuideChanged);
+    StationsService.instance.load();
     _syncWithDriverApi();
     _loadWallet();
     _loadPhoto();
     // The frame can ask for the guide in the same frame that first builds
     // this screen, before it was listening.
     if (widget.guide?.requested == true) _scheduleGuideStart();
+  }
+
+  void _onStationsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -263,6 +270,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void dispose() {
     _auth.currentUser.removeListener(_onUserChanged);
     _sessions.sessionStarted.removeListener(_onSessionStartedElsewhere);
+    StationsService.instance.stations.removeListener(_onStationsChanged);
     widget.guide?.removeListener(_onGuideChanged);
     _cancelGuideTimers();
     _scroll.dispose();
@@ -769,18 +777,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Expanded(
-            child: _buildSummaryTile(
-              icon: Icons.account_balance_wallet_rounded,
-              title: AppStrings.get('wallet_balance'),
-              value: isInternal
-                  ? 'Үнэ төлбөргүй'
-                  : (balance == null ? '—' : formatMnt(balance)),
-              footer: isInternal
-                  ? 'Дотоод хэрэглэгч'
-                  : AppStrings.get('topup_title'),
-              footerIcon: isInternal
-                  ? Icons.verified_rounded
-                  : Icons.add_rounded,
+            child: _buildWalletCard(
+              isInternal: isInternal,
+              balance: balance,
               onTap: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -791,24 +790,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               },
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
-            child: _buildSummaryTile(
-              icon: Icons.calendar_month_rounded,
-              title: AppStrings.get('home_month_title'),
-              value: _historyLoaded && !_historyFailed
-                  ? '${kwh.toStringAsFixed(1)} кВт·ц'
-                  : '—',
-              footer: _historyFailed
-                  ? AppStrings.get('home_unavailable')
-                  : _historyLoaded
-                  ? [
-                      AppStrings.get(
-                        'home_month_sessions',
-                      ).replaceFirst('{n}', '${month.length}'),
-                      if (spent != null) formatMnt(spent),
-                    ].join(' · ')
-                  : AppStrings.get('loading'),
+            child: _buildMonthCard(
+              kwh: kwh,
+              monthSessionsCount: month.length,
+              spent: spent,
               onTap: () => _open(const SessionsScreen()),
             ),
           ),
@@ -817,96 +804,300 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  Widget _buildSummaryTile({
-    required IconData icon,
-    required String title,
-    required String value,
-    required String footer,
-    IconData? footerIcon,
+  Widget _buildWalletCard({
+    required bool isInternal,
+    required num? balance,
     required VoidCallback onTap,
   }) {
     final AppPalette palette = context.palette;
+    final bool isDark = ThemeController.isDark;
+
     return Material(
-      color: palette.card,
-      borderRadius: BorderRadius.circular(20),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: palette.border),
+            color: palette.card,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : palette.border,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : palette.accent.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: palette.accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, size: 16, color: palette.accent),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: palette.inkMuted,
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              palette.accent.withValues(alpha: 0.22),
+                              palette.accent.withValues(alpha: 0.08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.account_balance_wallet_rounded,
+                          size: 17,
+                          color: palette.accent,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        AppStrings.get('wallet_balance'),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: palette.inkMuted,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
                   ),
                   Icon(
                     Icons.chevron_right_rounded,
                     size: 18,
-                    color: palette.inkMuted,
+                    color: palette.inkMuted.withValues(alpha: 0.7),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  value,
+                  isInternal
+                      ? 'Үнэ төлбөргүй'
+                      : (balance == null ? '—' : formatMnt(balance)),
                   style: TextStyle(
-                    fontSize: 21,
+                    fontSize: 23,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.6,
                     color: palette.ink,
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: <Widget>[
-                  if (footerIcon != null) ...<Widget>[
-                    Icon(footerIcon, size: 13, color: palette.accent),
-                    const SizedBox(width: 2),
-                  ],
-                  Expanded(
-                    child: Text(
-                      footer,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: isInternal
+                      ? AppTheme.sageGreen.withValues(alpha: 0.14)
+                      : palette.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isInternal
+                        ? AppTheme.sageGreen.withValues(alpha: 0.3)
+                        : palette.accent.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      isInternal ? Icons.verified_rounded : Icons.add_rounded,
+                      size: 14,
+                      color: isInternal ? AppTheme.sageGreen : palette.accent,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isInternal
+                          ? 'Дотоод хэрэглэгч'
+                          : AppStrings.get('topup_title'),
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: footerIcon != null
-                            ? palette.accent
-                            : palette.inkMuted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: isInternal
+                            ? AppTheme.sageGreen
+                            : palette.accent,
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthCard({
+    required double kwh,
+    required int monthSessionsCount,
+    required num? spent,
+    required VoidCallback onTap,
+  }) {
+    final AppPalette palette = context.palette;
+    final bool isDark = ThemeController.isDark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : palette.border,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : palette.accent.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.teal.withValues(alpha: 0.22),
+                              Colors.teal.withValues(alpha: 0.08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_month_rounded,
+                          size: 17,
+                          color: Colors.teal,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        AppStrings.get('home_month_title'),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: palette.inkMuted,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: palette.inkMuted.withValues(alpha: 0.7),
                   ),
                 ],
+              ),
+              const SizedBox(height: 14),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _historyLoaded && !_historyFailed
+                      ? '${kwh.toStringAsFixed(1)} кВт·ц'
+                      : '—',
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.6,
+                    color: palette.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : palette.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : palette.border,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 14,
+                      color: palette.accent,
+                    ),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        _historyFailed
+                            ? AppStrings.get('home_unavailable')
+                            : _historyLoaded
+                            ? [
+                                AppStrings.get(
+                                  'home_month_sessions',
+                                ).replaceFirst('{n}', '$monthSessionsCount'),
+                                if (spent != null) formatMnt(spent),
+                              ].join(' · ')
+                            : AppStrings.get('loading'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: palette.ink,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

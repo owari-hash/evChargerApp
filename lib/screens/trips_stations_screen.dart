@@ -266,9 +266,9 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    if (station.pricePerKwh > 0)
+                    if (station.basePricePerKwh > 0)
                       Text(
-                        '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}',
+                        '${formatMntLeading(station.basePricePerKwh)}/${AppStrings.get('unit_kwh')}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
@@ -563,8 +563,8 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
     final ChargingStationLocation? station = _station;
     final String title = station?.name ?? lookup.stationName;
     final String? address = station?.address ?? lookup.address;
-    final String? tariff = station != null && station.pricePerKwh > 0
-        ? '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}'
+    final String? tariff = station != null && station.basePricePerKwh > 0
+        ? '${formatMntLeading(station.basePricePerKwh)}/${AppStrings.get('unit_kwh')}'
         : null;
 
     // Without the station detail, the gun the sticker named is all there is

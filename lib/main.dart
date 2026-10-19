@@ -15,6 +15,7 @@ import 'services/announcement_watcher_service.dart';
 import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'services/sessions_service.dart';
+import 'services/stations_service.dart';
 import 'services/notifications_store.dart';
 import 'services/session_watcher_service.dart';
 import 'services/wallet_watcher_service.dart';
@@ -165,6 +166,7 @@ class _MainAppFrameState extends State<MainAppFrame>
     _guide.addListener(_onGuideChanged);
     _guide.onFinished = _onGuideFinished;
     GuidedStep.onTriggerGuide = _replayGuide;
+    StationsService.instance.targetStation.addListener(_onTargetStationChanged);
     _restoreSession();
     if (_isLoggedIn) _startWatchers();
   }
@@ -174,6 +176,7 @@ class _MainAppFrameState extends State<MainAppFrame>
     WidgetsBinding.instance.removeObserver(this);
     _auth.currentUser.removeListener(_onAuthChanged);
     _guide.removeListener(_onGuideChanged);
+    StationsService.instance.targetStation.removeListener(_onTargetStationChanged);
     _guide.dispose();
     if (GuidedStep.onTriggerGuide == _replayGuide) {
       GuidedStep.onTriggerGuide = null;
@@ -183,6 +186,14 @@ class _MainAppFrameState extends State<MainAppFrame>
     AnnouncementWatcherService.instance.stop();
     _announcementRetry?.cancel();
     super.dispose();
+  }
+
+  void _onTargetStationChanged() {
+    if (StationsService.instance.targetStation.value != null && mounted) {
+      setState(() {
+        _activeTabIndex = _mapTab;
+      });
+    }
   }
 
   /// Polling only while the app is in front; coming back checks straight

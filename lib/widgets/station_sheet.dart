@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/station.dart';
 import '../services/api_client.dart';
@@ -135,26 +134,13 @@ class _StationSheetState extends State<StationSheet> {
     );
   }
 
-  void _closeThen(VoidCallback? action) {
+  void _navigateToMap() {
     Navigator.of(context).pop();
-    action?.call();
-  }
-
-  void _externalMaps() {
-    final VoidCallback? custom = widget.onExternalMaps;
-    if (custom != null) {
-      _closeThen(custom);
-      return;
+    if (widget.onRoute != null) {
+      widget.onRoute!();
+    } else {
+      (widget.stationsService ?? StationsService.instance).routeToStation(_station);
     }
-    final Uri url = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination='
-      '${_station.latitude},${_station.longitude}&travelmode=driving',
-    );
-    unawaited(
-      launchUrl(url, mode: LaunchMode.externalApplication).catchError(
-        (Object _) => false,
-      ),
-    );
   }
 
   @override
@@ -253,9 +239,7 @@ class _StationSheetState extends State<StationSheet> {
                 children: <Widget>[
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: widget.onRoute == null
-                          ? _externalMaps
-                          : () => _closeThen(widget.onRoute),
+                      onPressed: _navigateToMap,
                       icon: const Icon(Icons.navigation_rounded, size: 18),
                       label: Text(AppStrings.get('directions')),
                     ),

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/connector_types.dart';
 import '../models/station.dart';
 import '../services/stations_service.dart';
@@ -108,8 +107,28 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     super.initState();
     _stations.stations.addListener(_onStationsChanged);
     _stations.loading.addListener(_onStationsChanged);
+    _stations.targetStation.addListener(_onTargetStationRequested);
     _initUserGpsLocation();
     _stations.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkTargetStation();
+    });
+  }
+
+  void _onTargetStationRequested() {
+    _checkTargetStation();
+  }
+
+  void _checkTargetStation() {
+    final ChargingStationLocation? station = _stations.targetStation.value;
+    if (station == null || !mounted) return;
+    _stations.clearTargetStation();
+    final LatLng pos = LatLng(station.latitude, station.longitude);
+    setState(() {
+      _selectedStationId = station.id;
+    });
+    _mapController.move(pos, 15.5);
+    _startNavigation(pos);
   }
 
   void _onStationsChanged() {
@@ -456,8 +475,6 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
       context,
       station: station,
       onRoute: () => _startNavigation(pos),
-      onExternalMaps: () =>
-          _launchExternalGpsNavigation(station.latitude, station.longitude),
     );
   }
 
@@ -475,36 +492,13 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     _flyTo(_userPosition, _isNavigatingRoute ? _navigationZoom : 15.5);
   }
 
-  Future<void> _launchExternalGpsNavigation(double lat, double lng) async {
-    // Reset the filter so all stations appear on the app map when the user
-    // returns from Google Maps. The user can re-filter at that point.
-    if (mounted) setState(() => _filter = StationFilter.none);
-
-    final Uri googleMapsUrl = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
-    );
-    if (await canLaunchUrl(googleMapsUrl)) {
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppStrings.get('getting_directions')}: $lat, $lng',
-            ),
-            backgroundColor: AppTheme.sageGreen,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   void dispose() {
     _cameraFlight.dispose();
     _positionStreamSub?.cancel();
     _stations.stations.removeListener(_onStationsChanged);
     _stations.loading.removeListener(_onStationsChanged);
+    _stations.targetStation.removeListener(_onTargetStationRequested);
     super.dispose();
   }
 

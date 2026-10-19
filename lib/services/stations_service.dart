@@ -85,6 +85,18 @@ class StationsService {
   /// rather than quietly presenting cached stations as live.
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
 
+  /// Set when a screen or sheet requests navigation to a specific station on the in-app map.
+  final ValueNotifier<ChargingStationLocation?> targetStation =
+      ValueNotifier<ChargingStationLocation?>(null);
+
+  void routeToStation(ChargingStationLocation station) {
+    targetStation.value = station;
+  }
+
+  void clearTargetStation() {
+    targetStation.value = null;
+  }
+
   /// Looks up a friendly human-readable name for a station id or chargePointId.
   String resolveStationName(String idOrName) {
     final String trimmed = idOrName.trim();

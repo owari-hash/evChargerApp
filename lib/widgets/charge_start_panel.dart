@@ -236,33 +236,6 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
             ),
           ),
         ],
-        Text(
-          AppStrings.get('pick_connector'),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: palette.ink,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (widget.connectors.isEmpty)
-          Text(
-            AppStrings.get('connector_any'),
-            style: TextStyle(fontSize: 13, color: palette.inkMuted),
-          )
-        else
-          for (final StationConnector c in widget.connectors)
-            _ConnectorOption(
-              connector: c,
-              online: widget.stationOnline,
-              selected: c.connectorId == _selected,
-              onTap: widget.stationOnline && c.isStartable && !_starting
-                  ? () => setState(() {
-                      _selected = c.connectorId;
-                      _error = null;
-                    })
-                  : null,
-            ),
         if (_error != null) ...<Widget>[
           const SizedBox(height: 12),
           Container(

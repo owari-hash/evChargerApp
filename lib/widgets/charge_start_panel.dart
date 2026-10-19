@@ -152,7 +152,7 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     if (chosen != null && chosen.status == 'Available') {
       setState(() {
         _starting = false;
-        _error = 'Та холболтоо дахин шалгана уу';
+        _error = 'Цэнэглэх хошуу холболтыг бүрэн хийгдсэн эсэхийг сайтар шалгана уу';
       });
       return;
     }
@@ -187,7 +187,7 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
       final String msg = (err.statusCode == 409 ||
               err.message.contains('хүлээж аваагүй') ||
               err.message.contains('залгасан'))
-          ? 'Та холболтоо дахин шалгана уу'
+          ? 'Цэнэглэх хошуу холболтыг бүрэн хийгдсэн эсэхийг сайтар шалгана уу'
           : err.message;
       setState(() => _error = msg);
     }

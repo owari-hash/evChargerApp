@@ -45,8 +45,8 @@ void main() {
     expect(find.byType(MongoliaMapScreen), findsOneWidget);
     expect(find.byType(LoginRegisterScreen).hitTestable(), findsNothing);
 
-    // And the way in is offered rather than imposed.
-    expect(find.byTooltip(AppStrings.get('login')), findsOneWidget);
+    // Logout button is hidden when no one is logged in.
+    expect(find.byTooltip(AppStrings.get('logout')), findsNothing);
   });
 
   testWidgets('a guest can browse the station list', (

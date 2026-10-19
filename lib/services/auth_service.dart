@@ -117,6 +117,27 @@ class AuthService {
     return _adopt(body['user']);
   }
 
+  /// Direct guest / unauthorized charging: texts a one-time code to the phone.
+  Future<CodeSent> sendGuestCode(String phone) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/guest/send-code',
+      body: <String, dynamic>{'phone': phone.trim()},
+    );
+    return CodeSent.fromJson(body);
+  }
+
+  /// Guest / unauthorized login: verifies the code and auto-creates or logs into the account.
+  Future<AuthUser> guestLogin({
+    required String phone,
+    required String code,
+  }) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/auth/guest/login',
+      body: <String, dynamic>{'phone': phone.trim(), 'code': code.trim()},
+    );
+    return _adopt(body['user'] as Map<String, dynamic>);
+  }
+
   /// Sign-up, step 1. Only called once the driver has accepted the terms.
   Future<CodeSent> sendSignupCode(String phone) async {
     final Map<String, dynamic> body = await _client.post(
@@ -135,6 +156,10 @@ class AuthService {
       '/auth/signup/verify',
       body: <String, dynamic>{'phone': phone.trim(), 'code': code.trim()},
     );
+    if (body['user'] is Map<String, dynamic>) {
+      _adopt(body['user'] as Map<String, dynamic>);
+      return '';
+    }
     return _ticket(body['signupTicket']);
   }
 

@@ -19,6 +19,7 @@ class Wallet {
     required this.status,
     required this.totalToppedUp,
     required this.totalSpent,
+    this.isInternal = false,
     this.idTags = const <String>[],
     this.lastTopUpAt,
     this.lastSpendAt,
@@ -34,6 +35,9 @@ class Wallet {
   final WalletStatus status;
   final num totalToppedUp;
   final num totalSpent;
+
+  /// Whether this is an internal user who charges free.
+  final bool isInternal;
 
   /// Charge tags that spend from this balance.
   final List<String> idTags;
@@ -54,6 +58,7 @@ class Wallet {
           : WalletStatus.active,
       totalToppedUp: _num(json['totalToppedUp']),
       totalSpent: _num(json['totalSpent']),
+      isInternal: json['isInternal'] == true,
       idTags: _stringList(json['idTags']),
       lastTopUpAt: _date(json['lastTopUpAt']),
       lastSpendAt: _date(json['lastSpendAt']),

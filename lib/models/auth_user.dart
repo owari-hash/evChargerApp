@@ -9,6 +9,7 @@ class AuthUser {
     this.emailVerified = false,
     this.phoneVerified = false,
     this.hasPin = true,
+    this.isInternal = false,
     this.idTags = const <String>[],
     this.locale = 'mn',
     this.createdAt,
@@ -32,6 +33,9 @@ class AuthUser {
 
   /// False only for an account from before PIN sign-in that has not set one.
   final bool hasPin;
+
+  /// Whether this driver is an internal user who charges free of charge.
+  final bool isInternal;
 
   /// RFID tags this driver can start a session with.
   final List<String> idTags;
@@ -79,6 +83,7 @@ class AuthUser {
       phoneVerified: json['phoneVerified'] == true,
       // A server from before PIN sign-in does not send it.
       hasPin: json['hasPin'] != false,
+      isInternal: json['isInternal'] == true,
       idTags: (json['idTags'] as List<dynamic>? ?? <dynamic>[])
           .map((dynamic tag) => tag.toString())
           .toList(growable: false),

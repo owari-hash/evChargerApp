@@ -171,10 +171,46 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    final bool isInternal =
+        widget.authService?.currentUser.value?.isInternal == true ||
+        AuthService.instance.currentUser.value?.isInternal == true;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        if (isInternal) ...<Widget>[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.sageGreen.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppTheme.sageGreen.withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.verified_rounded,
+                  size: 16,
+                  color: AppTheme.sageGreen,
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Дотоод хэрэглэгч · Үнэ төлбөргүй',
+                  style: TextStyle(
+                    color: AppTheme.sageGreen,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         Text(
           AppStrings.get('pick_connector'),
           style: TextStyle(

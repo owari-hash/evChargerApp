@@ -69,6 +69,7 @@ class WalletService {
   /// that floor, so the app never refuses a charge the station would accept.
   static String? startBlockReason(WalletSnapshot snapshot) {
     if (!snapshot.config.enabled) return null;
+    if (snapshot.wallet.isInternal) return null;
 
     if (snapshot.wallet.balance <= 0) {
       return AppStrings.get('start_blocked_body_zero');

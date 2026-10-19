@@ -759,6 +759,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           )
         : null;
 
+    final bool isInternal =
+        _wallet?.wallet.isInternal == true ||
+        _auth.currentUser.value?.isInternal == true;
     final num? balance = _wallet?.wallet.balance;
 
     return IntrinsicHeight(
@@ -769,9 +772,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             child: _buildSummaryTile(
               icon: Icons.account_balance_wallet_rounded,
               title: AppStrings.get('wallet_balance'),
-              value: balance == null ? '—' : formatMnt(balance),
-              footer: AppStrings.get('topup_title'),
-              footerIcon: Icons.add_rounded,
+              value: isInternal
+                  ? 'Үнэ төлбөргүй'
+                  : (balance == null ? '—' : formatMnt(balance)),
+              footer: isInternal
+                  ? 'Дотоод хэрэглэгч'
+                  : AppStrings.get('topup_title'),
+              footerIcon: isInternal
+                  ? Icons.verified_rounded
+                  : Icons.add_rounded,
               onTap: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute<void>(

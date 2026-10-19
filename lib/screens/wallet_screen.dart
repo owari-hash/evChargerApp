@@ -159,7 +159,39 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
             ),
           ],
-          if (low) ...<Widget>[
+          if (wallet.isInternal) ...<Widget>[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.sageGreen.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.sageGreen.withValues(alpha: 0.4),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.verified_rounded,
+                    size: 14,
+                    color: AppTheme.sageGreen,
+                  ),
+                  SizedBox(width: 5),
+                  Text(
+                    'Дотоод хэрэглэгч · Үнэ төлбөргүй',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (low && !wallet.isInternal) ...<Widget>[
             const SizedBox(height: 10),
             Text(
               AppStrings.get('wallet_low_balance').replaceFirst(

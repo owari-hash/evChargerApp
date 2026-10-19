@@ -131,6 +131,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   @override
   void initState() {
     super.initState();
+    _mode = widget.isSheet ? _Mode.signup : _Mode.login;
     for (final TextEditingController field in _allFields) {
       field.addListener(_onFieldChanged);
     }
@@ -332,7 +333,9 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     CodeSent? sent;
     final ApiException? error = await _run(() async {
       sent = _mode == _Mode.signup
-          ? await _auth.sendSignupCode(_phone.text)
+          ? (widget.isSheet
+              ? await _auth.sendGuestCode(_phone.text)
+              : await _auth.sendSignupCode(_phone.text))
           : await _auth.sendPinResetCode(_phone.text);
     });
     if (!mounted || error != null || sent == null) return false;
@@ -350,7 +353,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     final Map<String, String> local = <String, String>{
       if (!_looksLikePhone(_phone.text))
         'phone': AppStrings.get('auth_bad_phone'),
-      if (_mode == _Mode.signup && !_acceptedTerms)
+      if (_mode == _Mode.signup && !widget.isSheet && !_acceptedTerms)
         'acceptTerms': AppStrings.get('auth_terms_required'),
     };
     if (local.isNotEmpty) return _showLocalErrors(local);
@@ -374,16 +377,32 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
     String? ticket;
     final ApiException? error = await _run(() async {
-      ticket = _mode == _Mode.signup
-          ? await _auth.verifySignupCode(phone: _phone.text, code: _code.text)
-          : await _auth.verifyPinResetCode(
-              phone: _phone.text,
-              code: _code.text,
-            );
+      if (_mode == _Mode.signup) {
+        if (widget.isSheet) {
+          try {
+            await _auth.guestLogin(phone: _phone.text, code: _code.text);
+            return;
+          } catch (_) {
+            ticket = await _auth.verifySignupCode(phone: _phone.text, code: _code.text);
+          }
+        } else {
+          ticket = await _auth.verifySignupCode(phone: _phone.text, code: _code.text);
+        }
+      } else {
+        ticket = await _auth.verifyPinResetCode(
+          phone: _phone.text,
+          code: _code.text,
+        );
+      }
     });
     if (!mounted) return;
     if (error != null) {
       _code.clear();
+      return;
+    }
+
+    if (_mode == _Mode.signup && _auth.isSignedIn) {
+      _finished();
       return;
     }
 
@@ -579,12 +598,12 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
     final String title = AppStrings.get(switch (_mode) {
       _Mode.login => 'auth_login_headline',
-      _Mode.signup => 'auth_register_headline',
+      _Mode.signup => widget.isSheet ? 'guest_charge_title' : 'auth_register_headline',
       _Mode.reset => 'auth_reset_headline',
     });
     final String subtitle = AppStrings.get(switch (_mode) {
       _Mode.login => 'auth_login_sub',
-      _Mode.signup => 'auth_register_sub',
+      _Mode.signup => widget.isSheet ? 'guest_charge_sub' : 'auth_register_sub',
       _Mode.reset => 'auth_reset_sub',
     });
     final String stepTitle = AppStrings.get(switch (_step) {
@@ -623,19 +642,22 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
           if (_mode != _Mode.reset) ...<Widget>[
             _SegmentedCapsule(
               isLoginMode: _isLoginMode,
+              isSheet: widget.isSheet,
               enabled: !_pending,
               onChanged: (bool toLogin) =>
                   _setMode(toLogin ? _Mode.login : _Mode.signup),
             ),
             SizedBox(height: sectionGap),
           ],
-          _Headline(
-            title: title,
-            subtitle: subtitle,
-            compact: compact,
-            tight: tight,
-          ),
-          SizedBox(height: sectionGap),
+          if (!_isLoginMode || _mode == _Mode.reset) ...<Widget>[
+            _Headline(
+              title: title,
+              subtitle: subtitle,
+              compact: compact,
+              tight: tight,
+            ),
+            SizedBox(height: sectionGap),
+          ],
           if (!_isLoginMode) ...<Widget>[
             _StepHeader(title: stepTitle, step: _step.index + 1),
             SizedBox(height: tight ? 12 : 20),
@@ -857,10 +879,18 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     }
     return switch (_step) {
       _Step.phone => AppStrings.get(
-        _pending ? 'auth_sending' : 'auth_send_code',
+        _pending
+            ? 'auth_sending'
+            : (_mode == _Mode.signup && widget.isSheet
+                ? 'guest_send_code'
+                : 'auth_send_code'),
       ),
       _Step.code => AppStrings.get(
-        _pending ? 'auth_checking' : 'auth_verify_code',
+        _pending
+            ? 'auth_checking'
+            : (_mode == _Mode.signup && widget.isSheet
+                ? 'guest_verify_start'
+                : 'auth_verify_code'),
       ),
       _Step.pin =>
         _mode == _Mode.signup
@@ -1046,11 +1076,13 @@ class _SegmentedCapsule extends StatelessWidget {
   const _SegmentedCapsule({
     required this.isLoginMode,
     required this.onChanged,
+    this.isSheet = false,
     this.enabled = true,
   });
 
   final bool isLoginMode;
   final ValueChanged<bool> onChanged;
+  final bool isSheet;
   final bool enabled;
 
   @override
@@ -1094,10 +1126,15 @@ class _SegmentedCapsule extends StatelessWidget {
           ),
           Row(
             children: <Widget>[
-              _segment(context, AppStrings.get('login'), isLoginMode, true),
               _segment(
                 context,
-                AppStrings.get('register'),
+                AppStrings.get('login_with_pin'),
+                isLoginMode,
+                true,
+              ),
+              _segment(
+                context,
+                AppStrings.get(isSheet ? 'guest_charge_tab' : 'register'),
                 !isLoginMode,
                 false,
               ),

@@ -259,16 +259,6 @@ class _StationSheetState extends State<StationSheet> {
                       label: Text(AppStrings.get('directions')),
                     ),
                   ),
-                  if (widget.onRoute != null) ...<Widget>[
-                    const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed: _externalMaps,
-                      child: Tooltip(
-                        message: AppStrings.get('open_in_maps'),
-                        child: const Icon(Icons.map_outlined, size: 20),
-                      ),
-                    ),
-                  ],
                 ],
               ),
               const SizedBox(height: 18),
@@ -386,12 +376,6 @@ class _FactsRow extends StatelessWidget {
               value: station.pricePerKwh > 0
                   ? '${formatMntLeading(station.pricePerKwh)}/${AppStrings.get('unit_kwh')}'
                   : notPublished,
-              note: station.pricePerKwh > 0 && station.feePercent > 0
-                  ? AppStrings.get('service_fee_included').replaceFirst(
-                      '{percent}',
-                      formatPercent(station.feePercent),
-                    )
-                  : null,
             ),
           ),
         ],
@@ -405,13 +389,11 @@ class _Fact extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    this.note,
   });
 
   final IconData icon;
   final String label;
   final String value;
-  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -457,11 +439,6 @@ class _Fact extends StatelessWidget {
               ),
             ),
           ),
-          if (note != null)
-            Text(
-              note!,
-              style: TextStyle(fontSize: 10.5, color: palette.inkMuted),
-            ),
         ],
       ),
     );

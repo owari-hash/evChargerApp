@@ -17,8 +17,10 @@ import 'support/fake_auth.dart';
 /// These tests are what stop that wall coming back.
 Future<void> _launchAsGuest(WidgetTester tester) async {
   await tester.pumpWidget(EvChargerApp(authService: fakeAuthService()));
+  // Allow the async restoreSession to complete and setState to rebuild.
   await tester.pump();
   await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
 }
 
 Future<void> _openTab(WidgetTester tester, int index) async {

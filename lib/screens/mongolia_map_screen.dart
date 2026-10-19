@@ -476,6 +476,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
   }
 
   Future<void> _launchExternalGpsNavigation(double lat, double lng) async {
+    // Reset the filter so all stations appear on the app map when the user
+    // returns from Google Maps. The user can re-filter at that point.
+    if (mounted) setState(() => _filter = StationFilter.none);
+
     final Uri googleMapsUrl = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
     );

@@ -91,7 +91,10 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
 
   int? _selected;
   bool _starting = false;
-  String? _error;
+  /// Every failure is reported as a toast, the same as on the web.
+  void _fail(String message) {
+    if (mounted) AppToast.show(context, message, kind: ToastKind.error);
+  }
 
   @override
   void initState() {
@@ -150,17 +153,12 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
           orElse: () => null,
         );
     if (chosen != null && chosen.status == 'Available') {
-      setState(() {
-        _starting = false;
-        _error = 'Цэнэглэх хошуу холболтыг бүрэн хийгдсэн эсэхийг сайтар шалгана уу';
-      });
+      setState(() => _starting = false);
+      _fail(AppStrings.get('plug_not_detected'));
       return;
     }
 
-    setState(() {
-      _starting = true;
-      _error = null;
-    });
+    setState(() => _starting = true);
     try {
       await _stations.startCharging(widget.stationId, connectorId: _selected);
       _sessions.notifySessionStarted();
@@ -187,9 +185,9 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
       final String msg = (err.statusCode == 409 ||
               err.message.contains('хүлээж аваагүй') ||
               err.message.contains('залгасан'))
-          ? 'Цэнэглэх хошуу холболтыг бүрэн хийгдсэн эсэхийг сайтар шалгана уу'
+          ? AppStrings.get('plug_not_detected')
           : err.message;
-      setState(() => _error = msg);
+      _fail(msg);
     }
   }
 
@@ -230,55 +228,6 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
                     color: AppTheme.sageGreen,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (_error != null) ...<Widget>[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.errorRed.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.errorRed.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Icon(
-                  Icons.error_outline_rounded,
-                  size: 20,
-                  color: AppTheme.errorRed,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Амжилтгүй',
-                        style: TextStyle(
-                          color: AppTheme.errorRed,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _error!,
-                        key: const ValueKey<String>('charge-start-error'),
-                        style: const TextStyle(
-                          color: AppTheme.errorRed,
-                          fontSize: 12.5,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],

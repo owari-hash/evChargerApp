@@ -362,6 +362,9 @@ class AppStrings {
       'card_open': 'Төлбөрийн хуудас нээх',
       'card_failed': 'Картын төлбөр амжилтгүй боллоо. Дахин оролдоно уу.',
       'card_save': 'Дараагийн удаа нэг товшилтоор төлөхөөр картаа хадгалах',
+      'plug_not_detected':
+          'Хошуу машинд залгагдаагүй байна. Хошуугаа сайн залгаад дахин оролдоно уу.',
+      'card_save_note': 'Эхний төлбөрийн дараа карт тань хадгалагдана.',
       'topup_method': 'Төлөх арга',
       'topup_method_qpay': 'QPay',
       'topup_method_card': 'Карт',
@@ -804,6 +807,9 @@ class AppStrings {
       'card_open': 'Open payment page',
       'card_failed': 'The card payment did not go through. Please try again.',
       'card_save': 'Save this card for one-tap top-ups',
+      'plug_not_detected':
+          'The station hasn\'t detected the plug. Push it fully into the car until it clicks, wait 5 seconds and try again.',
+      'card_save_note': 'Your card is saved with this first payment — after that, top-ups are one tap.',
       'topup_method': 'Pay with',
       'topup_method_qpay': 'QPay',
       'topup_method_card': 'Card',

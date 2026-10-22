@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import 'app_toast.dart';
+import 'glass.dart';
 
 export 'app_toast.dart' show AppToast, ToastKind;
 
@@ -18,6 +19,7 @@ class SectionCard extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.padding = const EdgeInsets.all(16),
+    this.glass = false,
   });
 
   final Widget child;
@@ -26,10 +28,58 @@ class SectionCard extends StatelessWidget {
   final Widget? trailing;
   final EdgeInsetsGeometry padding;
 
+  /// Frosted glass instead of a solid card — for screens that sit on a
+  /// [GlassBackground], like the home dashboard and the wallet.
+  final bool glass;
+
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
 
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (title != null) ...<Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title!,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
+          if (subtitle != null) ...<Widget>[
+            const SizedBox(height: 5),
+            Text(
+              subtitle!,
+              style: TextStyle(
+                color: palette.inkMuted,
+                fontSize: 12.5,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+        ],
+        child,
+      ],
+    );
+
+    if (glass) {
+      return SizedBox(
+        width: double.infinity,
+        child: GlassCard(padding: padding, child: content),
+      );
+    }
     return Container(
       width: double.infinity,
       padding: padding,
@@ -38,43 +88,7 @@ class SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: palette.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (title != null) ...<Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    title!,
-                    style: TextStyle(
-                      color: palette.ink,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-            if (subtitle != null) ...<Widget>[
-              const SizedBox(height: 5),
-              Text(
-                subtitle!,
-                style: TextStyle(
-                  color: palette.inkMuted,
-                  fontSize: 12.5,
-                  height: 1.45,
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-          ],
-          child,
-        ],
-      ),
+      child: content,
     );
   }
 }

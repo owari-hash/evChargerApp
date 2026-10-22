@@ -10,7 +10,6 @@ import '../services/active_session_state.dart';
 import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
 import '../services/stations_service.dart';
-import '../services/vehicle_photo_service.dart';
 import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
@@ -20,7 +19,8 @@ import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/glass.dart';
 import '../widgets/guided_step.dart';
 import '../widgets/vehicle_charging_matrix.dart';
-import '../widgets/vehicle_hero_card.dart';
+import '../widgets/glass_vehicle_card.dart';
+import '../widgets/vehicle_hero_card.dart' show ChargeStatus, HeroFact;
 import 'sessions_screen.dart';
 import 'wallet_screen.dart';
 
@@ -33,7 +33,6 @@ class HomeDashboardScreen extends StatefulWidget {
     this.authService,
     this.sessionsService,
     this.walletService,
-    this.photoService,
     this.guide,
   });
 
@@ -54,7 +53,6 @@ class HomeDashboardScreen extends StatefulWidget {
   final AuthService? authService;
   final SessionsService? sessionsService;
   final WalletService? walletService;
-  final VehiclePhotoService? photoService;
 
   @override
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
@@ -90,10 +88,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   /// Null until loaded, or when the wallet is unavailable.
   WalletSnapshot? _wallet;
 
-  /// A real photo of the saved model, and which car it was looked up for.
-  VehiclePhoto? _photo;
-  String? _photoFor;
-
   /// The wallet read has come back, whether or not it worked.
   bool _walletLoaded = false;
 
@@ -126,7 +120,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     StationsService.instance.load();
     _syncWithDriverApi();
     _loadWallet();
-    _loadPhoto();
     // The frame can ask for the guide in the same frame that first builds
     // this screen, before it was listening.
     if (widget.guide?.requested == true) _scheduleGuideStart();
@@ -231,29 +224,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     });
   }
 
-  /// Looks up a photo of the saved model once per car, not on every rebuild.
-  Future<void> _loadPhoto() async {
-    final AuthUser? user = _auth.currentUser.value;
-    final String key = VehiclePhotoService.searchQuery(
-      user?.vehicleBrand,
-      user?.vehicleModel,
-    );
-    if (key == _photoFor) return;
-    _photoFor = key;
-    if (key.isEmpty) {
-      if (_photo != null) setState(() => _photo = null);
-      return;
-    }
-    final VehiclePhoto? photo =
-        await (widget.photoService ?? VehiclePhotoService.instance).photoFor(
-          user?.vehicleBrand,
-          user?.vehicleModel,
-        );
-    // The driver may have changed cars while this was in flight.
-    if (!mounted || _photoFor != key) return;
-    setState(() => _photo = photo);
-  }
-
   Future<void> _loadWallet() async {
     if (!_auth.isSignedIn) return;
     try {
@@ -288,7 +258,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final bool justSignedIn = _auth.isSignedIn && !_wasSignedIn;
     _wasSignedIn = _auth.isSignedIn;
     setState(() {});
-    _loadPhoto();
     if (justSignedIn) {
       _syncWithDriverApi();
       _loadWallet();
@@ -707,16 +676,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
     }
 
-    return VehicleHeroCard(
+    return GlassVehicleCard(
       brand: user?.vehicleBrand?.trim() ?? '',
       model: user?.vehicleModel?.trim() ?? '',
       isCharging: isCharging,
-      // The power is in the charge panel right below; once is enough.
       statusLabel: AppStrings.get(isCharging ? 'charging' : 'idle'),
       facts: facts,
       charge: charge,
       onAddVehicle: widget.onAddVehicle,
-      photo: _photo,
     );
   }
 

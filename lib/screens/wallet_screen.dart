@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -67,7 +68,9 @@ class _WalletScreenState extends State<WalletScreen> {
     return Scaffold(
       backgroundColor: palette.bg,
       appBar: AppBar(title: Text(AppStrings.get('wallet_title'))),
-      body: RefreshIndicator(onRefresh: _load, child: _buildBody(palette)),
+      body: GlassBackground(
+        child: RefreshIndicator(onRefresh: _load, child: _buildBody(palette)),
+      ),
     );
   }
 
@@ -100,6 +103,7 @@ class _WalletScreenState extends State<WalletScreen> {
           _topUpCard(palette, snapshot)
         else
           SectionCard(
+            glass: true,
             child: Text(
               AppStrings.get('topup_disabled'),
               style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
@@ -111,128 +115,169 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  /// The balance as a frosted glass card with the brand's light glowing
+  /// through it — the same look as the web wallet.
   Widget _balanceCard(AppPalette palette, WalletSnapshot snapshot) {
     final Wallet wallet = snapshot.wallet;
     final bool debt = wallet.inDebt;
     final bool low = !debt && wallet.balance < snapshot.config.minStartBalance;
+    final Color glowA = debt ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final Color glowB = debt ? const Color(0xFFF97316) : const Color(0xFF22D3EE);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: palette.panel,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return GlassCard(
+      borderRadius: 26,
+      padding: EdgeInsets.zero,
+      child: Stack(
         children: <Widget>[
-          Text(
-            AppStrings.get(debt ? 'wallet_debt' : 'wallet_balance'),
-            style: TextStyle(
-              color: palette.onPanel.withValues(alpha: 0.7),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              formatMnt(wallet.balance.abs()),
-              style: TextStyle(
-                color: debt ? AppTheme.warningOrange : Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.2,
-              ),
-            ),
-          ),
-          if (debt) ...<Widget>[
-            const SizedBox(height: 6),
-            Text(
-              AppStrings.get('wallet_debt_hint'),
-              style: TextStyle(
-                color: palette.onPanel.withValues(alpha: 0.62),
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ],
-          if (wallet.isInternal) ...<Widget>[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.sageGreen.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppTheme.sageGreen.withValues(alpha: 0.4),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.verified_rounded,
-                    size: 14,
-                    color: AppTheme.sageGreen,
+          Positioned(top: -60, left: -40, child: _glow(glowA, 180)),
+          Positioned(bottom: -80, right: 10, child: _glow(glowB, 200)),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  AppStrings.get(debt ? 'wallet_debt' : 'wallet_balance'),
+                  style: TextStyle(
+                    color: palette.inkMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
-                  SizedBox(width: 5),
-                  Text(
-                    'Дотоод хэрэглэгч · Үнэ төлбөргүй',
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatMnt(wallet.balance.abs()),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: debt ? AppTheme.errorRed : palette.ink,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1.2,
+                    ),
+                  ),
+                ),
+                if (debt) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    AppStrings.get('wallet_debt_hint'),
+                    style: TextStyle(
+                      color: palette.inkMuted,
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      height: 1.4,
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-          if (low && !wallet.isInternal) ...<Widget>[
-            const SizedBox(height: 10),
-            Text(
-              AppStrings.get('wallet_low_balance').replaceFirst(
-                '{amount}',
-                formatMnt(snapshot.config.minStartBalance),
-              ),
-              style: const TextStyle(
-                color: AppTheme.warningOrange,
-                fontSize: 12,
-                height: 1.4,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _panelStat(
-                  palette,
-                  AppStrings.get('wallet_topped_up'),
-                  formatMnt(wallet.totalToppedUp),
+                if (wallet.isInternal) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.sageGreen.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.sageGreen.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          Icons.verified_rounded,
+                          size: 14,
+                          color: AppTheme.sageGreen,
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'Дотоод хэрэглэгч · Үнэ төлбөргүй',
+                          style: TextStyle(
+                            color: AppTheme.sageGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (low && !wallet.isInternal) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    AppStrings.get('wallet_low_balance').replaceFirst(
+                      '{amount}',
+                      formatMnt(snapshot.config.minStartBalance),
+                    ),
+                    style: const TextStyle(
+                      color: AppTheme.warningOrange,
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ThemeController.isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.white.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: ThemeController.isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _panelStat(
+                          palette,
+                          AppStrings.get('wallet_topped_up'),
+                          formatMnt(wallet.totalToppedUp),
+                        ),
+                      ),
+                      Container(width: 1, height: 28, color: palette.border),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _panelStat(
+                          palette,
+                          AppStrings.get('wallet_spent'),
+                          formatMnt(wallet.totalSpent),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                width: 1,
-                height: 30,
-                color: palette.onPanel.withValues(alpha: 0.18),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _panelStat(
-                  palette,
-                  AppStrings.get('wallet_spent'),
-                  formatMnt(wallet.totalSpent),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _glow(Color color, double size) {
+    return IgnorePointer(
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.35),
+            shape: BoxShape.circle,
+          ),
+        ),
       ),
     );
   }
@@ -247,7 +292,7 @@ class _WalletScreenState extends State<WalletScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: palette.onPanel.withValues(alpha: 0.6),
+            color: palette.inkMuted,
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
@@ -259,8 +304,8 @@ class _WalletScreenState extends State<WalletScreen> {
           alignment: Alignment.centerLeft,
           child: Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: palette.ink,
               fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
@@ -273,6 +318,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Widget _topUpCard(AppPalette palette, WalletSnapshot snapshot) {
     return SectionCard(
+      glass: true,
       title: AppStrings.get('topup_title'),
       subtitle: AppStrings.get('wallet_subtitle'),
       child: _TopUpForm(
@@ -286,6 +332,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Widget _historyCard(AppPalette palette, List<WalletEntry> entries) {
     return SectionCard(
+      glass: true,
       title: AppStrings.get('wallet_history'),
       child: entries.isEmpty
           ? Align(
@@ -942,9 +989,22 @@ class _TopUpFormState extends State<_TopUpForm> {
                   visualDensity: VisualDensity.compact,
                 ),
                 Expanded(
-                  child: Text(
-                    AppStrings.get('card_save'),
-                    style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        AppStrings.get('card_save'),
+                        style: TextStyle(color: palette.ink, fontSize: 12.5),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        AppStrings.get('card_save_note'),
+                        style: TextStyle(
+                          color: palette.inkMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

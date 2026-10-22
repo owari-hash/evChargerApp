@@ -162,9 +162,14 @@ class GlassSegmented extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.images,
   });
 
   final List<(IconData, String)> options;
+
+  /// Optional brand logos (asset paths) shown instead of an option's icon,
+  /// index for index with [options].
+  final List<String?>? images;
   final int value;
   final ValueChanged<int> onChanged;
   final bool enabled;
@@ -252,13 +257,26 @@ class GlassSegmented extends StatelessWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
-                                  Icon(
-                                    options[i].$1,
-                                    size: 20,
-                                    color: i == value
-                                        ? palette.accent
-                                        : palette.inkMuted,
-                                  ),
+                                  if (images != null &&
+                                      i < images!.length &&
+                                      images![i] != null)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Image.asset(
+                                        images![i]!,
+                                        width: 22,
+                                        height: 22,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    )
+                                  else
+                                    Icon(
+                                      options[i].$1,
+                                      size: 20,
+                                      color: i == value
+                                          ? palette.accent
+                                          : palette.inkMuted,
+                                    ),
                                   const SizedBox(width: 8),
                                   AnimatedDefaultTextStyle(
                                     duration: const Duration(milliseconds: 200),

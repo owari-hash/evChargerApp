@@ -489,9 +489,12 @@ class _TopUpFormState extends State<_TopUpForm> {
   /// Keep the card on the bank page for one-tap top-ups next time.
   bool _saveCard = true;
 
-  /// QPay (QR, SocialPay and any bank app) or a card — the same two choices
-  /// as the web. Under "card", a saved card or (null) a new one.
-  late bool _payByCard = !widget.config.topUpEnabled;
+  /// QPay, a card or SocialPay — the same choices as the web. Under "card",
+  /// a saved card or (null) a new one.
+  late String _method = widget.config.topUpEnabled
+      ? 'qpay'
+      : (widget.config.cardTopUpEnabled ? 'card' : 'socialpay');
+  bool get _payByCard => _method == 'card';
   late String? _cardId = _payByCard && widget.cards.isNotEmpty
       ? widget.cards.first.id
       : null;
@@ -535,7 +538,8 @@ class _TopUpFormState extends State<_TopUpForm> {
     return amount;
   }
 
-  Future<void> _start({bool card = false}) async {
+  Future<void> _start({String method = 'qpay'}) async {
+    final bool card = method == 'card';
     final int? amount = _validAmount();
     if (amount == null) return;
 
@@ -547,7 +551,7 @@ class _TopUpFormState extends State<_TopUpForm> {
     try {
       final TopUpInvoice invoice = await widget.wallets.startTopUp(
         amount,
-        card: card,
+        method: method,
         saveCard: card && widget.config.savedCardsEnabled && _saveCard,
       );
       if (!mounted) return;
@@ -555,7 +559,11 @@ class _TopUpFormState extends State<_TopUpForm> {
 
       // The card page opens straight away; the sheet underneath waits for
       // the payment, so closing the browser lands the driver on its result.
-      if (invoice.isCard) await openPaymentPage(invoice.paymentUrl!);
+      if (invoice.isSocialPay) {
+        await openSocialPay(invoice);
+      } else if (invoice.isCard) {
+        await openPaymentPage(invoice.paymentUrl!);
+      }
       if (!mounted) return;
 
       final num? credited = await showModalBottomSheet<num>(
@@ -714,22 +722,22 @@ class _TopUpFormState extends State<_TopUpForm> {
     return null;
   }
 
-  void _choosePayByCard(bool card) {
+  void _chooseMethod(String method) {
     setState(() {
-      _payByCard = card;
+      _method = method;
       // Choosing "card" preselects the driver's saved card, like the web.
-      _cardId = card && _cards.isNotEmpty ? _cards.first.id : null;
+      _cardId = method == 'card' && _cards.isNotEmpty ? _cards.first.id : null;
     });
   }
 
   /// The one button: does whatever the chosen method means.
   void _pay() {
-    if (!_payByCard) {
-      _start();
+    if (_method != 'card') {
+      _start(method: _method);
     } else if (_selectedCard != null) {
       _payWithSaved(_selectedCard!);
     } else {
-      _start(card: true);
+      _start(method: 'card');
     }
   }
 
@@ -744,8 +752,11 @@ class _TopUpFormState extends State<_TopUpForm> {
       return AppStrings.get('topup_choose_first');
     }
     final String money = formatMnt(amount);
-    if (!_payByCard) {
+    if (_method == 'qpay') {
       return AppStrings.get('topup_cta_qr').replaceFirst('{amount}', money);
+    }
+    if (_method == 'socialpay') {
+      return AppStrings.get('topup_cta_social').replaceFirst('{amount}', money);
     }
     final SavedCard? card = _selectedCard;
     if (card != null) {
@@ -754,6 +765,62 @@ class _TopUpFormState extends State<_TopUpForm> {
       ).replaceFirst('{card}', card.label).replaceFirst('{amount}', money);
     }
     return AppStrings.get('topup_cta_card').replaceFirst('{amount}', money);
+  }
+
+  /// Wallet apps that are on the way: shown greyed out so drivers know
+  /// they are coming, and a tap says so rather than doing nothing.
+  Widget _comingSoonApps(AppPalette palette) {
+    const List<(String, String)> apps = <(String, String)>[
+      ('assets/images/pay_toki.png', 'Toki'),
+      ('assets/images/pay_tino.png', 'Tino'),
+      ('assets/images/pay_hipay.png', 'HiPay'),
+    ];
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            AppStrings.get('topup_coming_soon_apps'),
+            style: TextStyle(color: palette.inkMuted, fontSize: 12),
+          ),
+        ),
+        for (final (String asset, String name) in apps)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Tooltip(
+              message: '$name · ${AppStrings.get('coming_soon')}',
+              child: GestureDetector(
+                onTap: () => AppToast.show(
+                  context,
+                  '$name — ${AppStrings.get('coming_soon')}',
+                  kind: ToastKind.info,
+                ),
+                child: Opacity(
+                  opacity: 0.4,
+                  // Greyscale, so they read as "not yet" at a glance.
+                  child: ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: Image.asset(
+                        asset,
+                        width: 34,
+                        height: 34,
+                        fit: BoxFit.cover,
+                        semanticLabel: name,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   /// A saved card as a pill: tap to choose it, × to forget it.
@@ -852,6 +919,19 @@ class _TopUpFormState extends State<_TopUpForm> {
     final AppPalette palette = context.palette;
     final WalletConfig config = widget.config;
     final bool busy = _creating || _payingCardId != null;
+    // The ways to pay this server offers, in the web's order.
+    final List<(String, IconData, String)> methods = <(String, IconData, String)>[
+      if (config.topUpEnabled)
+        ('qpay', Icons.qr_code_2_rounded, AppStrings.get('topup_method_qpay')),
+      if (config.cardTopUpEnabled)
+        ('card', Icons.credit_card_rounded, AppStrings.get('topup_method_card')),
+      if (config.socialPayEnabled)
+        (
+          'socialpay',
+          Icons.phone_iphone_rounded,
+          AppStrings.get('topup_method_socialpay'),
+        ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -933,7 +1013,7 @@ class _TopUpFormState extends State<_TopUpForm> {
               .replaceFirst('{max}', formatMnt(config.maxTopUp)),
           onSubmitted: (_) => _pay(),
         ),
-        if (config.topUpEnabled && config.cardTopUpEnabled) ...<Widget>[
+        if (methods.length > 1) ...<Widget>[
           const SizedBox(height: 18),
           Text(
             AppStrings.get('topup_method'),
@@ -945,21 +1025,25 @@ class _TopUpFormState extends State<_TopUpForm> {
           ),
           const SizedBox(height: 10),
           GlassSegmented(
-            value: _payByCard ? 1 : 0,
+            value: methods.indexWhere((m) => m.$1 == _method).clamp(0, 2),
             enabled: !busy,
-            onChanged: (int i) => _choosePayByCard(i == 1),
+            onChanged: (int i) => _chooseMethod(methods[i].$1),
             options: <(IconData, String)>[
-              (Icons.qr_code_2_rounded, AppStrings.get('topup_method_qpay')),
-              (Icons.credit_card_rounded, AppStrings.get('topup_method_card')),
+              for (final (String, IconData, String) m in methods) (m.$2, m.$3),
+            ],
+            // SocialPay shows its own logo, so drivers recognise it at once.
+            images: <String?>[
+              for (final (String, IconData, String) m in methods)
+                m.$1 == 'socialpay' ? 'assets/images/pay_socialpay.png' : null,
             ],
           ),
+          const SizedBox(height: 12),
+          _comingSoonApps(palette),
         ],
-        if (config.cardTopUpEnabled || config.topUpEnabled) ...<Widget>[
+        if (methods.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Text(
-            AppStrings.get(
-              _payByCard ? 'topup_method_card_hint' : 'topup_method_qpay_hint',
-            ),
+            AppStrings.get('topup_method_${_method}_hint'),
             style: TextStyle(color: palette.inkMuted, fontSize: 12),
           ),
         ],
@@ -1015,14 +1099,37 @@ class _TopUpFormState extends State<_TopUpForm> {
         PrimaryAction(
           label: _payLabel(),
           busy: busy,
-          icon: _payByCard
+          icon: _method == 'card'
               ? Icons.credit_card_rounded
+              : _method == 'socialpay'
+              ? Icons.phone_iphone_rounded
               : Icons.qr_code_rounded,
           onPressed: busy ? null : _pay,
         ),
       ],
     );
   }
+}
+
+/// Opens the SocialPay app on this invoice through Golomt's deeplink; when
+/// the app is not installed, Golomt's SocialPay page (a QR) opens instead.
+Future<void> openSocialPay(TopUpInvoice invoice) async {
+  final String? deeplink = invoice.deeplinks
+      .map((TopUpDeeplink d) => d.link)
+      .whereType<String>()
+      .where((String l) => l.startsWith('socialpay'))
+      .firstOrNull;
+  if (deeplink != null) {
+    final Uri? uri = Uri.tryParse(deeplink);
+    final bool opened =
+        uri != null &&
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        ).catchError((Object _) => false);
+    if (opened) return;
+  }
+  if (invoice.paymentUrl != null) await openPaymentPage(invoice.paymentUrl!);
 }
 
 /// Opens Golomt Bank's card page in an in-app browser tab (Safari View
@@ -1177,7 +1284,11 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
               const SizedBox(height: 18),
               Text(
                 AppStrings.get(
-                  _invoice.isCard ? 'card_title' : 'invoice_title',
+                  _invoice.isSocialPay
+                      ? 'social_title'
+                      : _invoice.isCard
+                      ? 'card_title'
+                      : 'invoice_title',
                 ),
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -1266,7 +1377,9 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.credit_card_rounded,
+              _invoice.isSocialPay
+                  ? Icons.phone_iphone_rounded
+                  : Icons.credit_card_rounded,
               size: 34,
               color: palette.accent,
             ),
@@ -1274,7 +1387,9 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
         ),
         const SizedBox(height: 14),
         Text(
-          AppStrings.get('card_instruction'),
+          AppStrings.get(
+            _invoice.isSocialPay ? 'social_instruction' : 'card_instruction',
+          ),
           textAlign: TextAlign.center,
           style: TextStyle(
             color: palette.inkMuted,
@@ -1285,9 +1400,13 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
         if (_invoice.paymentUrl != null) ...<Widget>[
           const SizedBox(height: 14),
           OutlinedButton.icon(
-            onPressed: () => openPaymentPage(_invoice.paymentUrl!),
+            onPressed: () => _invoice.isSocialPay
+                ? openSocialPay(_invoice)
+                : openPaymentPage(_invoice.paymentUrl!),
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
-            label: Text(AppStrings.get('card_open')),
+            label: Text(
+              AppStrings.get(_invoice.isSocialPay ? 'social_open' : 'card_open'),
+            ),
           ),
         ],
       ],

@@ -369,7 +369,16 @@ class AppStrings {
       'topup_method_qpay': 'QPay',
       'topup_method_card': 'Карт',
       'topup_method_qpay_hint':
-          'QR уншуулах эсвэл SocialPay, Хаан, ХХБ зэрэг банкны аппаар',
+          'QR кодыг Хаан, ХХБ зэрэг банкны аппаараа уншуулна',
+      'topup_method_socialpay': 'SocialPay',
+      'topup_method_socialpay_hint': 'SocialPay аппаараа төлнө',
+      'topup_coming_soon_apps': 'Удахгүй нэмэгдэх аппууд',
+      'coming_soon': 'Тун удахгүй',
+      'topup_cta_social': 'SocialPay-ээр {amount} төлөх',
+      'social_title': 'SocialPay-ээр төлөх',
+      'social_instruction':
+          'SocialPay апп нээгдэнэ. Тэнд төлбөрөө баталгаажуулахад хэтэвч автоматаар цэнэглэгдэнэ.',
+      'social_open': 'SocialPay нээх',
       'topup_method_card_hint':
           'Visa, Mastercard, UnionPay — Голомт банкны аюулгүй хуудсаар',
       'topup_new_card': 'Шинэ карт',
@@ -813,7 +822,16 @@ class AppStrings {
       'topup_method': 'Pay with',
       'topup_method_qpay': 'QPay',
       'topup_method_card': 'Card',
-      'topup_method_qpay_hint': 'QR or SocialPay, Khan, TDB and any bank app',
+      'topup_method_qpay_hint': 'Scan the QR with Khan, TDB or any bank app',
+      'topup_method_socialpay': 'SocialPay',
+      'topup_method_socialpay_hint': 'Pay in the SocialPay app',
+      'topup_coming_soon_apps': 'More apps coming soon',
+      'coming_soon': 'Coming soon',
+      'topup_cta_social': 'Pay {amount} with SocialPay',
+      'social_title': 'Pay with SocialPay',
+      'social_instruction':
+          'SocialPay opens. Confirm the payment there and your wallet is topped up automatically.',
+      'social_open': 'Open SocialPay',
       'topup_method_card_hint':
           'Visa, Mastercard or UnionPay on Golomt Bank\'s secure page',
       'topup_new_card': 'New card',

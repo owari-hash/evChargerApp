@@ -20,7 +20,7 @@ import '../widgets/glass.dart';
 import '../widgets/guided_step.dart';
 import '../widgets/vehicle_charging_matrix.dart';
 import '../widgets/glass_vehicle_card.dart';
-import '../widgets/vehicle_hero_card.dart' show ChargeStatus, HeroFact;
+import '../widgets/vehicle_hero_card.dart' show ChargeStatus;
 import 'sessions_screen.dart';
 import 'wallet_screen.dart';
 
@@ -628,11 +628,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  /// The driver's own car, drawn to match the model they saved, with real
-  /// facts underneath: the live session while charging, the last one when not.
+  /// The driver's own car as a glass card: whether it is charging, and while
+  /// it is, the battery and the live meter readings — nothing else.
   Widget _buildVehicleHero(bool isCharging) {
     final AuthUser? user = _auth.currentUser.value;
-    final List<HeroFact> facts = <HeroFact>[];
 
     ChargeStatus? charge;
     if (isCharging) {
@@ -651,29 +650,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ).replaceFirst('{time}', _formatClock(_sessionStart!)),
         ].join(' · '),
       );
-    } else if (_history.isNotEmpty) {
-      final ChargingSession last = _history.first;
-      facts.add(
-        HeroFact(
-          icon: Icons.history_rounded,
-          label: AppStrings.get('hero_last_charge'),
-          value: _ago(last.stopTimestamp ?? last.startTimestamp),
-        ),
-      );
-      facts.add(
-        HeroFact(
-          icon: Icons.battery_charging_full_rounded,
-          label: AppStrings.get('hero_energy'),
-          value: '${last.energyKwh.toStringAsFixed(1)} кВт·ц',
-        ),
-      );
-      facts.add(
-        HeroFact(
-          icon: Icons.ev_station_rounded,
-          label: AppStrings.get('hero_station'),
-          value: last.displayLocation,
-        ),
-      );
     }
 
     return GlassVehicleCard(
@@ -681,7 +657,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       model: user?.vehicleModel?.trim() ?? '',
       isCharging: isCharging,
       statusLabel: AppStrings.get(isCharging ? 'charging' : 'idle'),
-      facts: facts,
+      // Only the live charge belongs on the car; history has its own card.
       charge: charge,
       onAddVehicle: widget.onAddVehicle,
     );

@@ -132,6 +132,7 @@ class WalletConfig {
     required this.topUpEnabled,
     this.cardTopUpEnabled = false,
     this.savedCardsEnabled = false,
+    this.socialPayEnabled = false,
     required this.presets,
     required this.minTopUp,
     required this.maxTopUp,
@@ -149,6 +150,9 @@ class WalletConfig {
 
   /// Cards can be saved on the bank page and charged in one tap later.
   final bool savedCardsEnabled;
+
+  /// SocialPay through Golomt: pay in the SocialPay app.
+  final bool socialPayEnabled;
 
   /// Whether any way of topping up is available.
   bool get anyTopUpEnabled => topUpEnabled || cardTopUpEnabled;
@@ -169,6 +173,7 @@ class WalletConfig {
       topUpEnabled: json['topUpEnabled'] == true,
       cardTopUpEnabled: json['cardTopUpEnabled'] == true,
       savedCardsEnabled: json['savedCardsEnabled'] == true,
+      socialPayEnabled: json['socialPayEnabled'] == true,
       presets: (json['presets'] as List<dynamic>? ?? <dynamic>[])
           .map((dynamic v) => _num(v).round())
           .toList(growable: false),
@@ -242,6 +247,7 @@ class TopUpInvoice {
     this.shortUrl,
     this.deeplinks = const <TopUpDeeplink>[],
     this.provider,
+    this.golomtChannel,
     this.paymentUrl,
     this.socialPayUrl,
     this.declineReason,
@@ -266,6 +272,11 @@ class TopUpInvoice {
 
   /// QPAY, QPAY_QUICKQR or GOLOMT.
   final String? provider;
+
+  /// Golomt: CARD (the bank page) or SOCIALPAY (the SocialPay app).
+  final String? golomtChannel;
+
+  bool get isSocialPay => golomtChannel == 'SOCIALPAY';
 
   /// Golomt card payments: the bank's hosted page, and its SocialPay version.
   /// A card invoice has no QR — the driver pays on that page instead.
@@ -300,6 +311,7 @@ class TopUpInvoice {
           .where((TopUpDeeplink d) => d.link != null)
           .toList(growable: false),
       provider: _text(json['provider']),
+      golomtChannel: _text(json['golomtChannel']),
       paymentUrl: _text(json['paymentUrl']),
       socialPayUrl: _text(json['socialPayUrl']),
       declineReason: _text(json['declineReason']),
@@ -324,6 +336,7 @@ class TopUpInvoice {
       shortUrl: update.shortUrl ?? shortUrl,
       deeplinks: update.deeplinks.isNotEmpty ? update.deeplinks : deeplinks,
       provider: update.provider ?? provider,
+      golomtChannel: update.golomtChannel ?? golomtChannel,
       paymentUrl: update.paymentUrl ?? paymentUrl,
       socialPayUrl: update.socialPayUrl ?? socialPayUrl,
       declineReason: update.declineReason ?? declineReason,

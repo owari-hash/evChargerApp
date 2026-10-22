@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'models/app_update.dart';
@@ -765,52 +766,83 @@ class _MainAppFrameState extends State<MainAppFrame>
     );
   }
 
-  /// The floating pill of five tabs.
+  /// The floating pill of five tabs, as frosted glass so the screen's soft
+  /// background light shows through — the same look as the cards above it.
   Widget _buildBottomNavBar(AppPalette palette) {
-    return Container(
-      height: 66,
+    final bool isDark = ThemeController.isDark;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: palette.panel,
         borderRadius: BorderRadius.circular(36),
-        boxShadow: [
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: palette.shadow,
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: const Offset(0, 8),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.45)
+                : const Color(0xFF10281C).withValues(alpha: 0.14),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildBottomNavItem(
-            0,
-            Icons.home_rounded,
-            AppStrings.get('home'),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(36),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            height: 66,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(36),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDark
+                    ? <Color>[
+                        const Color(0xFF1C2A38).withValues(alpha: 0.78),
+                        const Color(0xFF14202C).withValues(alpha: 0.66),
+                      ]
+                    : <Color>[
+                        Colors.white.withValues(alpha: 0.86),
+                        Colors.white.withValues(alpha: 0.70),
+                      ],
+              ),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildBottomNavItem(
+                  0,
+                  Icons.home_rounded,
+                  AppStrings.get('home'),
+                ),
+                _buildBottomNavItem(
+                  1,
+                  Icons.map_rounded,
+                  AppStrings.get('map'),
+                ),
+                _buildBottomNavItem(
+                  2,
+                  Icons.qr_code_scanner_rounded,
+                  'QR',
+                ),
+                _buildBottomNavItem(
+                  3,
+                  Icons.ev_station_rounded,
+                  AppStrings.get('nav_stations'),
+                ),
+                _buildBottomNavItem(
+                  4,
+                  Icons.person_rounded,
+                  AppStrings.get('nav_account'),
+                ),
+              ],
+            ),
           ),
-          _buildBottomNavItem(
-            1,
-            Icons.map_rounded,
-            AppStrings.get('map'),
-          ),
-          _buildBottomNavItem(
-            2,
-            Icons.qr_code_scanner_rounded,
-            'QR',
-          ),
-          _buildBottomNavItem(
-            3,
-            Icons.ev_station_rounded,
-            AppStrings.get('nav_stations'),
-          ),
-          _buildBottomNavItem(
-            4,
-            Icons.person_rounded,
-            AppStrings.get('nav_account'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -847,14 +879,35 @@ class _MainAppFrameState extends State<MainAppFrame>
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          // The selected tab is the payment switch's glass pill.
           decoration: BoxDecoration(
-            color: isSelected ? palette.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(28),
+            gradient: isSelected
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: ThemeController.isDark
+                        ? <Color>[
+                            const Color(0xFF34D399).withValues(alpha: 0.32),
+                            const Color(0xFF10B981).withValues(alpha: 0.14),
+                          ]
+                        : <Color>[Colors.white, const Color(0xFFEFFDF5)],
+                  )
+                : null,
+            border: Border.all(
+              color: isSelected
+                  ? const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: ThemeController.isDark ? 0.42 : 0.30)
+                  : Colors.transparent,
+            ),
             boxShadow: isSelected
-                ? [
+                ? <BoxShadow>[
                     BoxShadow(
-                      color: palette.accent.withValues(alpha: 0.4),
-                      blurRadius: 10,
+                      color: ThemeController.isDark
+                          ? const Color(0xFF10B981).withValues(alpha: 0.30)
+                          : Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 12,
                       offset: const Offset(0, 3),
                     ),
                   ]
@@ -866,9 +919,7 @@ class _MainAppFrameState extends State<MainAppFrame>
               Icon(
                 icon,
                 size: 20,
-                color: isSelected
-                    ? Colors.white
-                    : palette.onPanel.withValues(alpha: 0.6),
+                color: isSelected ? palette.accent : palette.inkMuted,
               ),
               if (isSelected) ...[
                 const SizedBox(width: 6),
@@ -879,10 +930,10 @@ class _MainAppFrameState extends State<MainAppFrame>
                       label,
                       maxLines: 1,
                       softWrap: false,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: palette.ink,
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
                       ),
                     ),

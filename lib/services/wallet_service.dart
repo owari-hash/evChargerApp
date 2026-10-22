@@ -40,17 +40,20 @@ class WalletService {
   /// Raises an invoice for [amount] tugriks: a QPay QR to scan, or with
   /// [card] a Golomt Bank payment page ([TopUpInvoice.paymentUrl]) to open.
   /// With [saveCard] the bank keeps the card for one-tap top-ups once paid.
+  ///
+  /// [method] is `qpay`, `card` (Golomt's card page) or `socialpay` (pay in
+  /// the SocialPay app, through Golomt).
   Future<TopUpInvoice> startTopUp(
     int amount, {
-    bool card = false,
+    String method = 'qpay',
     bool saveCard = false,
   }) async {
     final Map<String, dynamic> body = await _client.post(
       '/wallet/topup',
       body: <String, dynamic>{
         'amount': amount,
-        'method': card ? 'card' : 'qpay',
-        if (card && saveCard) 'saveCard': true,
+        'method': method,
+        if (method == 'card' && saveCard) 'saveCard': true,
       },
     );
     return TopUpInvoice.fromJson(_map(body['invoice']));

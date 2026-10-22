@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../config/api_config.dart';
 
 /// [chargeStarted] and [chargeStopped] come from the session watcher: a
 /// charge on the driver's own tag beginning or ending, wherever it was
@@ -17,6 +21,7 @@ class AppNotification {
     required this.at,
     this.imageUrl,
     this.transactionId,
+    this.dedupeKey,
   });
 
   final String id;
@@ -30,6 +35,12 @@ class AppNotification {
   /// [NotificationKind.chargeStopped] entry is about.
   final int? transactionId;
 
+  /// Identifies the event itself (e.g. a server notification id, or
+  /// `session:1234:finished`), so the same event noticed twice — once by
+  /// this device directly, once echoed back over the socket — is filed only
+  /// once. Mirrors the kiosk website's store.
+  final String? dedupeKey;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'kind': kind.name,
@@ -38,6 +49,7 @@ class AppNotification {
     'at': at.toIso8601String(),
     'imageUrl': imageUrl,
     if (transactionId != null) 'transactionId': transactionId,
+    if (dedupeKey != null) 'dedupeKey': dedupeKey,
   };
 
   static AppNotification? fromJson(Map<String, dynamic> json) {
@@ -59,6 +71,7 @@ class AppNotification {
       at: at,
       imageUrl: json['imageUrl'] as String?,
       transactionId: json['transactionId'] is num ? (json['transactionId'] as num).toInt() : null,
+      dedupeKey: json['dedupeKey'] as String?,
     );
   }
 }
@@ -96,6 +109,10 @@ class NotificationsStore {
   bool _legacyCleared = false;
   int _counter = 0;
 
+  WebSocketChannel? _channel;
+  StreamSubscription<dynamic>? _socketSub;
+  Timer? _reconnectTimer;
+
   /// The account whose history is showing, or null when signed out.
   String? get userId => _userId;
 
@@ -114,9 +131,102 @@ class NotificationsStore {
     }
     if (userId == null) {
       _loading = null;
+      _disconnectSocket();
       return Future<void>.value();
     }
+    _connectSocket(userId);
     return _loading = _load(userId);
+  }
+
+  /// Turns the server's wire name for a notification kind into the enum —
+  /// mirrors the kiosk website's `NotificationKind` strings, which don't
+  /// match this enum's Dart-cased `chargeStarted`/`chargeStopped` members.
+  static NotificationKind _kindFromWire(String? wire) {
+    switch (wire) {
+      case 'announcement':
+        return NotificationKind.announcement;
+      case 'session-started':
+        return NotificationKind.chargeStarted;
+      case 'session-finished':
+        return NotificationKind.chargeStopped;
+      case 'wallet':
+      default:
+        return NotificationKind.wallet;
+    }
+  }
+
+  /// Opens a socket so a notification filed while the app is open (another
+  /// device topping up the wallet, an admin announcement, a charge another
+  /// tag started) appears right away instead of waiting for the next time
+  /// this list happens to reload. Reconnects on its own if the connection
+  /// drops, as long as [userId] is still the signed-in driver.
+  void _connectSocket(String userId) {
+    _disconnectSocket();
+    if (_userId != userId) return;
+
+    final Uri base = Uri.parse(ApiConfig.baseUrl);
+    final String scheme = base.scheme == 'https' ? 'wss' : 'ws';
+    final Uri wsUri = base.replace(
+      scheme: scheme,
+      path: '/ws/notifications',
+      queryParameters: <String, String>{'userId': userId, 'role': 'driver'},
+    );
+
+    try {
+      final WebSocketChannel channel = WebSocketChannel.connect(wsUri);
+      _channel = channel;
+      _socketSub = channel.stream.listen(
+        (dynamic raw) {
+          if (_userId != userId) return;
+          try {
+            final dynamic payload = jsonDecode(raw as String);
+            if (payload is! Map<String, dynamic> || payload['type'] != 'notification') return;
+            final dynamic data = payload['data'];
+            if (data is! Map<String, dynamic>) return;
+            final String? title = data['title'] as String?;
+            final String? body = data['body'] as String?;
+            if (title == null || body == null) return;
+            final dynamic txId = data['transactionId'];
+            final String? serverDedupe = data['dedupeKey'] as String? ??
+                (data['id'] != null ? 'server:${data['id']}' : null);
+            unawaited(
+              add(
+                kind: _kindFromWire(data['kind'] as String?),
+                title: title,
+                body: body,
+                imageUrl: data['imageUrl'] as String?,
+                transactionId: txId is num ? txId.toInt() : null,
+                dedupeKey: serverDedupe,
+              ),
+            );
+          } catch (_) {
+            // Malformed payload — nothing to show for it.
+          }
+        },
+        onDone: () => _scheduleReconnect(userId),
+        onError: (Object _) => _scheduleReconnect(userId),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleReconnect(userId);
+    }
+  }
+
+  void _scheduleReconnect(String userId) {
+    _channel = null;
+    _socketSub = null;
+    if (_userId != userId) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 4), () => _connectSocket(userId));
+  }
+
+  void _disconnectSocket() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _socketSub?.cancel();
+    _socketSub = null;
+    _channel?.sink.close();
+    _channel = null;
   }
 
   Future<void> _load(String userId) async {
@@ -157,11 +267,13 @@ class NotificationsStore {
     required String body,
     String? imageUrl,
     int? transactionId,
+    String? dedupeKey,
   }) async {
     final String? userId = _userId;
     if (userId == null) return;
     await _loading;
     if (_userId != userId) return;
+    if (dedupeKey != null && items.value.any((n) => n.dedupeKey == dedupeKey)) return;
     final DateTime now = DateTime.now();
     final notification = AppNotification(
       id: '${now.microsecondsSinceEpoch}-${_counter++}',
@@ -171,6 +283,7 @@ class NotificationsStore {
       at: now,
       imageUrl: imageUrl,
       transactionId: transactionId,
+      dedupeKey: dedupeKey,
     );
     items.value = [notification, ...items.value].take(_maxItems).toList(growable: false);
     unread.value += 1;

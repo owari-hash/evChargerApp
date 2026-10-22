@@ -379,8 +379,7 @@ class AppStrings {
       'social_instruction':
           'SocialPay апп нээгдэнэ. Тэнд төлбөрөө баталгаажуулахад хэтэвч автоматаар цэнэглэгдэнэ.',
       'social_open': 'SocialPay нээх',
-      'topup_method_card_hint':
-          'Visa, Mastercard, UnionPay — Голомт банкны аюулгүй хуудсаар',
+ 
       'topup_new_card': 'Шинэ карт',
       'topup_cta_qr': 'QPay QR авах · {amount}',
       'topup_cta_card': 'Картаар {amount} төлөх',

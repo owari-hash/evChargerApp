@@ -150,7 +150,11 @@ class GlassCard extends StatelessWidget {
 }
 
 /// An iOS-style segmented control: a frosted track with one glass pill that
-/// springs between the options — the web's payment switch, in Flutter.
+/// slides between the options — the web's payment switch, in Flutter.
+///
+/// The pill is measured from the track's real width, and every option fills
+/// its whole segment with the icon and label centred, so nothing sits off to
+/// one side whatever the screen width.
 class GlassSegmented extends StatelessWidget {
   const GlassSegmented({
     super.key,
@@ -165,106 +169,123 @@ class GlassSegmented extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final bool enabled;
 
+  static const double _height = 52;
+  static const double _inset = 4;
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = ThemeController.isDark;
     final AppPalette palette = context.palette;
-    final double step = options.length <= 1 ? 0 : 2 / (options.length - 1);
 
     return Container(
-      height: 48,
-      padding: const EdgeInsets.all(4),
+      height: _height,
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.05)
             : const Color(0xFF0D1F17).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.white.withValues(alpha: 0.7),
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.white.withValues(alpha: 0.75),
         ),
       ),
-      child: Stack(
-        children: <Widget>[
-          AnimatedAlign(
-            alignment: Alignment(-1 + step * value, 0),
-            duration: const Duration(milliseconds: 380),
-            curve: Curves.easeOutBack,
-            child: FractionallySizedBox(
-              widthFactor: 1 / options.length,
-              heightFactor: 1,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: isDark
-                        ? <Color>[
-                            const Color(0xFF34D399).withValues(alpha: 0.30),
-                            const Color(0xFF10B981).withValues(alpha: 0.12),
-                          ]
-                        : <Color>[Colors.white, const Color(0xFFF0FDF6)],
-                  ),
-                  border: Border.all(
-                    color: const Color(
-                      0xFF10B981,
-                    ).withValues(alpha: isDark ? 0.38 : 0.28),
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: isDark
-                          ? const Color(0xFF10B981).withValues(alpha: 0.35)
-                          : Colors.black.withValues(alpha: 0.10),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints box) {
+          final double segment = (box.maxWidth - _inset * 2) / options.length;
+          return Stack(
+            children: <Widget>[
+              // The sliding glass pill.
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.easeOutBack,
+                top: _inset,
+                bottom: _inset,
+                left: _inset + segment * value,
+                width: segment,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: isDark
+                          ? <Color>[
+                              const Color(0xFF34D399).withValues(alpha: 0.32),
+                              const Color(0xFF10B981).withValues(alpha: 0.14),
+                            ]
+                          : <Color>[Colors.white, const Color(0xFFEFFDF5)],
                     ),
+                    border: Border.all(
+                      color: const Color(
+                        0xFF10B981,
+                      ).withValues(alpha: isDark ? 0.42 : 0.30),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: isDark
+                            ? const Color(0xFF10B981).withValues(alpha: 0.30)
+                            : Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // The options, each filling its segment, content centred.
+              Positioned.fill(
+                left: _inset,
+                right: _inset,
+                child: Row(
+                  children: <Widget>[
+                    for (int i = 0; i < options.length; i++)
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          selected: i == value,
+                          label: options[i].$2,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: enabled ? () => onChanged(i) : null,
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Icon(
+                                    options[i].$1,
+                                    size: 20,
+                                    color: i == value
+                                        ? palette.accent
+                                        : palette.inkMuted,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 200),
+                                    style: TextStyle(
+                                      color: i == value
+                                          ? palette.ink
+                                          : palette.inkMuted,
+                                      fontSize: 15,
+                                      height: 1,
+                                      fontWeight: i == value
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                    ),
+                                    child: Text(options[i].$2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            ),
-          ),
-          Row(
-            children: <Widget>[
-              for (int i = 0; i < options.length; i++)
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: i == value,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: enabled ? () => onChanged(i) : null,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          Icon(
-                            options[i].$1,
-                            size: 18,
-                            color: i == value
-                                ? palette.accent
-                                : palette.inkMuted,
-                          ),
-                          const SizedBox(width: 8),
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 200),
-                            style: TextStyle(
-                              color: i == value
-                                  ? palette.ink
-                                  : palette.inkMuted,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            child: Text(options[i].$2),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../utils/app_strings.dart';
 import '../utils/money.dart';
 import '../widgets/charge_start_panel.dart';
 import '../widgets/station_sheet.dart';
+import '../widgets/app_toast.dart';
 
 /// Opens the camera QR scanner — the quickest way to start a charge when the
 /// driver is standing at the charger.
@@ -403,15 +404,9 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
   }
 
   void _onStarted() {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    // The toast lives on the root overlay, so it outlasts the sheet closing.
+    AppToast.show(context, AppStrings.get('charge_started'));
     Navigator.of(context).pop();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.get('charge_started')),
-        backgroundColor: AppTheme.sageGreen,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   @override

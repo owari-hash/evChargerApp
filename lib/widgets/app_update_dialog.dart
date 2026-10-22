@@ -5,6 +5,7 @@ import '../models/app_update.dart';
 import '../services/app_update_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import 'app_toast.dart';
 
 /// The update prompt.
 ///
@@ -62,8 +63,10 @@ class AppUpdateDialog extends StatelessWidget {
     }
 
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_text('update_open_failed'))),
+      AppToast.show(
+        context,
+        _text('update_open_failed'),
+        kind: ToastKind.error,
       );
     }
     // The dialog deliberately stays up on a forced update: the driver has not

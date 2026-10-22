@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/glass.dart';
 
 /// The driver's prepaid balance, top-ups and ledger — the app's counterpart to
 /// `/account/wallet` in the kiosk.
@@ -95,8 +96,8 @@ class _WalletScreenState extends State<WalletScreen> {
         const SizedBox(height: 12),
         if (snapshot.wallet.isFrozen)
           FormErrorBanner(message: AppStrings.get('wallet_frozen'))
-        else if (snapshot.config.topUpEnabled)
-          _topUpCard(palette, snapshot.config)
+        else if (snapshot.config.anyTopUpEnabled)
+          _topUpCard(palette, snapshot)
         else
           SectionCard(
             child: Text(
@@ -270,11 +271,16 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _topUpCard(AppPalette palette, WalletConfig config) {
+  Widget _topUpCard(AppPalette palette, WalletSnapshot snapshot) {
     return SectionCard(
       title: AppStrings.get('topup_title'),
       subtitle: AppStrings.get('wallet_subtitle'),
-      child: _TopUpForm(config: config, wallets: _wallets, onPaid: _load),
+      child: _TopUpForm(
+        config: snapshot.config,
+        cards: snapshot.cards,
+        wallets: _wallets,
+        onPaid: _load,
+      ),
     );
   }
 
@@ -402,15 +408,20 @@ class _WalletScreenState extends State<WalletScreen> {
 
 String _two(int value) => value.toString().padLeft(2, '0');
 
-/// Amount picker plus the QPay invoice it opens.
+/// Amount picker plus the invoice it opens: a QPay QR, or a Golomt Bank card
+/// page the driver pays on in the browser.
 class _TopUpForm extends StatefulWidget {
   const _TopUpForm({
     required this.config,
     required this.wallets,
     required this.onPaid,
+    this.cards = const <SavedCard>[],
   });
 
   final WalletConfig config;
+
+  /// Bank cards saved for one-tap top-ups.
+  final List<SavedCard> cards;
   final WalletService wallets;
   final Future<void> Function() onPaid;
 
@@ -422,7 +433,30 @@ class _TopUpFormState extends State<_TopUpForm> {
   final TextEditingController _amount = TextEditingController();
   int? _selectedPreset;
   bool _creating = false;
-  String? _error;
+
+  /// Every failure is reported as a toast, the same as on the web.
+  void _fail(String message) {
+    if (mounted) AppToast.show(context, message, kind: ToastKind.error);
+  }
+
+  /// Keep the card on the bank page for one-tap top-ups next time.
+  bool _saveCard = true;
+
+  /// QPay (QR, SocialPay and any bank app) or a card — the same two choices
+  /// as the web. Under "card", a saved card or (null) a new one.
+  late bool _payByCard = !widget.config.topUpEnabled;
+  late String? _cardId = _payByCard && widget.cards.isNotEmpty
+      ? widget.cards.first.id
+      : null;
+  String? _payingCardId;
+  late List<SavedCard> _cards = widget.cards;
+
+  @override
+  void didUpdateWidget(covariant _TopUpForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A reload after a payment brings the freshly saved card along.
+    if (!identical(oldWidget.cards, widget.cards)) _cards = widget.cards;
+  }
 
   @override
   void dispose() {
@@ -434,33 +468,48 @@ class _TopUpFormState extends State<_TopUpForm> {
   /// so what the driver sees typed is always what will be charged.
   int? get _chosenAmount => amountOf(_amount.text);
 
-  Future<void> _start() async {
+  /// The amount when it is within limits; otherwise shows why and is null.
+  int? _validAmount() {
     final int? amount = _chosenAmount;
     final WalletConfig config = widget.config;
 
     if (amount == null || amount <= 0) {
-      setState(() => _error = AppStrings.get('topup_invalid'));
-      return;
+      _fail(AppStrings.get('topup_invalid'));
+      return null;
     }
     if (amount < config.minTopUp || amount > config.maxTopUp) {
-      setState(
-        () => _error = AppStrings.get('topup_range')
+      _fail(
+        AppStrings.get('topup_range')
             .replaceFirst('{min}', formatMnt(config.minTopUp))
             .replaceFirst('{max}', formatMnt(config.maxTopUp)),
       );
-      return;
+      return null;
     }
+    return amount;
+  }
+
+  Future<void> _start({bool card = false}) async {
+    final int? amount = _validAmount();
+    if (amount == null) return;
 
     FocusScope.of(context).unfocus();
     setState(() {
       _creating = true;
-      _error = null;
     });
 
     try {
-      final TopUpInvoice invoice = await widget.wallets.startTopUp(amount);
+      final TopUpInvoice invoice = await widget.wallets.startTopUp(
+        amount,
+        card: card,
+        saveCard: card && widget.config.savedCardsEnabled && _saveCard,
+      );
       if (!mounted) return;
       setState(() => _creating = false);
+
+      // The card page opens straight away; the sheet underneath waits for
+      // the payment, so closing the browser lands the driver on its result.
+      if (invoice.isCard) await openPaymentPage(invoice.paymentUrl!);
+      if (!mounted) return;
 
       final num? credited = await showModalBottomSheet<num>(
         context: context,
@@ -487,17 +536,275 @@ class _TopUpFormState extends State<_TopUpForm> {
       }
     } on ApiException catch (error) {
       if (!mounted) return;
-      setState(() {
-        _creating = false;
-        _error = error.message;
-      });
+      setState(() => _creating = false);
+      _fail(error.message);
     }
+  }
+
+  /// Charges a saved card after the driver confirms — no bank page opens.
+  Future<void> _payWithSaved(SavedCard card) async {
+    final int? amount = _validAmount();
+    if (amount == null) return;
+    FocusScope.of(context).unfocus();
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(AppStrings.get('saved_card_confirm_title')),
+        content: Text(
+          AppStrings.get('saved_card_confirm_body')
+              .replaceFirst('{card}', card.label)
+              .replaceFirst('{amount}', formatMnt(amount)),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.get('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(AppStrings.get('saved_card_confirm_yes')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _payingCardId = card.id);
+    try {
+      final TopUpStatus status = await widget.wallets.payWithSavedCard(
+        amount,
+        card.id,
+      );
+      if (!mounted) return;
+      setState(() => _payingCardId = null);
+
+      if (status.paid) {
+        final num credited = status.invoice.paidAmount > 0
+            ? status.invoice.paidAmount
+            : status.invoice.amount;
+        _amount.clear();
+        setState(() => _selectedPreset = null);
+        await widget.onPaid();
+        if (!mounted) return;
+        showSnack(
+          context,
+          AppStrings.get('invoice_paid')
+              .replaceFirst('{amount}', formatMnt(credited)),
+        );
+        return;
+      }
+      if (status.invoice.status == InvoiceStatus.failed) {
+        _fail(status.invoice.declineReason ?? AppStrings.get('card_failed'));
+        return;
+      }
+      // The bank's answer was lost on the way: wait for it like a card page.
+      final num? credited = await showModalBottomSheet<num>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (BuildContext sheetContext) =>
+            _InvoiceSheet(invoice: status.invoice, wallets: widget.wallets),
+      );
+      if (credited != null) await widget.onPaid();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _payingCardId = null);
+      _fail(error.message);
+    }
+  }
+
+  Future<void> _removeSaved(SavedCard card) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(AppStrings.get('saved_card_remove_title')),
+        content: Text(
+          AppStrings.get('saved_card_remove_body')
+              .replaceFirst('{card}', card.label),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.get('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.errorRed,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(AppStrings.get('saved_card_remove_yes')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.wallets.removeSavedCard(card.id);
+    } on ApiException catch (error) {
+      // Already gone on the server is the outcome the driver wanted.
+      if (error.statusCode != 404) {
+        _fail(error.message);
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(
+      () => _cards = _cards
+          .where((SavedCard c) => c.id != card.id)
+          .toList(growable: false),
+    );
+  }
+
+  /// The selected saved card, or null when paying with a new card.
+  SavedCard? get _selectedCard {
+    for (final SavedCard c in _cards) {
+      if (c.id == _cardId) return c;
+    }
+    return null;
+  }
+
+  void _choosePayByCard(bool card) {
+    setState(() {
+      _payByCard = card;
+      // Choosing "card" preselects the driver's saved card, like the web.
+      _cardId = card && _cards.isNotEmpty ? _cards.first.id : null;
+    });
+  }
+
+  /// The one button: does whatever the chosen method means.
+  void _pay() {
+    if (!_payByCard) {
+      _start();
+    } else if (_selectedCard != null) {
+      _payWithSaved(_selectedCard!);
+    } else {
+      _start(card: true);
+    }
+  }
+
+  String _payLabel() {
+    if (_creating || _payingCardId != null) {
+      return AppStrings.get(
+        _payingCardId != null ? 'saved_card_paying' : 'topup_submitting',
+      );
+    }
+    final int? amount = _chosenAmount;
+    if (amount == null || amount <= 0) {
+      return AppStrings.get('topup_choose_first');
+    }
+    final String money = formatMnt(amount);
+    if (!_payByCard) {
+      return AppStrings.get('topup_cta_qr').replaceFirst('{amount}', money);
+    }
+    final SavedCard? card = _selectedCard;
+    if (card != null) {
+      return AppStrings.get(
+        'saved_card_pay',
+      ).replaceFirst('{card}', card.label).replaceFirst('{amount}', money);
+    }
+    return AppStrings.get('topup_cta_card').replaceFirst('{amount}', money);
+  }
+
+  /// A saved card as a pill: tap to choose it, × to forget it.
+  Widget _cardChip(AppPalette palette, SavedCard card, bool busy) {
+    final bool active = _cardId == card.id;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: 12),
+      decoration: BoxDecoration(
+        color: palette.card.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: active ? palette.accent : palette.border,
+          width: active ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          GestureDetector(
+            onTap: busy ? null : () => setState(() => _cardId = card.id),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: active ? palette.accent : palette.border,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  card.label,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: AppStrings.get('saved_card_remove'),
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: busy ? null : () => _removeSaved(card),
+            icon: Icon(Icons.close_rounded, color: palette.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _newCardChip(AppPalette palette, bool busy) {
+    final bool active = _cardId == null;
+    return GestureDetector(
+      onTap: busy ? null : () => setState(() => _cardId = null),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: palette.card.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? palette.accent : palette.border,
+            width: active ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.add_rounded,
+              size: 16,
+              color: active ? palette.ink : palette.inkMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              AppStrings.get('topup_new_card'),
+              style: TextStyle(
+                color: active ? palette.ink : palette.inkMuted,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final WalletConfig config = widget.config;
+    final bool busy = _creating || _payingCardId != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -531,7 +838,6 @@ class _TopUpFormState extends State<_TopUpForm> {
                         offset: _amount.text.indexOf('.'),
                       );
                     }
-                    _error = null;
                   }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
@@ -578,24 +884,97 @@ class _TopUpFormState extends State<_TopUpForm> {
           helper: AppStrings.get('topup_range')
               .replaceFirst('{min}', formatMnt(config.minTopUp))
               .replaceFirst('{max}', formatMnt(config.maxTopUp)),
-          onSubmitted: (_) => _start(),
+          onSubmitted: (_) => _pay(),
         ),
-        if (_error != null) ...<Widget>[
-          const SizedBox(height: 12),
-          FormErrorBanner(message: _error!),
+        if (config.topUpEnabled && config.cardTopUpEnabled) ...<Widget>[
+          const SizedBox(height: 18),
+          Text(
+            AppStrings.get('topup_method'),
+            style: TextStyle(
+              color: palette.inkMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          GlassSegmented(
+            value: _payByCard ? 1 : 0,
+            enabled: !busy,
+            onChanged: (int i) => _choosePayByCard(i == 1),
+            options: <(IconData, String)>[
+              (Icons.qr_code_2_rounded, AppStrings.get('topup_method_qpay')),
+              (Icons.credit_card_rounded, AppStrings.get('topup_method_card')),
+            ],
+          ),
         ],
-        const SizedBox(height: 14),
+        if (config.cardTopUpEnabled || config.topUpEnabled) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            AppStrings.get(
+              _payByCard ? 'topup_method_card_hint' : 'topup_method_qpay_hint',
+            ),
+            style: TextStyle(color: palette.inkMuted, fontSize: 12),
+          ),
+        ],
+        if (_payByCard && _cards.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final SavedCard card in _cards)
+                _cardChip(palette, card, busy),
+              _newCardChip(palette, busy),
+            ],
+          ),
+        ],
+        if (_payByCard && _cardId == null && config.savedCardsEnabled) ...<Widget>[
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () => setState(() => _saveCard = !_saveCard),
+            borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: <Widget>[
+                Checkbox(
+                  value: _saveCard,
+                  onChanged: (bool? v) =>
+                      setState(() => _saveCard = v ?? false),
+                  visualDensity: VisualDensity.compact,
+                ),
+                Expanded(
+                  child: Text(
+                    AppStrings.get('card_save'),
+                    style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
         PrimaryAction(
-          label: _creating
-              ? AppStrings.get('topup_submitting')
-              : AppStrings.get('topup_submit'),
-          busy: _creating,
-          icon: Icons.qr_code_rounded,
-          onPressed: _start,
+          label: _payLabel(),
+          busy: busy,
+          icon: _payByCard
+              ? Icons.credit_card_rounded
+              : Icons.qr_code_rounded,
+          onPressed: busy ? null : _pay,
         ),
       ],
     );
   }
+}
+
+/// Opens Golomt Bank's card page in an in-app browser tab (Safari View
+/// Controller / Custom Tabs), falling back to the system browser.
+Future<void> openPaymentPage(String link) async {
+  final Uri? uri = Uri.tryParse(link);
+  if (uri == null) return;
+  final bool opened = await launchUrl(
+    uri,
+    mode: LaunchMode.inAppBrowserView,
+  ).catchError((Object _) => false);
+  if (!opened) await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 /// The QPay QR, polled until QPay says the invoice is settled.
@@ -623,7 +1002,6 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
   DateTime _startedAt = DateTime.now();
   bool _checking = false;
   bool _timedOut = false;
-  String? _notice;
   String? _fatal;
 
   @override
@@ -653,7 +1031,6 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
     if (_checking || !mounted) return;
     setState(() {
       _checking = true;
-      if (manual) _notice = null;
     });
 
     try {
@@ -674,12 +1051,21 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
         return;
       }
 
+      if (manual) {
+        AppToast.show(
+          context,
+          AppStrings.get('invoice_not_paid'),
+          kind: ToastKind.info,
+        );
+      }
       setState(() {
         _invoice = merged;
         _checking = false;
-        _notice = manual ? AppStrings.get('invoice_not_paid') : null;
         if (merged.status == InvoiceStatus.expired) {
           _fatal = AppStrings.get('invoice_expired');
+          _poll?.cancel();
+        } else if (merged.isCard && merged.status == InvoiceStatus.failed) {
+          _fatal = merged.declineReason ?? AppStrings.get('card_failed');
           _poll?.cancel();
         } else if (merged.isSettled) {
           _fatal = AppStrings.get('invoice_canceled');
@@ -688,10 +1074,8 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
       });
     } on ApiException catch (error) {
       if (!mounted) return;
-      setState(() {
-        _checking = false;
-        if (manual) _notice = error.message;
-      });
+      setState(() => _checking = false);
+      if (manual) AppToast.show(context, error.message, kind: ToastKind.error);
     }
   }
 
@@ -732,7 +1116,9 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
               ),
               const SizedBox(height: 18),
               Text(
-                AppStrings.get('invoice_title'),
+                AppStrings.get(
+                  _invoice.isCard ? 'card_title' : 'invoice_title',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: palette.ink,
@@ -761,6 +1147,8 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
               const SizedBox(height: 18),
               if (_fatal != null)
                 FormErrorBanner(message: _fatal!)
+              else if (_invoice.isCard)
+                _cardPayment(palette)
               else ...<Widget>[
                 _qr(palette),
                 const SizedBox(height: 16),
@@ -777,10 +1165,6 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
                   const SizedBox(height: 14),
                   _bankGrid(palette),
                 ],
-              ],
-              if (_notice != null) ...<Widget>[
-                const SizedBox(height: 14),
-                FormErrorBanner(message: _notice!),
               ],
               const SizedBox(height: 18),
               if (_fatal == null) _waitingRow(palette),
@@ -804,6 +1188,49 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
           ),
         );
       },
+    );
+  }
+
+  /// A card invoice has no QR: the driver pays on Golomt Bank's page, which
+  /// can be reopened here, or hands off to the SocialPay app.
+  Widget _cardPayment(AppPalette palette) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Center(
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: palette.accent.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.credit_card_rounded,
+              size: 34,
+              color: palette.accent,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          AppStrings.get('card_instruction'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: palette.inkMuted,
+            fontSize: 12.5,
+            height: 1.45,
+          ),
+        ),
+        if (_invoice.paymentUrl != null) ...<Widget>[
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () => openPaymentPage(_invoice.paymentUrl!),
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: Text(AppStrings.get('card_open')),
+          ),
+        ],
+      ],
     );
   }
 
@@ -905,14 +1332,22 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
   ///
   /// A grid of names all looks the same at a glance; drivers recognise their
   /// bank by its mark, so the logo leads and the name labels it.
+  static bool _isSocialPay(TopUpDeeplink d) =>
+      RegExp(r'social\s*pay', caseSensitive: false).hasMatch(d.name ?? '');
+
   Widget _bankGrid(AppPalette palette) {
     return Wrap(
       spacing: 10,
       runSpacing: 12,
       alignment: WrapAlignment.center,
-      children: _invoice.deeplinks
-          .map((TopUpDeeplink bank) => _bankTile(palette, bank))
-          .toList(growable: false),
+      // SocialPay is the app most drivers reach for, so it leads.
+      children:
+          ([..._invoice.deeplinks]..sort(
+                (TopUpDeeplink a, TopUpDeeplink b) =>
+                    (_isSocialPay(b) ? 1 : 0) - (_isSocialPay(a) ? 1 : 0),
+              ))
+              .map((TopUpDeeplink bank) => _bankTile(palette, bank))
+              .toList(growable: false),
     );
   }
 

@@ -29,14 +29,29 @@ class WalletService {
           .whereType<Map<String, dynamic>>()
           .map(WalletEntry.fromJson)
           .toList(growable: false),
+      cards: (body['cards'] as List<dynamic>? ?? <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .map(SavedCard.fromJson)
+          .where((SavedCard c) => c.id.isNotEmpty)
+          .toList(growable: false),
     );
   }
 
-  /// Raises a QPay invoice for [amount] tugriks and returns the QR to scan.
-  Future<TopUpInvoice> startTopUp(int amount) async {
+  /// Raises an invoice for [amount] tugriks: a QPay QR to scan, or with
+  /// [card] a Golomt Bank payment page ([TopUpInvoice.paymentUrl]) to open.
+  /// With [saveCard] the bank keeps the card for one-tap top-ups once paid.
+  Future<TopUpInvoice> startTopUp(
+    int amount, {
+    bool card = false,
+    bool saveCard = false,
+  }) async {
     final Map<String, dynamic> body = await _client.post(
       '/wallet/topup',
-      body: <String, dynamic>{'amount': amount},
+      body: <String, dynamic>{
+        'amount': amount,
+        'method': card ? 'card' : 'qpay',
+        if (card && saveCard) 'saveCard': true,
+      },
     );
     return TopUpInvoice.fromJson(_map(body['invoice']));
   }
@@ -55,6 +70,31 @@ class WalletService {
       paid: body['paid'] == true,
       wallet: wallet is Map<String, dynamic> ? Wallet.fromJson(wallet) : null,
     );
+  }
+
+  /// Charges a saved card at once — no bank page. The answer is final unless
+  /// the bank's reply was lost, in which case the invoice is still pending and
+  /// [checkTopUp] settles it.
+  Future<TopUpStatus> payWithSavedCard(int amount, String cardId) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/wallet/topup',
+      body: <String, dynamic>{
+        'amount': amount,
+        'method': 'saved_card',
+        'cardId': cardId,
+      },
+    );
+    final dynamic wallet = body['wallet'];
+    return TopUpStatus(
+      invoice: TopUpInvoice.fromJson(_map(body['invoice'])),
+      paid: body['paid'] == true,
+      wallet: wallet is Map<String, dynamic> ? Wallet.fromJson(wallet) : null,
+    );
+  }
+
+  /// Forgets a saved card.
+  Future<void> removeSavedCard(String cardId) async {
+    await _client.delete('/wallet/cards/$cardId');
   }
 
   static Map<String, dynamic> _map(dynamic value) =>

@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/station_filter_sheet.dart';
 import '../widgets/station_sheet.dart';
+import '../widgets/app_toast.dart';
 
 /// Which label the primary route button shows. Extracted so the start/stop
 /// behaviour is verifiable without driving the map widget.
@@ -344,13 +345,7 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
 
     _stopNavigation();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.get('arrived_full')),
-        backgroundColor: AppTheme.sageGreen,
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    AppToast.show(context, AppStrings.get('arrived_full'));
   }
 
   String _navigationInstruction(LatLng from, LatLng to) {
@@ -434,8 +429,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
   void _goToNearestMatch() {
     final List<ChargingStationLocation> matches = _stationsMatching(_filter);
     if (matches.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStrings.get('filter_none_match'))),
+      AppToast.show(
+        context,
+        AppStrings.get('filter_none_match'),
+        kind: ToastKind.info,
       );
       return;
     }
@@ -453,17 +450,15 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
     });
     _mapController.move(pos, 14.5);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AppStrings.get('filter_nearest_found')
-              .replaceFirst('{name}', nearest.name)
-              .replaceFirst(
-                '{distance}',
-                _distanceKmTo(nearest).toStringAsFixed(1),
-              ),
-        ),
-      ),
+    AppToast.show(
+      context,
+      AppStrings.get('filter_nearest_found')
+          .replaceFirst('{name}', nearest.name)
+          .replaceFirst(
+            '{distance}',
+            _distanceKmTo(nearest).toStringAsFixed(1),
+          ),
+      kind: ToastKind.info,
     );
   }
 

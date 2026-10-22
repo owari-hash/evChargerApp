@@ -12,6 +12,7 @@ import '../utils/app_strings.dart';
 import '../utils/money.dart';
 import '../screens/trips_stations_screen.dart';
 import 'charge_start_panel.dart';
+import 'app_toast.dart';
 
 /// Opens [station]'s detail sheet — the app's version of the website's
 /// station page: status, address, power and price, every gun with its live
@@ -124,14 +125,9 @@ class _StationSheetState extends State<StationSheet> {
   }
 
   void _onStarted() {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    // The toast lives on the root overlay, so it outlasts the sheet closing.
+    AppToast.show(context, AppStrings.get('charge_started'));
     Navigator.of(context).pop();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.get('charge_started')),
-        backgroundColor: AppTheme.sageGreen,
-      ),
-    );
   }
 
   void _navigateToMap() {

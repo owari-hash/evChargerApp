@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import 'app_toast.dart';
+
+export 'app_toast.dart' show AppToast, ToastKind;
 
 /// A titled card. The account, wallet, sessions and security screens are all
 /// built from these, so they read as one surface.
@@ -445,12 +448,16 @@ void showApiSnack(BuildContext context, Object error) {
   final String message = error is ApiException
       ? error.message
       : 'Хүсэлт амжилтгүй боллоо. Дахин оролдоно уу.';
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  AppToast.show(context, message, kind: ToastKind.error);
 }
 
-/// Confirmation text snack, for an action that succeeded.
-void showSnack(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+/// Confirmation toast, for an action that succeeded.
+void showSnack(
+  BuildContext context,
+  String message, {
+  ToastKind kind = ToastKind.success,
+}) {
+  AppToast.show(context, message, kind: kind);
 }
 
 /// Blocks a charge from starting on an empty or too-low wallet, with a

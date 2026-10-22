@@ -130,6 +130,8 @@ class WalletConfig {
   const WalletConfig({
     required this.enabled,
     required this.topUpEnabled,
+    this.cardTopUpEnabled = false,
+    this.savedCardsEnabled = false,
     required this.presets,
     required this.minTopUp,
     required this.maxTopUp,
@@ -139,8 +141,17 @@ class WalletConfig {
 
   final bool enabled;
 
-  /// False when QPay is switched off — the top-up button has to be hidden.
+  /// False when QPay is switched off — the QR top-up has to be hidden.
   final bool topUpEnabled;
+
+  /// Card / SocialPay top-up through Golomt Bank's hosted payment page.
+  final bool cardTopUpEnabled;
+
+  /// Cards can be saved on the bank page and charged in one tap later.
+  final bool savedCardsEnabled;
+
+  /// Whether any way of topping up is available.
+  bool get anyTopUpEnabled => topUpEnabled || cardTopUpEnabled;
 
   final List<int> presets;
   final int minTopUp;
@@ -156,6 +167,8 @@ class WalletConfig {
     return WalletConfig(
       enabled: json['enabled'] != false,
       topUpEnabled: json['topUpEnabled'] == true,
+      cardTopUpEnabled: json['cardTopUpEnabled'] == true,
+      savedCardsEnabled: json['savedCardsEnabled'] == true,
       presets: (json['presets'] as List<dynamic>? ?? <dynamic>[])
           .map((dynamic v) => _num(v).round())
           .toList(growable: false),
@@ -173,11 +186,38 @@ class WalletSnapshot {
     required this.wallet,
     required this.config,
     required this.entries,
+    this.cards = const <SavedCard>[],
   });
 
   final Wallet wallet;
   final WalletConfig config;
   final List<WalletEntry> entries;
+  final List<SavedCard> cards;
+}
+
+/// A bank card saved for one-tap top-ups. The bank masks the number
+/// (515023******7733); the token that charges it never leaves the server.
+class SavedCard {
+  const SavedCard({required this.id, this.cardNumber, this.bank});
+
+  final String id;
+  final String? cardNumber;
+  final String? bank;
+
+  /// `•••• 7733`, the way drivers recognise their card.
+  String get label {
+    final String digits = (cardNumber ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 4) {
+      return '•••• ${digits.substring(digits.length - 4)}';
+    }
+    return bank ?? '••••';
+  }
+
+  factory SavedCard.fromJson(Map<String, dynamic> json) => SavedCard(
+    id: (json['id'] ?? '').toString(),
+    cardNumber: _text(json['cardNumber']),
+    bank: _text(json['bank']),
+  );
 }
 
 enum InvoiceStatus {
@@ -201,6 +241,10 @@ class TopUpInvoice {
     this.qrImage,
     this.shortUrl,
     this.deeplinks = const <TopUpDeeplink>[],
+    this.provider,
+    this.paymentUrl,
+    this.socialPayUrl,
+    this.declineReason,
     this.expiresAt,
   });
 
@@ -219,8 +263,22 @@ class TopUpInvoice {
 
   final String? shortUrl;
   final List<TopUpDeeplink> deeplinks;
+
+  /// QPAY, QPAY_QUICKQR or GOLOMT.
+  final String? provider;
+
+  /// Golomt card payments: the bank's hosted page, and its SocialPay version.
+  /// A card invoice has no QR — the driver pays on that page instead.
+  final String? paymentUrl;
+  final String? socialPayUrl;
+
+  /// A declined card payment: the bank's own reason, in Mongolian.
+  final String? declineReason;
+
   final DateTime? expiresAt;
 
+  /// A Golomt card payment — on the bank page, or a saved card — has no QR.
+  bool get isCard => provider == 'GOLOMT' || paymentUrl != null;
   bool get isPaid => status == InvoiceStatus.paid;
   bool get isSettled =>
       status == InvoiceStatus.canceled ||
@@ -241,6 +299,10 @@ class TopUpInvoice {
           .map(TopUpDeeplink.fromJson)
           .where((TopUpDeeplink d) => d.link != null)
           .toList(growable: false),
+      provider: _text(json['provider']),
+      paymentUrl: _text(json['paymentUrl']),
+      socialPayUrl: _text(json['socialPayUrl']),
+      declineReason: _text(json['declineReason']),
       expiresAt: _date(json['expiresAt']),
     );
   }
@@ -261,6 +323,10 @@ class TopUpInvoice {
       qrImage: update.qrImage ?? qrImage,
       shortUrl: update.shortUrl ?? shortUrl,
       deeplinks: update.deeplinks.isNotEmpty ? update.deeplinks : deeplinks,
+      provider: update.provider ?? provider,
+      paymentUrl: update.paymentUrl ?? paymentUrl,
+      socialPayUrl: update.socialPayUrl ?? socialPayUrl,
+      declineReason: update.declineReason ?? declineReason,
       expiresAt: update.expiresAt ?? expiresAt,
     );
   }

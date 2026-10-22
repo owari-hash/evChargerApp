@@ -55,7 +55,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
   bool _verifyingCode = false;
   bool _codeSent = false;
   bool _deletingAccount = false;
-  String? _pinError;
   Map<String, String> _pinFields = const <String, String>{};
   String? _codeError;
 
@@ -125,16 +124,12 @@ class _SecurityScreenState extends State<SecurityScreen> {
       _confirm.clear();
     }
     if (local.isNotEmpty) {
-      setState(() {
-        _pinError = null;
-        _pinFields = local;
-      });
+      setState(() => _pinFields = local);
       return;
     }
 
     setState(() {
       _changing = true;
-      _pinError = null;
       _pinFields = const <String, String>{};
     });
 
@@ -159,9 +154,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
       if (!mounted) return;
       setState(() {
         _changing = false;
-        _pinError = error.message;
         _pinFields = error.fields;
       });
+      showApiSnack(context, error);
     }
   }
 
@@ -206,6 +201,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         _sendingCode = false;
         _codeError = error.message;
       });
+      showApiSnack(context, error);
     }
   }
 
@@ -231,6 +227,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         _verifyingCode = false;
         _codeError = error.message;
       });
+      showApiSnack(context, error);
     }
   }
 
@@ -353,10 +350,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 child: Text(AppStrings.get('sec_send_code')),
               ),
             ] else ...<Widget>[
-              if (_codeError != null) ...<Widget>[
-                FormErrorBanner(message: _codeError!),
-                const SizedBox(height: 12),
-              ],
               PrimaryAction(
                 label: AppStrings.get('sec_send_code'),
                 busy: _sendingCode,
@@ -376,7 +369,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
     _confirm.clear();
     setState(() {
       _pinFormOpen = false;
-      _pinError = null;
       _pinFields = const <String, String>{};
     });
   }
@@ -445,10 +437,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
           error: _pinFields['confirmPin'],
           onCompleted: _checkConfirm,
         ),
-        if (_pinError != null) ...<Widget>[
-          const SizedBox(height: 12),
-          FormErrorBanner(message: _pinError!),
-        ],
         const SizedBox(height: 14),
         PrimaryAction(
           label: actionLabel,

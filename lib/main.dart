@@ -30,6 +30,7 @@ import 'widgets/draggable_assistant_button.dart';
 import 'widgets/charge_notifications.dart';
 import 'widgets/guided_step.dart';
 import 'widgets/notifications_sheet.dart';
+import 'widgets/app_toast.dart';
 
 void main() async {
   // The bundle version is read over a platform channel, so the binding has to
@@ -342,11 +343,11 @@ class _MainAppFrameState extends State<MainAppFrame>
     _presentBanner(() {
       if (!mounted) return;
       if (isChargeDebit) _debitShownAt = DateTime.now();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$label $amount'),
-          backgroundColor: entry.isCredit ? AppTheme.sageGreen : null,
-        ),
+      AppToast.show(
+        context,
+        amount,
+        title: label,
+        kind: entry.isCredit ? ToastKind.success : ToastKind.info,
       );
     });
   }

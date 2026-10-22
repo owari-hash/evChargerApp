@@ -17,6 +17,7 @@ import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
+import '../widgets/glass.dart';
 import '../widgets/guided_step.dart';
 import '../widgets/vehicle_charging_matrix.dart';
 import '../widgets/vehicle_hero_card.dart';
@@ -419,9 +420,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         await _sessions.stop(remote);
       } on ApiException catch (error) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        showApiSnack(context, error);
         return;
       }
       _remoteTransactionId = null;
@@ -504,78 +503,80 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final bool isCharging = _session.isCharging;
     return Scaffold(
       backgroundColor: context.palette.bg,
-      body: SingleChildScrollView(
-        controller: _scroll,
-        // The bottom gap lets the last card scroll clear of the assistant
-        // button resting in the bottom-right corner.
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 84),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hero View: Hero Car Banner with Particle Matrix FX during Charging
-            _guided(
-              stepIndex: 0,
-              key: 'hero',
-              icon: Icons.electric_car_rounded,
-              borderRadius: 28,
-              child: VehicleChargingMatrix(
-                isCharging: isCharging,
-                child: _buildVehicleHero(isCharging),
+      body: GlassBackground(
+        child: SingleChildScrollView(
+          controller: _scroll,
+          // The bottom gap lets the last card scroll clear of the assistant
+          // button resting in the bottom-right corner.
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 84),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Hero View: Hero Car Banner with Particle Matrix FX during Charging
+              _guided(
+                stepIndex: 0,
+                key: 'hero',
+                icon: Icons.electric_car_rounded,
+                borderRadius: 28,
+                child: VehicleChargingMatrix(
+                  isCharging: isCharging,
+                  child: _buildVehicleHero(isCharging),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // Start a charge, or stop the one running.
-            _guided(
-              stepIndex: 1,
-              key: 'start',
-              icon: Icons.qr_code_scanner_rounded,
-              borderRadius: 20,
-              child: isCharging
-                  // Stop Charging Button
-                  ? SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        onPressed: _handleStopChargingSession,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                        ),
-                        icon: const Icon(Icons.stop_circle_rounded, size: 22),
-                        label: Text(
-                          AppStrings.get('stop_charging'),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+              // Start a charge, or stop the one running.
+              _guided(
+                stepIndex: 1,
+                key: 'start',
+                icon: Icons.qr_code_scanner_rounded,
+                borderRadius: 20,
+                child: isCharging
+                    // Stop Charging Button
+                    ? SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: _handleStopChargingSession,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.stop_circle_rounded, size: 22),
+                          label: Text(
+                            AppStrings.get('stop_charging'),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                      ),
-                    )
-                  : _buildStartActions(),
-            ),
-            const SizedBox(height: 22),
-            _guided(
-              stepIndex: 2,
-              key: 'wallet',
-              icon: Icons.account_balance_wallet_rounded,
-              borderRadius: 20,
-              child: _buildSummaryRow(),
-            ),
-            const SizedBox(height: 22),
-            _guided(
-              stepIndex: 3,
-              key: 'recent',
-              icon: Icons.history_rounded,
-              borderRadius: 20,
-              tipBelow: false,
-              // The heading sits on the bare page, not in a card.
-              contentPadding: const EdgeInsets.all(10),
-              child: _buildRecentSessions(),
-            ),
-            const SizedBox(height: 8),
-          ],
+                      )
+                    : _buildStartActions(),
+              ),
+              const SizedBox(height: 22),
+              _guided(
+                stepIndex: 2,
+                key: 'wallet',
+                icon: Icons.account_balance_wallet_rounded,
+                borderRadius: 20,
+                child: _buildSummaryRow(),
+              ),
+              const SizedBox(height: 22),
+              _guided(
+                stepIndex: 3,
+                key: 'recent',
+                icon: Icons.history_rounded,
+                borderRadius: 20,
+                tipBelow: false,
+                // The heading sits on the bare page, not in a card.
+                contentPadding: const EdgeInsets.all(10),
+                child: _buildRecentSessions(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -810,142 +811,115 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     required VoidCallback onTap,
   }) {
     final AppPalette palette = context.palette;
-    final bool isDark = ThemeController.isDark;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : palette.border,
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.3)
-                    : palette.accent.withValues(alpha: 0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return GlassCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              palette.accent.withValues(alpha: 0.22),
-                              palette.accent.withValues(alpha: 0.08),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.account_balance_wallet_rounded,
-                          size: 17,
-                          color: palette.accent,
-                        ),
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          palette.accent.withValues(alpha: 0.22),
+                          palette.accent.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        AppStrings.get('wallet_balance'),
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: palette.inkMuted,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet_rounded,
+                      size: 17,
+                      color: palette.accent,
+                    ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: palette.inkMuted.withValues(alpha: 0.7),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppStrings.get('wallet_balance'),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: palette.inkMuted,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  isInternal
-                      ? 'Үнэ төлбөргүй'
-                      : (balance == null ? '—' : formatMnt(balance)),
-                  style: TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.6,
-                    color: palette.ink,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: isInternal
-                      ? AppTheme.sageGreen.withValues(alpha: 0.14)
-                      : palette.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isInternal
-                        ? AppTheme.sageGreen.withValues(alpha: 0.3)
-                        : palette.accent.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      isInternal ? Icons.verified_rounded : Icons.add_rounded,
-                      size: 14,
-                      color: isInternal ? AppTheme.sageGreen : palette.accent,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isInternal
-                          ? 'Дотоод хэрэглэгч'
-                          : AppStrings.get('topup_title'),
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: isInternal
-                            ? AppTheme.sageGreen
-                            : palette.accent,
-                      ),
-                    ),
-                  ],
-                ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: palette.inkMuted.withValues(alpha: 0.7),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isInternal
+                  ? 'Үнэ төлбөргүй'
+                  : (balance == null ? '—' : formatMnt(balance)),
+              style: TextStyle(
+                fontSize: 23,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.6,
+                color: palette.ink,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: isInternal
+                  ? AppTheme.sageGreen.withValues(alpha: 0.14)
+                  : palette.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isInternal
+                    ? AppTheme.sageGreen.withValues(alpha: 0.3)
+                    : palette.accent.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  isInternal ? Icons.verified_rounded : Icons.add_rounded,
+                  size: 14,
+                  color: isInternal ? AppTheme.sageGreen : palette.accent,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isInternal
+                      ? 'Дотоод хэрэглэгч'
+                      : AppStrings.get('topup_title'),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: isInternal
+                        ? AppTheme.sageGreen
+                        : palette.accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -959,149 +933,123 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final AppPalette palette = context.palette;
     final bool isDark = ThemeController.isDark;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : palette.border,
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.3)
-                    : palette.accent.withValues(alpha: 0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return GlassCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.teal.withValues(alpha: 0.22),
-                              Colors.teal.withValues(alpha: 0.08),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.calendar_month_rounded,
-                          size: 17,
-                          color: Colors.teal,
-                        ),
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.teal.withValues(alpha: 0.22),
+                          Colors.teal.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        AppStrings.get('home_month_title'),
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: palette.inkMuted,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_month_rounded,
+                      size: 17,
+                      color: Colors.teal,
+                    ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: palette.inkMuted.withValues(alpha: 0.7),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppStrings.get('home_month_title'),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: palette.inkMuted,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _historyLoaded && !_historyFailed
-                      ? '${kwh.toStringAsFixed(1)} кВт·ц'
-                      : '—',
-                  style: TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.6,
-                    color: palette.ink,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : palette.bg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : palette.border,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      Icons.bolt_rounded,
-                      size: 14,
-                      color: palette.accent,
-                    ),
-                    const SizedBox(width: 3),
-                    Flexible(
-                      child: Text(
-                        _historyFailed
-                            ? AppStrings.get('home_unavailable')
-                            : _historyLoaded
-                            ? [
-                                AppStrings.get(
-                                  'home_month_sessions',
-                                ).replaceFirst('{n}', '$monthSessionsCount'),
-                                if (spent != null) formatMnt(spent),
-                              ].join(' · ')
-                            : AppStrings.get('loading'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: palette.ink,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: palette.inkMuted.withValues(alpha: 0.7),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _historyLoaded && !_historyFailed
+                  ? '${kwh.toStringAsFixed(1)} кВт·ц'
+                  : '—',
+              style: TextStyle(
+                fontSize: 23,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.6,
+                color: palette.ink,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : palette.bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : palette.border,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.bolt_rounded,
+                  size: 14,
+                  color: palette.accent,
+                ),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    _historyFailed
+                        ? AppStrings.get('home_unavailable')
+                        : _historyLoaded
+                        ? [
+                            AppStrings.get(
+                              'home_month_sessions',
+                            ).replaceFirst('{n}', '$monthSessionsCount'),
+                            if (spent != null) formatMnt(spent),
+                          ].join(' · ')
+                        : AppStrings.get('loading'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: palette.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1147,12 +1095,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: palette.border),
-          ),
+        GlassCard(
+          padding: EdgeInsets.zero,
+          borderRadius: 20,
           child: !_historyLoaded
               ? const Padding(
                   padding: EdgeInsets.symmetric(vertical: 28),

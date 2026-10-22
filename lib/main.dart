@@ -747,7 +747,7 @@ class _MainAppFrameState extends State<MainAppFrame>
           padding: const EdgeInsets.only(
             left: 20,
             right: 20,
-            bottom: 16,
+            bottom: 8,
             top: 4,
           ),
           child: GuidedStep.of(
@@ -788,7 +788,7 @@ class _MainAppFrameState extends State<MainAppFrame>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            height: 66,
+            height: 64,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(36),
               gradient: LinearGradient(
@@ -859,10 +859,10 @@ class _MainAppFrameState extends State<MainAppFrame>
     final bool isSelected = _activeTabIndex == index;
     final AppPalette palette = context.palette;
 
-    // The selected pill needs more room than the icon-only items so its
-    // label is never clipped.
+    // Equal flex for every tab: an uneven split (extra width for whichever
+    // tab is selected) shifted the whole bar's visual weight left or right
+    // depending on which end was active, so it never looked centered.
     return Expanded(
-      flex: isSelected ? 2 : 1,
       // Keyed so tests can address a tab without matching an icon that also
       // appears inside the tab's own content.
       key: ValueKey<String>('nav-tab-$index'),

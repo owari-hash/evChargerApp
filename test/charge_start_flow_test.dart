@@ -126,7 +126,10 @@ class _FakeScannerController extends MobileScannerController {
   int stops = 0;
 
   @override
-  Future<void> start({CameraFacing? cameraDirection}) async => starts++;
+  Future<void> start({
+    CameraFacing? cameraDirection,
+    CameraLensType? cameraLensType,
+  }) async => starts++;
 
   @override
   Future<void> stop() async => stops++;

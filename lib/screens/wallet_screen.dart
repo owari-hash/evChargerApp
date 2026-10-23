@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+// Bank deeplinks go through as strings: Uri.parse lowercases the host, and
+// SocialPay's encrypted key sits in it (socialpay-payment://key=...).
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../models/wallet.dart';
 import '../services/api_client.dart';
@@ -1120,13 +1123,10 @@ Future<void> openSocialPay(TopUpInvoice invoice) async {
       .where((String l) => l.startsWith('socialpay'))
       .firstOrNull;
   if (deeplink != null) {
-    final Uri? uri = Uri.tryParse(deeplink);
-    final bool opened =
-        uri != null &&
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        ).catchError((Object _) => false);
+    final bool opened = await launchUrlString(
+      deeplink,
+      mode: LaunchMode.externalApplication,
+    ).catchError((Object _) => false);
     if (opened) return;
   }
   if (invoice.paymentUrl != null) await openPaymentPage(invoice.paymentUrl!);
@@ -1247,9 +1247,7 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
   }
 
   Future<void> _openLink(String link) async {
-    final Uri? uri = Uri.tryParse(link);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await launchUrlString(link, mode: LaunchMode.externalApplication);
   }
 
   @override

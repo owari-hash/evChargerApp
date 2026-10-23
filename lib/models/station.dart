@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart' show Color;
 
+/// A connector's OCPP `connectorId` (1, 2, 3…) as the letter printed on its
+/// sticker (A, B, C…) — the id itself never changes anywhere in the data or
+/// API, this is display only. Falls back to the plain number past Z, which no
+/// station in this network reaches (stations here have one or two
+/// connectors). Mirrors `connectorLetter()` in evChargerKiosk/evChargerAdmin.
+String connectorLetter(int connectorId) {
+  if (connectorId < 1 || connectorId > 26) return '$connectorId';
+  return String.fromCharCode(64 + connectorId);
+}
+
 /// Whether a station can be charged at right now.
 ///
 /// The same three states the kiosk website shows, derived the same way, so a
@@ -61,8 +71,9 @@ class StationConnector {
 
   /// What a driver calls this gun on screen: its label if the operator set
   /// one, otherwise "Залгуур {n}".
-  String displayName(String fallbackPrefix) =>
-      (label != null && label!.trim().isNotEmpty) ? label! : '$fallbackPrefix $connectorId';
+  String displayName(String fallbackPrefix) => (label != null && label!.trim().isNotEmpty)
+      ? label!
+      : '$fallbackPrefix ${connectorLetter(connectorId)}';
 
   static StationConnector? fromJson(Map<String, dynamic> json) {
     final int? connectorId = json['connectorId'] is num

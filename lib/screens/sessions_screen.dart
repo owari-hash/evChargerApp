@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/charging_session.dart';
+import '../models/station.dart' show connectorLetter;
 import '../models/wallet.dart' show formatMnt;
 import '../services/api_client.dart';
 import '../services/session_watcher_service.dart';
@@ -234,7 +235,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     Text(
                       AppStrings.get(
                         'sess_connector',
-                      ).replaceFirst('{id}', '${session.connectorId}'),
+                      ).replaceFirst('{id}', connectorLetter(session.connectorId)),
                       style: TextStyle(color: palette.inkMuted, fontSize: 11.5),
                     ),
                   ],

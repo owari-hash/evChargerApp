@@ -25,6 +25,8 @@ class ChargingSession {
     this.minutesToFull,
     this.stopReason,
     this.ebarimt,
+    this.tariffPerKwh,
+    this.tariffZoneName,
   });
 
   final int transactionId;
@@ -54,6 +56,14 @@ class ChargingSession {
   final int? minutesToFull;
   final String? stopReason;
   final EBarimtData? ebarimt;
+
+  /// Per kWh this session is billed at: while running, the time-of-day zone
+  /// in effect now (from the station's zones as they were at the start);
+  /// once finished, the blended rate it was billed at.
+  final num? tariffPerKwh;
+
+  /// Running sessions: the name of the zone being billed right now, if named.
+  final String? tariffZoneName;
 
   bool get isActive => status == SessionStatus.active;
 
@@ -103,6 +113,10 @@ class ChargingSession {
       ebarimt: json['ebarimt'] is Map<String, dynamic>
           ? EBarimtData.fromJson(json['ebarimt'] as Map<String, dynamic>)
           : null,
+      tariffPerKwh: json['tariffPerKwh'] is num
+          ? json['tariffPerKwh'] as num
+          : null,
+      tariffZoneName: _text(json['tariffZoneName']),
     );
   }
 
@@ -128,6 +142,8 @@ class ChargingSession {
       minutesToFull: minutesToFull,
       stopReason: stopReason,
       ebarimt: ebarimt,
+      tariffPerKwh: tariffPerKwh,
+      tariffZoneName: tariffZoneName,
     );
   }
 

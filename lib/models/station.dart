@@ -134,6 +134,8 @@ class ChargingStationLocation {
     this.isOnline = true,
     this.feePercent = 0,
     this.baseTariffPerKwh,
+    this.defaultTariffPerKwh,
+    this.tariffZones = const <TariffZone>[],
   });
 
   final String id;
@@ -156,6 +158,12 @@ class ChargingStationLocation {
 
   /// Base tariff per kWh before service fee markup.
   final double? baseTariffPerKwh;
+
+  /// The rate outside every time-of-day zone.
+  final double? defaultTariffPerKwh;
+
+  /// Time-of-day rates, sorted by start; empty for a single flat rate.
+  final List<TariffZone> tariffZones;
 
   /// Tariff to show on the UI: base price without the 1% fee markup (e.g. 1000₮ instead of 1010₮).
   double get basePricePerKwh {
@@ -264,6 +272,12 @@ class ChargingStationLocation {
       isOnline: json['isOnline'] != false,
       feePercent: _toDouble(json['feePercent']) ?? 0,
       baseTariffPerKwh: _toDouble(json['baseTariffPerKwh']),
+      defaultTariffPerKwh: _toDouble(json['defaultTariffPerKwh']),
+      tariffZones: (json['tariffZones'] as List<dynamic>? ?? <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .map(TariffZone.fromJson)
+          .whereType<TariffZone>()
+          .toList(growable: false),
     );
   }
 
@@ -292,6 +306,8 @@ class ChargingStationLocation {
       isOnline: isOnline,
       feePercent: feePercent,
       baseTariffPerKwh: baseTariffPerKwh,
+      defaultTariffPerKwh: defaultTariffPerKwh,
+      tariffZones: tariffZones,
     );
   }
 
@@ -305,5 +321,37 @@ class ChargingStationLocation {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value);
     return null;
+  }
+}
+
+/// A time-of-day rate. Minutes are Mongolia local time since midnight.
+class TariffZone {
+  const TariffZone({
+    required this.startMinute,
+    required this.endMinute,
+    required this.tariffPerKwh,
+    this.name,
+  });
+
+  final String? name;
+  final int startMinute;
+  final int endMinute;
+  final double tariffPerKwh;
+
+  /// Whether this zone covers [minute] (minutes since local midnight).
+  bool covers(int minute) => minute >= startMinute && minute < endMinute;
+
+  static TariffZone? fromJson(Map<String, dynamic> json) {
+    final dynamic start = json['startMinute'];
+    final dynamic end = json['endMinute'];
+    final dynamic rate = json['tariffPerKwh'];
+    if (start is! num || end is! num || rate is! num) return null;
+    final String name = (json['name'] ?? '').toString().trim();
+    return TariffZone(
+      name: name.isEmpty ? null : name,
+      startMinute: start.toInt(),
+      endMinute: end.toInt(),
+      tariffPerKwh: rate.toDouble(),
+    );
   }
 }

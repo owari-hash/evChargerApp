@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/auth_user.dart';
 import '../models/charging_session.dart';
+import '../models/station.dart';
 import '../models/wallet.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -15,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/signed_out_panel.dart';
+import '../widgets/tariff_panel.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
 import '../widgets/glass.dart';
 import '../widgets/guided_step.dart';
@@ -90,6 +92,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   /// Null until loaded, or when the wallet is unavailable.
   WalletSnapshot? _wallet;
+
+  /// The running session as the API last reported it — for its billed rate.
+  ChargingSession? _activeSession;
+
+  /// The station of the running session, for its full tariff list.
+  ChargingStationLocation? _tariffStation;
 
   /// The wallet read has come back, whether or not it worked.
   bool _walletLoaded = false;
@@ -305,7 +313,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             .toList(growable: false);
         _historyLoaded = true;
         _historyFailed = false;
+        _activeSession = active;
         if (active == null) {
+          _tariffStation = null;
           _remoteTransactionId = null;
           _sessionStart = null;
           _session.clear();
@@ -324,6 +334,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         );
       });
       _scheduleLiveRefresh();
+      if (active != null) _loadTariffStation(active.chargePointId);
       if (widget.guide?.requested == true) _scheduleGuideStart();
     } on ApiException {
       // Offline, or the session list is unavailable. Showing nothing is right;
@@ -338,6 +349,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       });
       _scheduleLiveRefresh();
       if (widget.guide?.requested == true) _scheduleGuideStart();
+    }
+  }
+
+  /// The running session's station, fetched once per session for its
+  /// tariff list; refreshed every poll would be wasted — the list changes
+  /// only when an operator edits it.
+  Future<void> _loadTariffStation(String stationId) async {
+    final ChargingStationLocation? current = _tariffStation;
+    if (current != null &&
+        (current.id == stationId || current.qrCode == stationId)) {
+      return;
+    }
+    try {
+      final ChargingStationLocation station = await StationsService.instance
+          .station(stationId);
+      if (mounted && _activeSession != null) {
+        setState(() => _tariffStation = station);
+      }
+    } on ApiException {
+      // The panel still shows the driver's own rate without the station list.
     }
   }
 
@@ -533,6 +564,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   child: _buildVehicleHero(isCharging),
                 ),
               ),
+              if (isCharging && _activeSession != null) ...<Widget>[
+                const SizedBox(height: 12),
+                TariffPanel(
+                  yourRate:
+                      _activeSession!.tariffPerKwh ??
+                      _tariffStation?.pricePerKwh,
+                  zoneName: _activeSession!.tariffZoneName,
+                  isInternal: _wallet?.wallet.isInternal ?? false,
+                  stationRate: _tariffStation?.pricePerKwh,
+                  defaultRate: _tariffStation?.defaultTariffPerKwh,
+                  zones:
+                      _tariffStation?.tariffZones ?? const <TariffZone>[],
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Start a charge, or stop the one running.

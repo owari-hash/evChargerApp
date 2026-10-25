@@ -22,6 +22,7 @@ class ChargingSession {
     this.feePercent,
     this.lastPowerW,
     this.lastSocPercent,
+    this.minutesToFull,
     this.stopReason,
     this.ebarimt,
   });
@@ -47,6 +48,10 @@ class ChargingSession {
 
   final num? lastPowerW;
   final num? lastSocPercent;
+
+  /// Running sessions only: the backend's estimate of minutes until the
+  /// battery is full. Null when the station does not report battery %.
+  final int? minutesToFull;
   final String? stopReason;
   final EBarimtData? ebarimt;
 
@@ -91,6 +96,9 @@ class ChargingSession {
       lastSocPercent: json['lastSocPercent'] is num
           ? json['lastSocPercent'] as num
           : null,
+      minutesToFull: json['minutesToFull'] is num
+          ? (json['minutesToFull'] as num).round()
+          : null,
       stopReason: _text(json['stopReason']),
       ebarimt: json['ebarimt'] is Map<String, dynamic>
           ? EBarimtData.fromJson(json['ebarimt'] as Map<String, dynamic>)
@@ -117,6 +125,7 @@ class ChargingSession {
       feePercent: feePercent,
       lastPowerW: lastPowerW,
       lastSocPercent: lastSocPercent,
+      minutesToFull: minutesToFull,
       stopReason: stopReason,
       ebarimt: ebarimt,
     );

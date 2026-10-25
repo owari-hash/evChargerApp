@@ -23,6 +23,7 @@ class HeroFact {
 class ChargeStatus {
   const ChargeStatus({
     this.socPercent,
+    this.minutesToFull,
     required this.powerKw,
     required this.energyKwh,
     this.costMnt,
@@ -31,6 +32,27 @@ class ChargeStatus {
 
   /// The car's own state of charge; many chargers never receive it.
   final double? socPercent;
+
+  /// Estimated minutes to a full battery, from the backend. Null when the
+  /// charger does not report battery % or it is too early to tell.
+  final int? minutesToFull;
+
+  /// The caption beside the big battery %: "≈ 27 мин дүүрэхэд" when there
+  /// is an estimate, otherwise "Баттерей" (or "not reported").
+  String get batteryCaption {
+    final int? m = minutesToFull;
+    if (socPercent == null) return AppStrings.get('charge_soc_unknown');
+    if (m == null) return AppStrings.get('charge_battery');
+    if (m <= 1) return AppStrings.get('charge_almost_full');
+    if (m < 60) {
+      return AppStrings.get('charge_to_full_min').replaceFirst('{minutes}', '$m');
+    }
+    return AppStrings.get('charge_to_full_hours')
+        .replaceFirst('{hours}', '${m ~/ 60}')
+        .replaceFirst('{minutes}', '${m % 60}');
+  }
+
+  bool get hasEstimate => socPercent != null && minutesToFull != null;
   final double powerKw;
   final double energyKwh;
   final double? costMnt;
@@ -561,15 +583,15 @@ class _HeroCardBody extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
-                  soc == null
-                      ? AppStrings.get('charge_soc_unknown')
-                      : AppStrings.get('charge_battery'),
+                  c.batteryCaption,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+                    color: c.hasEstimate
+                        ? _accent
+                        : Colors.white.withValues(alpha: 0.6),
+                    fontSize: c.hasEstimate ? 13.5 : 11.5,
+                    fontWeight: c.hasEstimate ? FontWeight.w800 : FontWeight.w600,
                     height: 1.3,
                   ),
                 ),

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -35,9 +37,10 @@ class GlassVehicleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final String name = <String>[brand, model]
-        .where((String s) => s.isNotEmpty)
-        .join(' ');
+    final String name = <String>[
+      brand,
+      model,
+    ].where((String s) => s.isNotEmpty).join(' ');
 
     return GlassCard(
       borderRadius: 28,
@@ -152,46 +155,157 @@ class _StatusPill extends StatelessWidget {
 }
 
 /// A glowing car mark in place of a photo: the brand's look without the
-/// brand's picture, and the same on every phone.
-class _CarMark extends StatelessWidget {
+/// brand's picture, and the same on every phone. While charging, a ring of
+/// light circles it and the bolt breathes, so "charging" is visible at a
+/// glance.
+class _CarMark extends StatefulWidget {
   const _CarMark({required this.charging});
 
   final bool charging;
 
   @override
+  State<_CarMark> createState() => _CarMarkState();
+}
+
+class _CarMarkState extends State<_CarMark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CarMark old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  /// Runs only while charging, and never when the phone asks for less motion.
+  void _sync() {
+    final bool reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.charging && !reduce) {
+      if (!_c.isAnimating) _c.repeat();
+    } else {
+      _c.stop();
+      _c.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool isDark = ThemeController.isDark;
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF34D399), Color(0xFF0EA5A4)],
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: isDark ? 0.25 : 0.7),
-          width: 1.5,
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: const Color(
-              0xFF10B981,
-            ).withValues(alpha: charging ? 0.6 : 0.35),
-            blurRadius: charging ? 28 : 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Icon(
-        charging ? Icons.bolt_rounded : Icons.electric_car_rounded,
-        color: Colors.white,
-        size: 34,
+    final bool charging = widget.charging;
+
+    return SizedBox(
+      width: 84,
+      height: 84,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (BuildContext context, Widget? _) {
+          final double t = _c.value;
+          // Two breaths per ring turn.
+          final double pulse = charging
+              ? (math.sin(t * math.pi * 4) + 1) / 2
+              : 0;
+          return Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              if (charging)
+                Transform.rotate(
+                  angle: t * math.pi * 2,
+                  child: CustomPaint(
+                    size: const Size(84, 84),
+                    painter: _RingPainter(),
+                  ),
+                ),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Color(0xFF34D399), Color(0xFF0EA5A4)],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: isDark ? 0.25 : 0.7),
+                    width: 1.5,
+                  ),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(
+                        alpha: charging ? 0.45 + 0.30 * pulse : 0.35,
+                      ),
+                      blurRadius: charging ? 22 + 14 * pulse : 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Transform.scale(
+                  scale: 1 + 0.10 * pulse,
+                  child: Icon(
+                    charging ? Icons.bolt_rounded : Icons.electric_car_rounded,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+/// A comet of light on a faint track, rotated by [_CarMark].
+class _RingPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect r = (Offset.zero & size).deflate(3);
+    canvas.drawCircle(
+      r.center,
+      r.width / 2,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0xFF34D399).withValues(alpha: 0.18),
+    );
+    canvas.drawArc(
+      r,
+      0,
+      math.pi * 1.4,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..shader = SweepGradient(
+          endAngle: math.pi * 1.4,
+          colors: <Color>[
+            const Color(0xFF34D399).withValues(alpha: 0),
+            const Color(0xFF34D399),
+            const Color(0xFF22D3EE),
+          ],
+        ).createShader(r),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => false;
 }
 
 class _AddVehicle extends StatelessWidget {
@@ -260,35 +374,22 @@ class _LiveCharge extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
-                AppStrings.get(
-                  soc == null ? 'charge_soc_unknown' : 'charge_battery',
+                charge.batteryCaption,
+                style: TextStyle(
+                  color: charge.hasEstimate ? palette.accent : palette.inkMuted,
+                  fontSize: 12.5,
+                  fontWeight: charge.hasEstimate
+                      ? FontWeight.w800
+                      : FontWeight.w400,
                 ),
-                style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            height: 10,
-            child: Stack(
-              children: <Widget>[
-                Container(color: palette.inkMuted.withValues(alpha: 0.15)),
-                FractionallySizedBox(
-                  widthFactor: ((soc ?? 0) / 100).clamp(0.0, 1.0),
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: <Color>[Color(0xFF34D399), Color(0xFF22D3EE)],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _ChargeBar(
+          fraction: ((soc ?? 0) / 100).clamp(0.0, 1.0),
+          track: palette.inkMuted.withValues(alpha: 0.15),
         ),
         const SizedBox(height: 14),
         Row(
@@ -397,6 +498,94 @@ class _Tile extends StatelessWidget {
             style: TextStyle(color: palette.inkMuted, fontSize: 11),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The battery bar with a light sweeping through the filled part, left to
+/// right, like current flowing in — the "it is charging" motion.
+class _ChargeBar extends StatefulWidget {
+  const _ChargeBar({required this.fraction, required this.track});
+
+  final double fraction;
+  final Color track;
+
+  @override
+  State<_ChargeBar> createState() => _ChargeBarState();
+}
+
+class _ChargeBarState extends State<_ChargeBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final bool reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduce) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: 10,
+        child: Stack(
+          children: <Widget>[
+            Container(color: widget.track),
+            FractionallySizedBox(
+              widthFactor: widget.fraction,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: <Color>[Color(0xFF34D399), Color(0xFF22D3EE)],
+                      ),
+                    ),
+                  ),
+                  AnimatedBuilder(
+                    animation: _c,
+                    builder: (BuildContext context, Widget? _) {
+                      if (!_c.isAnimating) return const SizedBox.shrink();
+                      // From fully left of the fill to fully right of it.
+                      final double x = -1.6 + _c.value * 3.2;
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment(x - 0.5, 0),
+                            end: Alignment(x + 0.5, 0),
+                            colors: <Color>[
+                              Colors.white.withValues(alpha: 0),
+                              Colors.white.withValues(alpha: 0.65),
+                              Colors.white.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

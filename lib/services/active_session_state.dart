@@ -17,6 +17,9 @@ class ActiveSessionState {
 
   /// The car's own state of charge, only if the station passed one on.
   double? socPercent;
+
+  /// Backend's estimate of minutes to a full battery, when it can make one.
+  int? minutesToFull;
   double powerKw = 0;
   double energyKwh = 0;
 
@@ -31,8 +34,10 @@ class ActiveSessionState {
     required double energyKwh,
     required double powerKw,
     double? socPercent,
+    int? minutesToFull,
     double? costMnt,
   }) {
+    this.minutesToFull = minutesToFull;
     this.transactionId = transactionId;
     this.stationName = stationName;
     this.energyKwh = energyKwh;
@@ -47,6 +52,7 @@ class ActiveSessionState {
     transactionId = null;
     stationName = null;
     socPercent = null;
+    minutesToFull = null;
     powerKw = 0;
     energyKwh = 0;
     costMnt = null;

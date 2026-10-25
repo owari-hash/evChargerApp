@@ -316,6 +316,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           energyKwh: active.energyKwh.toDouble(),
           powerKw: (active.lastPowerW ?? 0) / 1000.0,
           socPercent: active.lastSocPercent?.toDouble(),
+          minutesToFull: active.minutesToFull,
           costMnt: active.cost?.toDouble(),
         );
       });
@@ -639,6 +640,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       // one, and the meter's power, energy and bill.
       charge = ChargeStatus(
         socPercent: _session.socPercent,
+        minutesToFull: _session.minutesToFull,
         powerKw: _session.powerKw,
         energyKwh: _session.energyKwh,
         costMnt: _session.costMnt,

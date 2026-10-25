@@ -256,8 +256,17 @@ class _StationSheetState extends State<StationSheet> {
                 ),
                 const SizedBox(height: 8),
                 ..._connectors.map(
-                  (StationConnector c) =>
-                      ConnectorOptionTile(connector: c, online: s.isOnline),
+                  (StationConnector c) => ConnectorOptionTile(
+                    connector: c,
+                    online: s.isOnline,
+                    // A gun is only picked by scanning its QR sticker, so the
+                    // start names the gun the driver is standing at.
+                    onTap: () => AppToast.show(
+                      context,
+                      AppStrings.get('qr_required_title'),
+                      kind: ToastKind.info,
+                    ),
+                  ),
                 ),
               ],
               const SizedBox(height: 18),

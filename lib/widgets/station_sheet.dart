@@ -189,6 +189,21 @@ class _StationSheetState extends State<StationSheet> {
                       ),
                     ),
                   ),
+                  // Directions sit by the name as an icon, not a full-width button.
+                  IconButton(
+                    onPressed: _navigateToMap,
+                    tooltip: AppStrings.get('directions'),
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      backgroundColor: palette.accent.withValues(alpha: 0.12),
+                    ),
+                    icon: Icon(
+                      Icons.navigation_rounded,
+                      size: 20,
+                      color: palette.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: AppStrings.get('close'),
@@ -230,18 +245,6 @@ class _StationSheetState extends State<StationSheet> {
               ],
               const SizedBox(height: 14),
               _FactsRow(station: s),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _navigateToMap,
-                      icon: const Icon(Icons.navigation_rounded, size: 18),
-                      label: Text(AppStrings.get('directions')),
-                    ),
-                  ),
-                ],
-              ),
               // Every gun with its live state — one someone has just scanned
               // reads as in use. Only the QR scanner narrows this to one gun.
               if (_connectors.isNotEmpty) ...<Widget>[

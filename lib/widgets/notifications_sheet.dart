@@ -17,7 +17,7 @@ void showNotificationsSheet(
   BuildContext context, {
   void Function(AppNotification item)? onOpen,
 }) {
-  unawaited(NotificationsStore.instance.markAllRead());
+  // Opening no longer clears the badge; «Бүгдийг унших» does.
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -48,6 +48,28 @@ String notificationTime(DateTime at, {DateTime? now}) {
     return '${AppStrings.get('notif_yesterday')} $clock';
   }
   return '${local.year}.${two(local.month)}.${two(local.day)} $clock';
+}
+
+/// «Цэвэрлэх» asks first; clearing cannot be undone.
+Future<void> _confirmClear(BuildContext context) async {
+  final bool? yes = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext dialogContext) => AlertDialog(
+      title: Text(AppStrings.get('notifications_clear_confirm')),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          style: AppTheme.cancelButtonStyle,
+          child: Text(AppStrings.get('cancel')),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(AppStrings.get('notifications_clear')),
+        ),
+      ],
+    ),
+  );
+  if (yes == true) await NotificationsStore.instance.clearAll();
 }
 
 class NotificationsSheet extends StatelessWidget {
@@ -117,6 +139,38 @@ class NotificationsSheet extends StatelessWidget {
                             letterSpacing: -0.3,
                           ),
                         ),
+                      ),
+                      ValueListenableBuilder<List<AppNotification>>(
+                        valueListenable: NotificationsStore.instance.items,
+                        builder: (context, items, _) {
+                          if (items.isEmpty) return const SizedBox.shrink();
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              ValueListenableBuilder<int>(
+                                valueListenable: NotificationsStore.instance.unread,
+                                builder: (context, unread, _) => IconButton(
+                                  tooltip: AppStrings.get('notifications_mark_all_read'),
+                                  onPressed: unread == 0
+                                      ? null
+                                      : () => unawaited(
+                                          NotificationsStore.instance.markAllRead(),
+                                        ),
+                                  color: palette.accent,
+                                  disabledColor: palette.inkMuted.withValues(alpha: 0.4),
+                                  icon: const Icon(Icons.done_all_rounded, size: 21),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: AppStrings.get('notifications_clear'),
+                                onPressed: () => unawaited(_confirmClear(context)),
+                                color: AppTheme.errorRed,
+                                icon: const Icon(Icons.delete_outline_rounded, size: 21),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          );
+                        },
                       ),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),

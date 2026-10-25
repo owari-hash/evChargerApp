@@ -301,4 +301,13 @@ class NotificationsStore {
     await _loading;
     unread.value = 0;
   }
+
+  /// «Цэвэрлэх»: empties this driver's list on this phone.
+  Future<void> clearAll() async {
+    final String? userId = _userId;
+    await _loading;
+    items.value = const <AppNotification>[];
+    unread.value = 0;
+    if (userId != null && _userId == userId) await _persist(userId);
+  }
 }

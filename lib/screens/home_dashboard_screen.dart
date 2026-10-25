@@ -15,6 +15,7 @@ import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/feedback_card.dart';
 import '../widgets/signed_out_panel.dart';
 import '../widgets/tariff_panel.dart';
 import '../widgets/charging_session_receipt_sheet.dart';
@@ -643,6 +644,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 contentPadding: const EdgeInsets.all(10),
                 child: _buildRecentSessions(),
               ),
+              const SizedBox(height: 18),
+              // «Санал хүсэлт» — feedback and partnership requests.
+              const FeedbackCard(),
               const SizedBox(height: 8),
             ],
           ),

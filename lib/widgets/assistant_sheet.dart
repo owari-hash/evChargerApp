@@ -102,7 +102,8 @@ class _AssistantSheetState extends State<_AssistantSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: BoxDecoration(
-        color: palette.panel,
+        // Theme background, not the brand-green panel: follows light/dark.
+        color: palette.bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
@@ -119,7 +120,7 @@ class _AssistantSheetState extends State<_AssistantSheet> {
                     child: Text(
                       AppStrings.get('assistant_label'),
                       style: TextStyle(
-                        color: palette.onPanel,
+                        color: palette.ink,
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
@@ -129,11 +130,11 @@ class _AssistantSheetState extends State<_AssistantSheet> {
                     IconButton(
                       onPressed: _streaming ? null : () => setState(() => _messages.clear()),
                       tooltip: AppStrings.get('assistant_new_chat'),
-                      icon: Icon(Icons.refresh_rounded, color: palette.onPanel.withValues(alpha: 0.7)),
+                      icon: Icon(Icons.refresh_rounded, color: palette.inkMuted),
                     ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: Icon(Icons.close_rounded, color: palette.onPanel),
+                    icon: Icon(Icons.close_rounded, color: palette.ink),
                   ),
                 ],
               ),
@@ -189,12 +190,12 @@ class _AssistantSheetState extends State<_AssistantSheet> {
                       enabled: !_streaming,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
-                      style: TextStyle(color: palette.onPanel),
+                      style: TextStyle(color: palette.ink),
                       decoration: InputDecoration(
                         hintText: AppStrings.get('assistant_placeholder'),
                         hintStyle: TextStyle(color: palette.inkMuted),
                         filled: true,
-                        fillColor: palette.bg,
+                        fillColor: palette.card,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -253,13 +254,15 @@ class _Bubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: BoxDecoration(
-          color: isUser ? palette.accent : palette.bg,
+          color: isUser ? palette.accent : palette.card,
           borderRadius: BorderRadius.circular(16),
+          // The bot's bubble is close to the page colour in light mode.
+          border: isUser ? null : Border.all(color: palette.border),
         ),
         child: Text(
           text,
           style: TextStyle(
-            color: isUser ? Colors.white : palette.onPanel,
+            color: isUser ? Colors.white : palette.ink,
             fontSize: 14,
             height: 1.35,
           ),

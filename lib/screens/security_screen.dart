@@ -448,6 +448,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         const SizedBox(height: 4),
         TextButton(
           onPressed: _changing ? null : _closePinForm,
+          style: AppTheme.cancelButtonStyle,
           child: Text(AppStrings.get('cancel')),
         ),
       ],
@@ -589,6 +590,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
+            style: AppTheme.cancelButtonStyle,
             child: Text(AppStrings.get('cancel')),
           ),
           FilledButton(

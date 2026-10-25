@@ -158,6 +158,15 @@ class AppTheme {
   static const Color warningOrange = Color(0xFFE67E22);
   static const Color errorRed = Color(0xFFE74C3C);
 
+  /// Every «Цуцлах» button: red with white text, so backing out is never
+  /// mistaken for the action itself.
+  static ButtonStyle get cancelButtonStyle => TextButton.styleFrom(
+    backgroundColor: errorRed,
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
+
   static ThemeData get lightTheme => _build(AppPalette.light, Brightness.light);
 
   static ThemeData get darkTheme => _build(AppPalette.dark, Brightness.dark);

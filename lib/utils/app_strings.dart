@@ -359,7 +359,7 @@ class AppStrings {
       'wallet_filter_apply': 'Шүүх',
       'wallet_filter_custom': 'Огноо сонгох',
       'wallet_filter_empty': 'Энэ хугацаанд хөдөлгөөн алга.',
-      'wallet_entry_topup': 'Цэнэглэлт',
+      'wallet_entry_topup': 'Хэтэвч цэнэглэлт',
       'wallet_entry_charge': 'Цэнэглэлтийн төлбөр',
       'wallet_entry_refund': 'Буцаалт',
       'wallet_entry_adjustment': 'Тохируулга',
@@ -397,7 +397,7 @@ class AppStrings {
       'card_instruction': 'Голомт банкны аюулгүй хуудсанд картаа оруулж төлнө үү. Төлбөр орж ирэхэд хэтэвч автоматаар цэнэглэгдэнэ.',
       'card_open': 'Төлбөрийн хуудас нээх',
       'card_failed': 'Картын төлбөр амжилтгүй боллоо. Дахин оролдоно уу.',
-      'card_save': 'Дараагийн удаа нэг товшилтоор төлөхөөр картаа хадгалах',
+      'card_save': 'Карт мэдээллийг сануулах /тун удахгүй/',
       'plug_not_detected':
           'Цэнэглэгч хошуу бүрэн залгагдсан эсэхийг дахин шалгана уу',
       'card_save_note': 'Эхний төлбөрийн дараа карт тань хадгалагдана.',
@@ -886,7 +886,7 @@ class AppStrings {
       'card_instruction': 'Enter your card on Golomt Bank\'s secure page. Your wallet is topped up as soon as the payment arrives.',
       'card_open': 'Open payment page',
       'card_failed': 'The card payment did not go through. Please try again.',
-      'card_save': 'Save this card for one-tap top-ups',
+      'card_save': 'Remember card details (coming soon)',
       'plug_not_detected':
           'The station hasn\'t detected the plug. Push it fully into the car until it clicks, wait 5 seconds and try again.',
       'card_save_note': 'Your card is saved with this first payment — after that, top-ups are one tap.',

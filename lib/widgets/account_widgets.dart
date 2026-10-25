@@ -493,6 +493,7 @@ Future<void> showStartBlockedDialog(
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.pop(dialogContext),
+          style: AppTheme.cancelButtonStyle,
           child: Text(AppStrings.get('cancel')),
         ),
         FilledButton(

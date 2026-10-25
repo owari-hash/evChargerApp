@@ -264,8 +264,9 @@ class GlassSegmented extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(6),
                                       child: Image.asset(
                                         images![i]!,
-                                        width: 22,
-                                        height: 22,
+                                        // Same box as the icons beside it.
+                                        width: 20,
+                                        height: 20,
                                         fit: BoxFit.contain,
                                       ),
                                     )
@@ -286,9 +287,10 @@ class GlassSegmented extends StatelessWidget {
                                           : palette.inkMuted,
                                       fontSize: 15,
                                       height: 1,
-                                      fontWeight: i == value
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
+                                      // One weight for every option: a bolder
+                                      // selected label is wider and shifted
+                                      // the spacing each time it changed.
+                                      fontWeight: FontWeight.w700,
                                     ),
                                     child: Text(options[i].$2),
                                   ),

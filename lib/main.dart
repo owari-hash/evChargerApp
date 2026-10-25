@@ -591,8 +591,6 @@ class _MainAppFrameState extends State<MainAppFrame>
 
   /// Logging out throws away the session, so make the user mean it.
   Future<void> _confirmLogout() async {
-    final AppPalette palette = context.palette;
-
     final bool? shouldLogOut = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -603,7 +601,7 @@ class _MainAppFrameState extends State<MainAppFrame>
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              style: TextButton.styleFrom(foregroundColor: palette.inkMuted),
+              style: AppTheme.cancelButtonStyle,
               child: Text(AppStrings.get('cancel')),
             ),
             FilledButton(

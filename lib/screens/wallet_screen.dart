@@ -516,13 +516,20 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
+  /// When it happened, plus a charge's kWh. The description used to stand
+  /// here, but for a top-up it only repeated the amount on the right.
   String _entrySubtitle(WalletEntry entry) {
-    final String? description = entry.description;
-    if (description != null && description.isNotEmpty) return description;
-    if (entry.chargePointId != null) return entry.chargePointId!;
-    final DateTime? at = entry.createdAt;
-    if (at == null) return '';
-    return '${at.year}-${_two(at.month)}-${_two(at.day)} ${_two(at.hour)}:${_two(at.minute)}';
+    final DateTime? at = entry.createdAt?.toLocal();
+    final String when = at == null
+        ? ''
+        : '${at.year}.${_two(at.month)}.${_two(at.day)} ${_two(at.hour)}:${_two(at.minute)}';
+    final String? kwh = RegExp(
+      r'([\d.,]+)\s*кВт·ц',
+    ).firstMatch(entry.description ?? '')?.group(1);
+    return <String>[
+      if (when.isNotEmpty) when,
+      if (kwh != null) '$kwh кВт·ц',
+    ].join(' · ');
   }
 }
 
@@ -687,6 +694,7 @@ class _TopUpFormState extends State<_TopUpForm> {
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
+            style: AppTheme.cancelButtonStyle,
             child: Text(AppStrings.get('cancel')),
           ),
           FilledButton(
@@ -756,6 +764,7 @@ class _TopUpFormState extends State<_TopUpForm> {
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
+            style: AppTheme.cancelButtonStyle,
             child: Text(AppStrings.get('cancel')),
           ),
           FilledButton(
@@ -1146,22 +1155,10 @@ class _TopUpFormState extends State<_TopUpForm> {
                   visualDensity: VisualDensity.compact,
                 ),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        AppStrings.get('card_save'),
-                        style: TextStyle(color: palette.ink, fontSize: 12.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        AppStrings.get('card_save_note'),
-                        style: TextStyle(
-                          color: palette.inkMuted,
-                          fontSize: 11.5,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    AppStrings.get('card_save'),
+                    // A note, not a heading: the feature is still coming.
+                    style: TextStyle(color: palette.inkMuted, fontSize: 12),
                   ),
                 ),
               ],

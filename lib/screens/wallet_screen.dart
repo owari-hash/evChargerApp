@@ -37,6 +37,75 @@ class _WalletScreenState extends State<WalletScreen> {
   String? _loadError;
   bool _loading = true;
 
+  /// The history filter stays tucked away until the driver taps its button.
+  bool _filterOpen = false;
+
+  /// A quick range (7, 14 or 30 days back from today), or null.
+  int? _presetDays;
+
+  /// A range picked on the calendar; replaces any quick range.
+  DateTimeRange? _customRange;
+
+  bool get _filtering => _presetDays != null || _customRange != null;
+
+  /// What the active filter is called, for the summary pill.
+  String get _filterLabel {
+    final DateTimeRange? range = _customRange;
+    if (range != null) return '${_date(range.start)} – ${_date(range.end)}';
+    return AppStrings.get(
+      'wallet_filter_days',
+    ).replaceFirst('{n}', '$_presetDays');
+  }
+
+  List<WalletEntry> _applyFilter(List<WalletEntry> entries) {
+    if (!_filtering) return entries;
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime from;
+    final DateTime until;
+    final DateTimeRange? range = _customRange;
+    if (range != null) {
+      from = range.start;
+      until = DateTime(range.end.year, range.end.month, range.end.day + 1);
+    } else {
+      // "Last 7 days" counts today as one of the seven.
+      from = DateTime(today.year, today.month, today.day - (_presetDays! - 1));
+      until = DateTime(today.year, today.month, today.day + 1);
+    }
+    return entries.where((WalletEntry e) {
+      final DateTime? at = e.createdAt?.toLocal();
+      return at != null && !at.isBefore(from) && at.isBefore(until);
+    }).toList();
+  }
+
+  Future<void> _pickRange() async {
+    final DateTime now = DateTime.now();
+    final AppPalette palette = context.palette;
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: now,
+      initialDateRange: _customRange,
+      builder: (BuildContext context, Widget? child) {
+        final ThemeData theme = Theme.of(context);
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
+              primary: palette.accent,
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _customRange = picked;
+      _presetDays = null;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +118,8 @@ class _WalletScreenState extends State<WalletScreen> {
       _loadError = null;
     });
     try {
-      final WalletSnapshot snapshot = await _wallets.load();
+      // The API's maximum, so the 30-day filter has a month of activity to show.
+      final WalletSnapshot snapshot = await _wallets.load(entryLimit: 100);
       if (!mounted) return;
       setState(() {
         _snapshot = snapshot;
@@ -333,26 +403,262 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _historyCard(AppPalette palette, List<WalletEntry> entries) {
+  Widget _historyCard(AppPalette palette, List<WalletEntry> all) {
+    final List<WalletEntry> entries = _applyFilter(all);
+    final String emptyKey = _filtering && all.isNotEmpty
+        ? 'wallet_filter_empty'
+        : 'wallet_history_empty';
+
     return SectionCard(
       glass: true,
       title: AppStrings.get('wallet_history'),
-      child: entries.isEmpty
-          ? Align(
+      trailing: all.isEmpty ? null : _filterButton(palette),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _filterOpen
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _filterPanel(palette),
+                  )
+                : _filtering
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _activeFilterPill(palette),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+          if (entries.isEmpty)
+            Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                AppStrings.get('wallet_history_empty'),
+                AppStrings.get(emptyKey),
                 style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
               ),
             )
-          : Column(
+          else
+            for (int i = 0; i < entries.length; i++) ...<Widget>[
+              if (i > 0) Divider(color: palette.border, height: 20),
+              _entryRow(palette, entries[i]),
+            ],
+        ],
+      ),
+    );
+  }
+
+  /// The tune icon in the history header; tinted with a dot while a filter is on.
+  Widget _filterButton(AppPalette palette) {
+    final bool lit = _filterOpen || _filtering;
+    return Tooltip(
+      message: AppStrings.get('wallet_filter'),
+      child: Material(
+        color: lit
+            ? palette.accent.withValues(alpha: 0.14)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _filterOpen = !_filterOpen),
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Stack(
+              alignment: Alignment.center,
               children: <Widget>[
-                for (int i = 0; i < entries.length; i++) ...<Widget>[
-                  if (i > 0) Divider(color: palette.border, height: 20),
-                  _entryRow(palette, entries[i]),
-                ],
+                Icon(
+                  Icons.tune_rounded,
+                  size: 19,
+                  color: lit ? palette.accent : palette.inkMuted,
+                ),
+                if (_filtering)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: palette.accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterPanel(AppPalette palette) {
+    final DateTimeRange? range = _customRange;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ThemeController.isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.white.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              for (final int days in const <int>[7, 14, 30]) ...<Widget>[
+                if (days != 7) const SizedBox(width: 8),
+                Expanded(
+                  child: _filterChip(
+                    palette,
+                    label: AppStrings.get(
+                      'wallet_filter_days',
+                    ).replaceFirst('{n}', '$days'),
+                    selected: _presetDays == days,
+                    onTap: () => setState(() {
+                      _presetDays = _presetDays == days ? null : days;
+                      _customRange = null;
+                    }),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          _filterChip(
+            palette,
+            icon: Icons.calendar_month_rounded,
+            label: range == null
+                ? AppStrings.get('wallet_filter_custom')
+                : '${_date(range.start)} – ${_date(range.end)}',
+            selected: range != null,
+            onTap: _pickRange,
+          ),
+          if (_filtering) ...<Widget>[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => setState(() {
+                  _presetDays = null;
+                  _customRange = null;
+                }),
+                style: TextButton.styleFrom(
+                  foregroundColor: palette.inkMuted,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(
+                  AppStrings.get('wallet_filter_clear'),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(
+    AppPalette palette, {
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
+    return Material(
+      color: selected ? palette.accent : palette.accent.withValues(alpha: 0.0),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? palette.accent : palette.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (icon != null) ...<Widget>[
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? Colors.white : palette.inkMuted,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? Colors.white : palette.ink,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shown while the panel is closed, so a filtered list never looks like the whole history.
+  Widget _activeFilterPill(AppPalette palette) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: palette.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: palette.accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.calendar_today_rounded, size: 13, color: palette.accent),
+          const SizedBox(width: 6),
+          Text(
+            _filterLabel,
+            style: TextStyle(
+              color: palette.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 2),
+          InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => setState(() {
+              _presetDays = null;
+              _customRange = null;
+            }),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 14, color: palette.accent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -457,6 +763,8 @@ class _WalletScreenState extends State<WalletScreen> {
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+String _date(DateTime d) => '${d.year}.${_two(d.month)}.${_two(d.day)}';
 
 /// Amount picker plus the invoice it opens: a QPay QR, or a Golomt Bank card
 /// page the driver pays on in the browser.

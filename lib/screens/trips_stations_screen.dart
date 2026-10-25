@@ -34,8 +34,15 @@ class TripsStationsScreen extends StatefulWidget {
   State<TripsStationsScreen> createState() => _TripsStationsScreenState();
 }
 
+/// Which stations the list shows.
+enum _StationShow { all, active, inactive }
+
 class _TripsStationsScreenState extends State<TripsStationsScreen> {
   final StationsService _stations = StationsService.instance;
+  _StationShow _show = _StationShow.all;
+
+  static bool _isActive(ChargingStationLocation s) =>
+      s.availability != StationAvailability.offline;
 
   @override
   void initState() {
@@ -98,11 +105,98 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               // The list is the last one that loaded; say so when it could not
               // be refreshed rather than passing it off as live.
               if (error != null && !loading) _buildOfflineNotice(context),
-              ...all.map((station) => _buildStationCard(station, context)),
+              _buildShowFilter(context, all),
+              const SizedBox(height: 14),
+              ...all
+                  .where(
+                    (ChargingStationLocation s) => switch (_show) {
+                      _StationShow.all => true,
+                      _StationShow.active => _isActive(s),
+                      _StationShow.inactive => !_isActive(s),
+                    },
+                  )
+                  .map((station) => _buildStationCard(station, context)),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Бүгд / Идэвхтэй / Идэвхгүй, each with how many stations it holds.
+  Widget _buildShowFilter(
+    BuildContext context,
+    List<ChargingStationLocation> all,
+  ) {
+    final AppPalette palette = context.palette;
+    final int active = all.where(_isActive).length;
+    final List<(_StationShow, String, int, Color?)> options =
+        <(_StationShow, String, int, Color?)>[
+          (_StationShow.all, AppStrings.get('stations_show_all'), all.length, null),
+          (
+            _StationShow.active,
+            AppStrings.get('stations_show_active'),
+            active,
+            StationAvailability.available.tone,
+          ),
+          (
+            _StationShow.inactive,
+            AppStrings.get('stations_show_inactive'),
+            all.length - active,
+            StationAvailability.offline.tone,
+          ),
+        ];
+
+    return Row(
+      children: <Widget>[
+        for (final (_StationShow value, String label, int count, Color? dot)
+            in options) ...<Widget>[
+          if (value != _StationShow.all) const SizedBox(width: 8),
+          Expanded(
+            child: Material(
+              color: _show == value
+                  ? palette.ink
+                  : palette.ink.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(20),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => setState(() => _show = value),
+                child: SizedBox(
+                  height: 38,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      if (dot != null) ...<Widget>[
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: dot,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: Text(
+                          '$label $count',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _show == value ? palette.bg : palette.ink,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

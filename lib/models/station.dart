@@ -22,7 +22,8 @@ enum StationAvailability {
   busy(Color(0xFFF59E0B)),
 
   /// The charge point is not talking to the CSMS.
-  offline(Color(0xFF94A3B8));
+  // Red, not grey: a station that is down should read as a problem.
+  offline(Color(0xFFEF4444));
 
   const StationAvailability(this.tone);
 

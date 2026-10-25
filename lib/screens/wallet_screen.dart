@@ -487,7 +487,13 @@ class _WalletScreenState extends State<WalletScreen> {
               AppStrings.get(
                 'wallet_balance_after',
               ).replaceFirst('{balance}', formatMnt(entry.balanceAfter)),
-              style: TextStyle(color: palette.inkMuted, fontSize: 10.5),
+              // Plain colour but bold: the green/red amount above says which
+              // way money moved, this says where the wallet ended up.
+              style: TextStyle(
+                color: palette.ink,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),

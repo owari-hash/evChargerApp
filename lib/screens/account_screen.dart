@@ -31,7 +31,6 @@ class _AccountScreenState extends State<AccountScreen> {
   AccountService get _account =>
       widget.accountService ?? AccountService.instance;
 
-  final TextEditingController _newTag = TextEditingController();
   late final TextEditingController _vehicleBrand = TextEditingController(
     text: _auth.currentUser.value?.vehicleBrand ?? '',
   );
@@ -39,12 +38,10 @@ class _AccountScreenState extends State<AccountScreen> {
     text: _auth.currentUser.value?.vehicleModel ?? '',
   );
 
-  bool _linkingTag = false;
   bool _savingVehicle = false;
 
   @override
   void dispose() {
-    _newTag.dispose();
     _vehicleBrand.dispose();
     _vehicleModel.dispose();
     super.dispose();
@@ -66,65 +63,6 @@ class _AccountScreenState extends State<AccountScreen> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _savingVehicle = false);
-      showApiSnack(context, error);
-    }
-  }
-
-  Future<void> _linkTag() async {
-    final String tag = _newTag.text.trim();
-    if (tag.isEmpty || _linkingTag) return;
-    FocusScope.of(context).unfocus();
-    setState(() => _linkingTag = true);
-
-    try {
-      await _account.linkIdTag(tag);
-      if (!mounted) return;
-      _newTag.clear();
-      setState(() => _linkingTag = false);
-      showSnack(
-        context,
-        AppStrings.get('acct_idtags_linked').replaceFirst('{tag}', tag),
-      );
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() => _linkingTag = false);
-      showApiSnack(context, error);
-    }
-  }
-
-  Future<void> _unlinkTag(String tag) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: Text(AppStrings.get('acct_idtags_unlink_confirm')),
-        content: Text(tag),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(AppStrings.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.errorRed,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(AppStrings.get('acct_idtags_unlink_yes')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    try {
-      await _account.unlinkIdTag(tag);
-      if (!mounted) return;
-      showSnack(
-        context,
-        AppStrings.get('acct_idtags_unlinked').replaceFirst('{tag}', tag),
-      );
-    } on ApiException catch (error) {
-      if (!mounted) return;
       showApiSnack(context, error);
     }
   }
@@ -157,8 +95,8 @@ class _AccountScreenState extends State<AccountScreen> {
             _navCard(palette),
             const SizedBox(height: 12),
             _vehicleCard(palette),
-            const SizedBox(height: 12),
-            _idTagsCard(palette, user),
+            // The charge tag is the system's own identifier for the driver;
+            // it is issued with the account and drivers never need to see it.
           ],
         );
       },
@@ -363,80 +301,6 @@ class _AccountScreenState extends State<AccountScreen> {
             label: AppStrings.get('acct_vehicle_save'),
             busy: _savingVehicle,
             onPressed: _saveVehicle,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _idTagsCard(AppPalette palette, AuthUser user) {
-    return SectionCard(
-      title: AppStrings.get('acct_idtags_title'),
-      subtitle: AppStrings.get('acct_idtags_body'),
-      child: Column(
-        children: <Widget>[
-          if (user.idTags.isEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                AppStrings.get('acct_idtags_none'),
-                style: TextStyle(color: palette.inkMuted, fontSize: 12.5),
-              ),
-            )
-          else
-            ...user.idTags.map(
-              (String tag) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: <Widget>[
-                    Icon(Icons.badge_rounded, size: 17, color: palette.accent),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        tag,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.ink,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => _unlinkTag(tag),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppTheme.errorRed,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: Text(
-                        AppStrings.get('acct_idtags_unlink'),
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
-          AccountField(
-            controller: _newTag,
-            label: AppStrings.get('acct_idtags_add'),
-            icon: Icons.nfc_rounded,
-            enabled: !_linkingTag,
-            helper: AppStrings.get('acct_idtags_hint'),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _linkTag(),
-          ),
-          const SizedBox(height: 12),
-          PrimaryAction(
-            label: AppStrings.get('acct_idtags_submit'),
-            busy: _linkingTag,
-            onPressed: _linkTag,
           ),
         ],
       ),

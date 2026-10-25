@@ -100,6 +100,9 @@ class AppStrings {
       'light_mode': 'Гэрэлтэй горим',
       'home': 'Нүүр',
       'stations': 'Станцууд',
+      'stations_show_all': 'Бүгд',
+      'stations_show_active': 'Идэвхтэй',
+      'stations_show_inactive': 'Идэвхгүй',
       'map': 'Газрын зураг',
       'quick_controls': 'Түргэн удирдлага',
       'charging': 'Цэнэглэж байна',
@@ -256,9 +259,9 @@ class AppStrings {
       'acct_no_number': 'Дугаар оруулаагүй байна',
       'acct_nav_wallet': 'Хэтэвч',
       'acct_nav_wallet_sub': 'Үлдэгдэл, цэнэглэлт, хөдөлгөөн',
-      'acct_nav_security': 'Аюулгүй байдал',
+      'acct_nav_security': 'Хувийн мэдээлэл',
       'acct_nav_security_sub': 'PIN код, и-мэйл, утас',
-      'acct_nav_sessions': 'Цэнэглэлтийн түүх',
+      'acct_nav_sessions': 'Цэнэглэлтүүд',
       'acct_nav_sessions_sub': 'Өмнөх цэнэглэлт, баримт',
       'acct_idtags_title': 'Цэнэглэх картууд',
       'acct_idtags_body':
@@ -334,7 +337,7 @@ class AppStrings {
       'start_blocked_cta': 'Хэтэвч цэнэглэх',
       'wallet_unavailable':
           'Хэтэвчийн үйлчилгээ түр боломжгүй байна. Хэсэг хугацааны дараа дахин оролдоно уу.',
-      'wallet_history': 'Хэтэвчийн хөдөлгөөн',
+      'wallet_history': 'Сүүлийн цэнэглэлтүүд',
       'wallet_history_empty': 'Одоогоор хөдөлгөөн алга байна.',
       'tariff_yours': 'Таны одоогийн тариф',
       'tariff_free': 'Үнэгүй · дотоод хэрэглэгч',
@@ -429,7 +432,7 @@ class AppStrings {
       'saved_card_remove_yes': 'Тийм, устгая',
 
       // ---- Charging history ----
-      'sess_title': 'Цэнэглэлтийн түүх',
+      'sess_title': 'Цэнэглэлтүүд',
       'sess_empty': 'Анхны цэнэглэлтийн дараа таны түүх энд харагдана.',
       'sess_unavailable':
           'Цэнэглэх сүлжээтэй одоохондоо холбогдож чадсангүй тул таны цэнэглэлтүүд харагдахгүй байна.',
@@ -454,7 +457,7 @@ class AppStrings {
           'Зогсоох хүсэлтийг хүлээн авлаа. Цэнэглэгч цэнэглэлтийг дуусгаж байна.',
 
       // ---- Security ----
-      'sec_title': 'Аюулгүй байдал',
+      'sec_title': 'Хувийн мэдээлэл',
       'sec_pin_title': 'PIN код',
       'sec_pin_current': 'Одоогийн PIN код',
       'sec_pin_new': 'Шинэ PIN код',
@@ -594,6 +597,9 @@ class AppStrings {
       'light_mode': 'Light Mode',
       'home': 'Home',
       'stations': 'Stations',
+      'stations_show_all': 'All',
+      'stations_show_active': 'Active',
+      'stations_show_inactive': 'Inactive',
       'map': 'Map',
       'quick_controls': 'Quick Controls',
       'charging': 'Charging',
@@ -744,9 +750,9 @@ class AppStrings {
       'acct_no_number': 'No number yet',
       'acct_nav_wallet': 'Wallet',
       'acct_nav_wallet_sub': 'Balance, top-ups and activity',
-      'acct_nav_security': 'Security',
+      'acct_nav_security': 'Settings',
       'acct_nav_security_sub': 'PIN, email and phone',
-      'acct_nav_sessions': 'Charging history',
+      'acct_nav_sessions': 'Sessions',
       'acct_nav_sessions_sub': 'Past sessions and receipts',
       'acct_idtags_title': 'Charge tags',
       'acct_idtags_body':
@@ -820,7 +826,7 @@ class AppStrings {
       'start_blocked_cta': 'Top up wallet',
       'wallet_unavailable':
           'The wallet service is not available right now. Please try again shortly.',
-      'wallet_history': 'Wallet activity',
+      'wallet_history': 'Recent charges',
       'wallet_history_empty': 'No wallet activity yet.',
       'tariff_yours': 'Your rate right now',
       'tariff_free': 'Free · internal user',
@@ -913,7 +919,7 @@ class AppStrings {
       'saved_card_remove_yes': 'Yes, remove',
 
       // ---- Charging history ----
-      'sess_title': 'Charging history',
+      'sess_title': 'Sessions',
       'sess_empty': 'Your charges appear here after your first one.',
       'sess_unavailable':
           'We could not reach the charging network just now, so your sessions are not shown.',
@@ -938,7 +944,7 @@ class AppStrings {
           'Stop request accepted. The charger is ending the session.',
 
       // ---- Security ----
-      'sec_title': 'Security',
+      'sec_title': 'Settings',
       'sec_pin_title': 'PIN code',
       'sec_pin_current': 'Current PIN',
       'sec_pin_new': 'New PIN',

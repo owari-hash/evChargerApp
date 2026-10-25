@@ -14,8 +14,11 @@ import 'auth_gate.dart';
 /// What a driver reads for one gun's live state.
 String connectorStatusLabel(StationConnector connector, {bool online = true}) {
   if (!online) return AppStrings.get('connector_offline');
+  if (connector.inUseByOther) return AppStrings.get('connector_busy');
   if (connector.isAvailable) return AppStrings.get('available');
-  if (connector.status == 'Preparing') return AppStrings.get('connector_plugged');
+  if (connector.status == 'Preparing') {
+    return AppStrings.get('connector_plugged');
+  }
   if (connector.isCharging) return AppStrings.get('charging');
   if (connector.isFaulted) return AppStrings.get('connector_faulted');
   return AppStrings.get('connector_busy');
@@ -91,6 +94,7 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
 
   int? _selected;
   bool _starting = false;
+
   /// Every failure is reported as a toast, the same as on the web.
   void _fail(String message) {
     if (mounted) AppToast.show(context, message, kind: ToastKind.error);
@@ -182,7 +186,8 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
         );
         return;
       }
-      final String msg = (err.statusCode == 409 ||
+      final String msg =
+          (err.statusCode == 409 ||
               err.message.contains('хүлээж аваагүй') ||
               err.message.contains('залгасан'))
           ? AppStrings.get('plug_not_detected')
@@ -297,12 +302,13 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
 }
 
 /// One gun: name, plug type and power, live status, picked or not.
-class _ConnectorOption extends StatelessWidget {
-  const _ConnectorOption({
+class ConnectorOptionTile extends StatelessWidget {
+  const ConnectorOptionTile({
+    super.key,
     required this.connector,
-    required this.online,
-    required this.selected,
-    required this.onTap,
+    this.online = true,
+    this.selected = false,
+    this.onTap,
   });
 
   final StationConnector connector;

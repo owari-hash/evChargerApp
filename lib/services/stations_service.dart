@@ -38,7 +38,9 @@ class ConnectorLookup {
           ? (json['connectorId'] as num).toInt()
           : null,
       connectorType: _textOrNull(json['connectorType']),
-      powerKw: json['powerKw'] is num ? (json['powerKw'] as num).toDouble() : null,
+      powerKw: json['powerKw'] is num
+          ? (json['powerKw'] as num).toDouble()
+          : null,
       label: _textOrNull(json['label']),
     );
   }
@@ -105,7 +107,8 @@ class StationsService {
 
     for (final ChargingStationLocation s in stations.value) {
       if (s.id == trimmed || s.qrCode == trimmed) {
-        if (s.name.isNotEmpty && !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
+        if (s.name.isNotEmpty &&
+            !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
           return s.name.trim();
         }
         if (s.address.isNotEmpty) return s.address.trim();
@@ -114,7 +117,8 @@ class StationsService {
 
     if (isHexId) {
       for (final ChargingStationLocation s in stations.value) {
-        if (s.name.isNotEmpty && !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
+        if (s.name.isNotEmpty &&
+            !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(s.name.trim())) {
           return s.name.trim();
         }
       }
@@ -195,7 +199,10 @@ class StationsService {
   Future<ConnectorLookup> resolveConnectorCode(String raw) async {
     final String code = _extractCode(raw);
     if (code.isEmpty) {
-      throw const ApiException(statusCode: 400, message: 'Энэ QR кодыг танисангүй.');
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Энэ QR кодыг танисангүй.',
+      );
     }
     final Map<String, dynamic> body = await _client.get(
       '/app/connector/${Uri.encodeComponent(code)}',
@@ -247,6 +254,26 @@ class StationsService {
         .toList(growable: false);
   }
 
+  /// "I scanned this gun and I'm at it": holds it for the signed-in driver
+  /// for a minute, so someone else scanning the same sticker sees it as in
+  /// use. Call again every few seconds to keep it. False when another driver
+  /// already has it.
+  Future<bool> holdConnector(String stationId, int connectorId) async {
+    final Map<String, dynamic> body = await _client.post(
+      '/stations/${Uri.encodeComponent(stationId)}/hold',
+      body: <String, dynamic>{'connectorId': connectorId},
+    );
+    return body['held'] == true;
+  }
+
+  /// Lets go of this driver's hold early (it lapses on its own otherwise).
+  Future<void> releaseConnector(String stationId, int connectorId) async {
+    await _client.post(
+      '/stations/${Uri.encodeComponent(stationId)}/release',
+      body: <String, dynamic>{'connectorId': connectorId},
+    );
+  }
+
   /// Asks the charge point to begin a session over OCPP, on the signed-in
   /// driver's own charge tag. The station's own Authorize decides whether that
   /// tag can actually charge there — a wallet top-up, a Client-sponsored free
@@ -259,7 +286,9 @@ class StationsService {
   Future<void> startCharging(String stationId, {int? connectorId}) async {
     final Map<String, dynamic> body = await _client.post(
       '/stations/${Uri.encodeComponent(stationId)}/start',
-      body: connectorId != null ? <String, dynamic>{'connectorId': connectorId} : null,
+      body: connectorId != null
+          ? <String, dynamic>{'connectorId': connectorId}
+          : null,
     );
     final String status = (body['status'] ?? '').toString();
     if (status != 'Accepted') {

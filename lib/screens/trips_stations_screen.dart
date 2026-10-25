@@ -88,7 +88,9 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
             if (all.isEmpty && loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
               )
             else if (all.isEmpty)
               _buildEmpty(context, error)
@@ -209,10 +211,7 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                         ),
                       ),
                     ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: palette.inkMuted,
-                    ),
+                    Icon(Icons.chevron_right_rounded, color: palette.inkMuted),
                   ],
                 ),
                 if (station.address.trim().isNotEmpty ||
@@ -330,10 +329,59 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
   ChargingStationLocation? _station;
   String? _errorMessage;
 
+  /// The station's guns as `/live` last reported them — the only read that
+  /// says whether another driver has the scanned gun.
+  List<StationConnector>? _live;
+
+  /// Keeps the scanned gun held for this driver and its state fresh while the
+  /// confirm view is open.
+  Timer? _poll;
+  static const Duration _pollEvery = Duration(seconds: 5);
+
+  bool get _signedIn =>
+      (widget.authService ?? AuthService.instance).currentUser.value != null;
+
   @override
   void dispose() {
+    _poll?.cancel();
+    _releaseHold();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Holds the scanned gun (when signed in) and re-reads every gun's state.
+  /// Failures are quiet: the next tick tries again, and the server still
+  /// refuses a start on a gun someone else has.
+  Future<void> _syncLive(ConnectorLookup lookup) async {
+    final int? connectorId = lookup.connectorId;
+    if (connectorId != null && _signedIn) {
+      try {
+        await _stations.holdConnector(lookup.stationId, connectorId);
+      } catch (_) {}
+    }
+    try {
+      final List<StationConnector> live = await _stations.liveConnectors(
+        lookup.stationId,
+      );
+      if (!mounted || _lookup?.stationId != lookup.stationId) return;
+      if (live.isNotEmpty) setState(() => _live = live);
+    } catch (_) {}
+  }
+
+  void _startPolling(ConnectorLookup lookup) {
+    _poll?.cancel();
+    _poll = Timer.periodic(_pollEvery, (_) => unawaited(_syncLive(lookup)));
+  }
+
+  void _releaseHold() {
+    final ConnectorLookup? lookup = _lookup;
+    final int? connectorId = lookup?.connectorId;
+    if (lookup == null || connectorId == null || !_signedIn) return;
+    unawaited(
+      _stations
+          .releaseConnector(lookup.stationId, connectorId)
+          .catchError((Object _) {}),
+    );
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -378,11 +426,17 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
         station = null;
       }
       if (!mounted) return;
+      _lookup = lookup;
+      _live = null;
+      // Ask who has the gun before showing it, so a taken gun is never
+      // offered for a moment and then pulled away.
+      await _syncLive(lookup);
+      if (!mounted) return;
       setState(() {
-        _lookup = lookup;
         _station = station;
         _stage = _ScanStage.confirming;
       });
+      _startPolling(lookup);
     } on ApiException catch (err) {
       if (!mounted) return;
       // Back to the camera, ready for the next code: it used to stay stopped
@@ -393,7 +447,10 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
   }
 
   void _backToScanning({String? error}) {
+    _poll?.cancel();
+    _releaseHold();
     setState(() {
+      _live = null;
       _stage = _ScanStage.scanning;
       _lookup = null;
       _station = null;
@@ -404,6 +461,7 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
   }
 
   void _onStarted() {
+    _poll?.cancel();
     // The toast lives on the root overlay, so it outlasts the sheet closing.
     AppToast.show(context, AppStrings.get('charge_started'));
     Navigator.of(context).pop();
@@ -479,9 +537,11 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
     final bool resolving = _stage == _ScanStage.resolving;
     final QrScannerViewBuilder builder =
         widget.scannerBuilder ??
-        (BuildContext context, MobileScannerController controller,
-                void Function(BarcodeCapture) onDetect) =>
-            MobileScanner(controller: controller, onDetect: onDetect);
+        (
+          BuildContext context,
+          MobileScannerController controller,
+          void Function(BarcodeCapture) onDetect,
+        ) => MobileScanner(controller: controller, onDetect: onDetect);
     return Column(
       children: [
         const SizedBox(height: 6),
@@ -533,7 +593,10 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
               _errorMessage!,
               key: const ValueKey<String>('scan-error'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.warningOrange, fontSize: 13),
+              style: const TextStyle(
+                color: AppTheme.warningOrange,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -553,8 +616,9 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
 
     // Without the station detail, the gun the sticker named is all there is
     // to show; its live state is then unknown, and the station decides.
-    final List<StationConnector> connectors =
-        station?.connectors.isNotEmpty == true
+    final List<StationConnector> all = _live?.isNotEmpty == true
+        ? _live!
+        : station?.connectors.isNotEmpty == true
         ? station!.connectors
         : (lookup.connectorId == null
               ? const <StationConnector>[]
@@ -567,6 +631,15 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
                     label: lookup.label,
                   ),
                 ]);
+
+    StationConnector? scanned;
+    for (final StationConnector c in all) {
+      if (c.connectorId == lookup.connectorId) scanned = c;
+    }
+    final bool online = station?.isOnline ?? true;
+    // An offline station reports every gun unavailable; the panel already
+    // says the station is offline, which is the truer reason.
+    final bool scannedTaken = scanned != null && online && !scanned.isStartable;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
@@ -615,28 +688,141 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
             ),
           ),
           const SizedBox(height: 18),
-          ChargeStartPanel(
-            stationId: lookup.stationId,
-            connectors: connectors,
-            initialConnectorId: lookup.connectorId,
-            stationOnline: station?.isOnline ?? true,
-            onStarted: _onStarted,
-            stationsService: widget.stationsService,
-            sessionsService: widget.sessionsService,
-            authService: widget.authService,
-            footer: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: TextButton(
-                onPressed: _backToScanning,
-                child: Text(
-                  AppStrings.get('scan_again'),
-                  style: TextStyle(color: palette.inkMuted, fontSize: 13),
+          if (scannedTaken)
+            _buildInUseView(context, scanned, all)
+          else
+            ChargeStartPanel(
+              stationId: lookup.stationId,
+              // The sticker names one gun; that is the only one on offer.
+              connectors: scanned != null ? <StationConnector>[scanned] : all,
+              initialConnectorId: lookup.connectorId,
+              stationOnline: station?.isOnline ?? true,
+              onStarted: _onStarted,
+              stationsService: widget.stationsService,
+              sessionsService: widget.sessionsService,
+              authService: widget.authService,
+              footer: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: TextButton(
+                  onPressed: _backToScanning,
+                  child: Text(
+                    AppStrings.get('scan_again'),
+                    style: TextStyle(color: palette.inkMuted, fontSize: 13),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
+    );
+  }
+
+  /// The scanned gun is someone else's: say so, and list the guns that are
+  /// free so the driver can walk over and scan one of those instead.
+  Widget _buildInUseView(
+    BuildContext context,
+    StationConnector scanned,
+    List<StationConnector> all,
+  ) {
+    final AppPalette palette = context.palette;
+    final List<StationConnector> free = all
+        .where(
+          (StationConnector c) =>
+              c.connectorId != scanned.connectorId && c.isStartable,
+        )
+        .toList();
+
+    return Column(
+      key: const ValueKey<String>('scanned-in-use'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.warningOrange.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.warningOrange.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Icon(
+                Icons.do_not_disturb_on_rounded,
+                color: AppTheme.warningOrange,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      AppStrings.get('scanned_in_use_title').replaceFirst(
+                        '{id}',
+                        connectorLetter(scanned.connectorId),
+                      ),
+                      style: TextStyle(
+                        color: palette.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      AppStrings.get('scanned_in_use_body'),
+                      style: TextStyle(
+                        color: palette.inkMuted,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        ConnectorOptionTile(connector: scanned),
+        const SizedBox(height: 10),
+        Text(
+          AppStrings.get('free_to_scan_title'),
+          style: TextStyle(
+            color: palette.ink,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (free.isEmpty)
+          Text(
+            AppStrings.get('none_free_to_scan'),
+            style: TextStyle(color: palette.inkMuted, fontSize: 13),
+          )
+        else
+          ...free.map(
+            (StationConnector c) => ConnectorOptionTile(connector: c),
+          ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            key: const ValueKey<String>('scan-another-button'),
+            onPressed: _backToScanning,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.sageGreen,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
+            label: Text(
+              AppStrings.get('scan_again'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

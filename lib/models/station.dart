@@ -46,6 +46,7 @@ class StationConnector {
     this.powerKw,
     this.label,
     this.currentTransactionId,
+    this.inUseByOther = false,
   });
 
   /// 1-based, as printed on the gun itself and on its QR sticker.
@@ -61,17 +62,23 @@ class StationConnector {
 
   final int? currentTransactionId;
 
+  /// Another driver has this gun — scanned it and has it open, is starting
+  /// on it, or is charging on it. Only `/stations/:id/live` reports this.
+  final bool inUseByOther;
+
   bool get isAvailable => status == 'Available';
 
   /// What the driver API's own `startable()` accepts: free, or with a car
   /// already plugged in and waiting (`Preparing`).
-  bool get isStartable => status == 'Available' || status == 'Preparing';
+  bool get isStartable =>
+      !inUseByOther && (status == 'Available' || status == 'Preparing');
   bool get isCharging => status == 'Charging';
   bool get isFaulted => status == 'Faulted' || status == 'Unavailable';
 
   /// What a driver calls this gun on screen: its label if the operator set
   /// one, otherwise "Залгуур {n}".
-  String displayName(String fallbackPrefix) => (label != null && label!.trim().isNotEmpty)
+  String displayName(String fallbackPrefix) =>
+      (label != null && label!.trim().isNotEmpty)
       ? label!
       : '$fallbackPrefix ${connectorLetter(connectorId)}';
 
@@ -85,11 +92,14 @@ class StationConnector {
       connectorId: connectorId,
       status: (json['status'] ?? 'Unavailable').toString(),
       type: _textOrNull(json['type']),
-      powerKw: json['powerKw'] is num ? (json['powerKw'] as num).toDouble() : null,
+      powerKw: json['powerKw'] is num
+          ? (json['powerKw'] as num).toDouble()
+          : null,
       label: _textOrNull(json['label']),
       currentTransactionId: json['currentTransactionId'] is num
           ? (json['currentTransactionId'] as num).toInt()
           : null,
+      inUseByOther: json['inUseByOther'] == true,
     );
   }
 

@@ -114,6 +114,12 @@ class _EbarimtSheetState extends State<EbarimtSheet> {
                           color: palette.ink,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      // Same line as the kiosk's И-Баримт page.
+                      Text(
+                        'Таны зарцуулсан цахилгааны НӨАТ-ийн баримт',
+                        style: TextStyle(fontSize: 12, color: palette.inkMuted),
+                      ),
                       Text(
                         widget.session.displayLocation,
                         maxLines: 1,

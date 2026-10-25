@@ -71,6 +71,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   /// Null means nothing is charging.
   int? _remoteTransactionId;
 
+  /// A stop request is on its way; the button shows it and ignores taps.
+  bool _stopping = false;
+
   /// When the real session now charging actually started, for the hero label.
   DateTime? _sessionStart;
 
@@ -375,7 +378,44 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return '$hh:$mm';
   }
 
-  void _handleStopChargingSession() async {
+  /// "Are you sure?" first, as on the website: a stray tap must not end a
+  /// charge the driver is waiting on.
+  Future<void> _confirmStop() async {
+    if (_stopping) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(AppStrings.get('sess_stop_confirm')),
+        content: _session.stationName == null ? null : Text(_session.stationName!),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.get('sess_keep')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _stopRed,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(AppStrings.get('sess_stop_yes')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _stopping = true);
+    try {
+      await _handleStopChargingSession();
+    } finally {
+      if (mounted) setState(() => _stopping = false);
+    }
+  }
+
+  /// The website's stop red, so the two read as the same button.
+  static const Color _stopRed = Color(0xFFDC2626);
+
+  Future<void> _handleStopChargingSession() async {
     double energy = _session.energyKwh;
     double? cost;
     double? energyCost;
@@ -507,18 +547,32 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: _handleStopChargingSession,
+                          key: const ValueKey<String>('home-stop-button'),
+                          onPressed: _stopping ? null : _confirmStop,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
+                            backgroundColor: _stopRed,
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor: _stopRed.withValues(alpha: 0.7),
+                            disabledForegroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
-                          icon: const Icon(Icons.stop_circle_rounded, size: 22),
+                          icon: _stopping
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.stop_rounded, size: 22),
                           label: Text(
-                            AppStrings.get('stop_charging'),
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                            AppStrings.get(_stopping ? 'sess_stopping' : 'sess_stop'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -641,6 +695,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       charge = ChargeStatus(
         socPercent: _session.socPercent,
         minutesToFull: _session.minutesToFull,
+        startedAt: _sessionStart,
         powerKw: _session.powerKw,
         energyKwh: _session.energyKwh,
         costMnt: _session.costMnt,

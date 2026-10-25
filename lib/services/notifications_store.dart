@@ -197,6 +197,7 @@ class NotificationsStore {
                 imageUrl: data['imageUrl'] as String?,
                 transactionId: txId is num ? txId.toInt() : null,
                 dedupeKey: serverDedupe,
+                at: data['at'] is String ? DateTime.tryParse(data['at'] as String) : null,
               ),
             );
           } catch (_) {
@@ -268,6 +269,8 @@ class NotificationsStore {
     String? imageUrl,
     int? transactionId,
     String? dedupeKey,
+    /// When the event happened (a Мэдээ's publish time); defaults to now.
+    DateTime? at,
   }) async {
     final String? userId = _userId;
     if (userId == null) return;
@@ -280,12 +283,16 @@ class NotificationsStore {
       kind: kind,
       title: title,
       body: body,
-      at: now,
+      at: (at ?? now).toLocal(),
       imageUrl: imageUrl,
       transactionId: transactionId,
       dedupeKey: dedupeKey,
     );
-    items.value = [notification, ...items.value].take(_maxItems).toList(growable: false);
+    // An old event noticed late (a Мэдээ from days ago) goes in its place by
+    // time, not on top as if it just happened.
+    final List<AppNotification> next = <AppNotification>[notification, ...items.value]
+      ..sort((AppNotification a, AppNotification b) => b.at.compareTo(a.at));
+    items.value = next.take(_maxItems).toList(growable: false);
     unread.value += 1;
     await _persist(userId);
   }

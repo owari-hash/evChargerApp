@@ -392,28 +392,41 @@ class _LiveCharge extends StatelessWidget {
           track: palette.inkMuted.withValues(alpha: 0.15),
         ),
         const SizedBox(height: 14),
+        // The website's four live readings, in its words and order.
         Row(
           children: <Widget>[
             Expanded(
               child: _Tile(
-                icon: Icons.speed_rounded,
-                label: AppStrings.get('hero_power'),
-                value: '${charge.powerKw.toStringAsFixed(1)} кВт',
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _Tile(
                 icon: Icons.battery_charging_full_rounded,
-                label: AppStrings.get('hero_energy'),
+                label: AppStrings.get('live_energy'),
                 value: '${charge.energyKwh.toStringAsFixed(1)} кВт·ц',
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _Tile(
+                icon: Icons.speed_rounded,
+                label: AppStrings.get('live_power'),
+                value: '${charge.powerKw.toStringAsFixed(1)} кВт',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _Tile(
+                icon: Icons.schedule_rounded,
+                label: AppStrings.get('live_elapsed'),
+                value: charge.elapsedLabel,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _Tile(
                 icon: Icons.payments_rounded,
-                label: AppStrings.get('charge_cost'),
+                label: AppStrings.get('live_cost'),
                 value: charge.costMnt == null
                     ? '—'
                     : formatMnt(charge.costMnt!),

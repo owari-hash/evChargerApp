@@ -396,6 +396,10 @@ class _MainAppFrameState extends State<MainAppFrame>
           title: a.title,
           body: a.body,
           imageUrl: a.imageUrl,
+          // Shown with when it was published, not when this phone saw it;
+          // the key matches the website's, so it is filed once.
+          at: a.createdAt,
+          dedupeKey: 'announcement:${a.id}',
         ),
       );
     }

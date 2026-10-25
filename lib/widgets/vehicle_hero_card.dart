@@ -27,8 +27,25 @@ class ChargeStatus {
     required this.powerKw,
     required this.energyKwh,
     this.costMnt,
+    this.startedAt,
     this.detail = '',
   });
+
+  /// When the session began, for "Зарцуулсан хугацаа".
+  final DateTime? startedAt;
+
+  /// Time charged so far as the website writes it: "23м", "1ц 5м".
+  String get elapsedLabel {
+    final DateTime? from = startedAt;
+    if (from == null) return '—';
+    final int minutes = DateTime.now()
+        .difference(from)
+        .inMinutes
+        .clamp(0, 100000);
+    final int h = minutes ~/ 60;
+    final int m = minutes % 60;
+    return h > 0 ? '$hц $mм' : '$mм';
+  }
 
   /// The car's own state of charge; many chargers never receive it.
   final double? socPercent;
@@ -45,7 +62,9 @@ class ChargeStatus {
     if (m == null) return AppStrings.get('charge_battery');
     if (m <= 1) return AppStrings.get('charge_almost_full');
     if (m < 60) {
-      return AppStrings.get('charge_to_full_min').replaceFirst('{minutes}', '$m');
+      return AppStrings.get(
+        'charge_to_full_min',
+      ).replaceFirst('{minutes}', '$m');
     }
     return AppStrings.get('charge_to_full_hours')
         .replaceFirst('{hours}', '${m ~/ 60}')
@@ -591,7 +610,9 @@ class _HeroCardBody extends StatelessWidget {
                         ? _accent
                         : Colors.white.withValues(alpha: 0.6),
                     fontSize: c.hasEstimate ? 13.5 : 11.5,
-                    fontWeight: c.hasEstimate ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: c.hasEstimate
+                        ? FontWeight.w800
+                        : FontWeight.w600,
                     height: 1.3,
                   ),
                 ),

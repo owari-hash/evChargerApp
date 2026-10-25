@@ -242,6 +242,24 @@ class _StationSheetState extends State<StationSheet> {
                   ),
                 ],
               ),
+              // Every gun with its live state — one someone has just scanned
+              // reads as in use. Only the QR scanner narrows this to one gun.
+              if (_connectors.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 18),
+                Text(
+                  AppStrings.get('station_guns_title'),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: palette.ink,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._connectors.map(
+                  (StationConnector c) =>
+                      ConnectorOptionTile(connector: c, online: s.isOnline),
+                ),
+              ],
               const SizedBox(height: 18),
               ChargeStartPanel(
                 stationId: s.id,

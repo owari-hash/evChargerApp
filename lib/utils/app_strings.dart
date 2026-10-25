@@ -433,6 +433,7 @@ class AppStrings {
 
       // ---- Charging history ----
       'sess_title': 'Цэнэглэлтүүд',
+      'sess_filter_empty': 'Энэ хугацаанд цэнэглэлт алга.',
       'sess_empty': 'Анхны цэнэглэлтийн дараа таны түүх энд харагдана.',
       'sess_unavailable':
           'Цэнэглэх сүлжээтэй одоохондоо холбогдож чадсангүй тул таны цэнэглэлтүүд харагдахгүй байна.',
@@ -920,6 +921,7 @@ class AppStrings {
 
       // ---- Charging history ----
       'sess_title': 'Sessions',
+      'sess_filter_empty': 'No sessions in this period.',
       'sess_empty': 'Your charges appear here after your first one.',
       'sess_unavailable':
           'We could not reach the charging network just now, so your sessions are not shown.',

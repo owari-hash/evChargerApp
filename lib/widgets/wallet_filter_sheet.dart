@@ -23,28 +23,67 @@ class WalletFilter {
 
   /// How many filters are on, for the badge on the filter button.
   int get activeCount => (hasDate ? 1 : 0) + (flow != WalletFlow.all ? 1 : 0);
+
+  /// Whether [at] falls in the picked dates (always true with no date set).
+  /// A preset counts today as one of its days.
+  bool includesDate(DateTime? at) {
+    if (!hasDate) return true;
+    if (at == null) return false;
+    final DateTime local = at.toLocal();
+    final DateTime from;
+    final DateTime until;
+    final DateTimeRange? r = range;
+    if (r != null) {
+      from = DateTime(r.start.year, r.start.month, r.start.day);
+      until = DateTime(r.end.year, r.end.month, r.end.day + 1);
+    } else {
+      final DateTime now = DateTime.now();
+      from = DateTime(now.year, now.month, now.day - (presetDays! - 1));
+      until = DateTime(now.year, now.month, now.day + 1);
+    }
+    return !local.isBefore(from) && local.isBefore(until);
+  }
+
+  /// "Сүүлийн 7 хоног" or "2026.10.01 – 2026.10.25", for the active-filter pill.
+  String get dateLabel {
+    final DateTimeRange? r = range;
+    if (r == null) {
+      return AppStrings.get(
+        'wallet_filter_days',
+      ).replaceFirst('{n}', '$presetDays');
+    }
+    String d(DateTime x) =>
+        '${x.year}.${x.month.toString().padLeft(2, '0')}.${x.day.toString().padLeft(2, '0')}';
+    return '${d(r.start)} – ${d(r.end)}';
+  }
 }
 
 /// Opens the filter sheet; resolves to the applied filter, or null if dismissed.
+///
+/// [showFlow] adds the income/spending choice; the charging history has no
+/// use for it and leaves it out.
 Future<WalletFilter?> showWalletFilterSheet(
   BuildContext context,
-  WalletFilter current,
-) {
+  WalletFilter current, {
+  bool showFlow = true,
+}) {
   return showModalBottomSheet<WalletFilter>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (BuildContext context) => _WalletFilterSheet(initial: current),
+    builder: (BuildContext context) =>
+        _WalletFilterSheet(initial: current, showFlow: showFlow),
   );
 }
 
 const List<int> _presets = <int>[7, 14, 30, 90];
 
 class _WalletFilterSheet extends StatefulWidget {
-  const _WalletFilterSheet({required this.initial});
+  const _WalletFilterSheet({required this.initial, required this.showFlow});
 
   final WalletFilter initial;
+  final bool showFlow;
 
   @override
   State<_WalletFilterSheet> createState() => _WalletFilterSheetState();
@@ -224,51 +263,53 @@ class _WalletFilterSheetState extends State<_WalletFilterSheet> {
                           )
                         : const SizedBox(width: double.infinity),
                   ),
-                  const SizedBox(height: 26),
-                  _heading(palette, AppStrings.get('wallet_filter_other')),
-                  InkWell(
-                    onTap: _pickFlow,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  AppStrings.get('wallet_filter_by_flow'),
-                                  style: TextStyle(
-                                    color: palette.ink,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
+                  if (widget.showFlow) ...<Widget>[
+                    const SizedBox(height: 26),
+                    _heading(palette, AppStrings.get('wallet_filter_other')),
+                    InkWell(
+                      onTap: _pickFlow,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    AppStrings.get('wallet_filter_by_flow'),
+                                    style: TextStyle(
+                                      color: palette.ink,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _flowLabel(_flow),
-                                  style: TextStyle(
-                                    color: _flow == WalletFlow.all
-                                        ? palette.inkMuted
-                                        : palette.accent,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _flowLabel(_flow),
+                                    style: TextStyle(
+                                      color: _flow == WalletFlow.all
+                                          ? palette.inkMuted
+                                          : palette.accent,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: palette.inkMuted,
-                          ),
-                        ],
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: palette.inkMuted,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 16),
                 ],
               ),
@@ -285,8 +326,7 @@ class _WalletFilterSheetState extends State<_WalletFilterSheet> {
                       palette,
                       AppStrings.get('wallet_filter_reset'),
                       primary: false,
-                      onTap: () =>
-                          Navigator.of(context).pop(WalletFilter.none),
+                      onTap: () => Navigator.of(context).pop(WalletFilter.none),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -498,10 +538,7 @@ class _WalletFilterSheetState extends State<_WalletFilterSheet> {
     final bool isStart = start != null && day == start;
     final bool isEnd = end != null && day == end;
     final bool between =
-        start != null &&
-        end != null &&
-        day.isAfter(start) &&
-        day.isBefore(end);
+        start != null && end != null && day.isAfter(start) && day.isBefore(end);
     final bool endpoint = isStart || isEnd;
     final bool hasBand = end != null && end != start;
     final Color band = palette.accent.withValues(alpha: 0.14);

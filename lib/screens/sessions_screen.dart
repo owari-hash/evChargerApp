@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/ebarimt_sheet.dart';
+import '../widgets/wallet_filter_sheet.dart';
 
 /// Charging history, and the way to stop a session that is still running —
 /// the app's counterpart to `/account/sessions` in the kiosk.
@@ -31,6 +32,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
   bool _loading = true;
   int? _stopping;
 
+  /// Date filter from the same sheet as the wallet's, without its type row.
+  WalletFilter _filter = WalletFilter.none;
+
+  Future<void> _openFilter() async {
+    final WalletFilter? picked = await showWalletFilterSheet(
+      context,
+      _filter,
+      showFlow: false,
+    );
+    if (picked != null && mounted) setState(() => _filter = picked);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,7 +56,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
       _loadError = null;
     });
     try {
-      final List<ChargingSession> list = await _sessions.list();
+      // The API's maximum, so a 30- or 90-day filter has the history to show.
+      final List<ChargingSession> list = await _sessions.list(limit: 200);
       SessionWatcherService.instance.ingest(list);
       if (!mounted) return;
       setState(() {
@@ -122,12 +136,29 @@ class _SessionsScreenState extends State<SessionsScreen> {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final List<ChargingSession>? list = _list;
+    final List<ChargingSession>? all = _list;
+    final List<ChargingSession>? list = all
+        ?.where((ChargingSession s) => _filter.includesDate(s.startTimestamp))
+        .toList();
 
     return Scaffold(
       backgroundColor: palette.bg,
       appBar: AppBar(
         title: Text(AppStrings.get('sess_title')),
+        actions: <Widget>[
+          if (all != null && all.isNotEmpty)
+            IconButton(
+              tooltip: AppStrings.get('wallet_filter'),
+              onPressed: _openFilter,
+              icon: Badge(
+                isLabelVisible: _filter.hasDate,
+                label: const Text('1'),
+                backgroundColor: palette.accent,
+                child: const Icon(Icons.tune_rounded),
+              ),
+            ),
+          const SizedBox(width: 4),
+        ],
         bottom: list == null || list.isEmpty
             ? null
             : PreferredSize(
@@ -159,7 +190,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final List<ChargingSession>? list = _list;
+    final List<ChargingSession>? list = _list
+        ?.where((ChargingSession s) => _filter.includesDate(s.startTimestamp))
+        .toList();
     if (list == null) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),
@@ -174,8 +207,16 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
     if (list.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(18, 40, 18, 40),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
         children: <Widget>[
+          if (_filter.hasDate) ...<Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _filterPill(palette),
+            ),
+            const SizedBox(height: 24),
+          ] else
+            const SizedBox(height: 24),
           Icon(
             Icons.receipt_long_rounded,
             size: 40,
@@ -183,7 +224,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            AppStrings.get('sess_empty'),
+            AppStrings.get(
+              _filter.hasDate ? 'sess_filter_empty' : 'sess_empty',
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: palette.inkMuted,
@@ -195,13 +238,57 @@ class _SessionsScreenState extends State<SessionsScreen> {
       );
     }
 
+    final bool pill = _filter.hasDate;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
-      itemCount: list.length,
+      itemCount: list.length + (pill ? 1 : 0),
       separatorBuilder: (BuildContext context, int _) =>
           const SizedBox(height: 10),
-      itemBuilder: (BuildContext context, int index) =>
-          _sessionCard(palette, list[index]),
+      itemBuilder: (BuildContext context, int index) {
+        if (pill && index == 0) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: _filterPill(palette),
+          );
+        }
+        return _sessionCard(palette, list[index - (pill ? 1 : 0)]);
+      },
+    );
+  }
+
+  /// The active date range, with an ✕ to clear it.
+  Widget _filterPill(AppPalette palette) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: palette.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: palette.accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.calendar_today_rounded, size: 13, color: palette.accent),
+          const SizedBox(width: 6),
+          Text(
+            _filter.dateLabel,
+            style: TextStyle(
+              color: palette.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 2),
+          InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => setState(() => _filter = WalletFilter.none),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 14, color: palette.accent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

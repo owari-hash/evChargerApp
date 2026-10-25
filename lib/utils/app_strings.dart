@@ -69,7 +69,7 @@ class AppStrings {
       'back': 'Буцах',
       'available': 'Сул байна',
       'connector_label': 'Хошуу',
-      'connector_busy': 'Эзэлсэн',
+      'connector_busy': 'Ашиглаж байна',
       'connector_faulted': 'Эвдрэлтэй',
       'unit_km': 'км',
       'unit_kw': 'кВт',

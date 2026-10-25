@@ -19,7 +19,13 @@ String connectorStatusLabel(StationConnector connector, {bool online = true}) {
   if (connector.status == 'Preparing') {
     return AppStrings.get('connector_plugged');
   }
-  if (connector.isCharging) return AppStrings.get('charging');
+  // A paused session (car or station holding off for a moment) is still the
+  // driver's charge in progress, not someone else's gun.
+  if (connector.isCharging ||
+      connector.status == 'SuspendedEV' ||
+      connector.status == 'SuspendedEVSE') {
+    return AppStrings.get('charging');
+  }
   if (connector.isFaulted) return AppStrings.get('connector_faulted');
   return AppStrings.get('connector_busy');
 }

@@ -54,6 +54,11 @@ class AnnouncementWatcherService {
   Future<void>? _inFlight;
   String? _inFlightUser;
 
+  /// Ids already handed to [_onNew], per account, for as long as the app
+  /// runs. The keychain copy is the durable record, but a write to it can
+  /// fail quietly; this keeps one dismissal from popping up again every poll.
+  final Map<String, Set<String>> _reported = <String, Set<String>>{};
+
   bool get isRunning => _timer != null;
 
   @visibleForTesting
@@ -111,13 +116,26 @@ class AnnouncementWatcherService {
     }
     if (_userId != userId) return;
 
-    final _SeenState state = await _read(userId);
+    final _SeenState? state = await _read(userId);
+    // The seen list is there but could not be read (a keychain error). Better
+    // to show nothing this round than to replay everything as new.
+    if (state == null) return;
     final DateTime cutoff = _accountCreatedAt ?? state.since;
+    final Set<String> reported = _reported.putIfAbsent(
+      userId,
+      () => <String>{},
+    );
 
     final List<Announcement> fresh = <Announcement>[];
     bool changed = state.isNew;
     for (final Announcement a in all) {
       if (state.ids.contains(a.id)) continue;
+      if (reported.contains(a.id)) {
+        // Shown already this run but the keychain lost it; file it again.
+        state.ids.add(a.id);
+        changed = true;
+        continue;
+      }
       state.ids.add(a.id);
       changed = true;
       final DateTime? at = a.createdAt;
@@ -126,12 +144,20 @@ class AnnouncementWatcherService {
     }
     if (changed) await _write(userId, state);
     if (_userId != userId || fresh.isEmpty) return;
+    reported.addAll(fresh.map((Announcement a) => a.id));
     _onNew?.call(fresh);
   }
 
-  Future<_SeenState> _read(String userId) async {
+  /// Null when the keychain itself fails — distinct from "nothing saved yet".
+  Future<_SeenState?> _read(String userId) async {
+    final String? raw;
     try {
-      final String? raw = await _storage.read(key: storageKeyFor(userId));
+      raw = await _storage.read(key: storageKeyFor(userId));
+    } catch (error) {
+      debugPrint('announcements: could not read seen list: $error');
+      return null;
+    }
+    try {
       if (raw != null && raw.isNotEmpty) {
         final dynamic json = jsonDecode(raw);
         if (json is Map<String, dynamic>) {
@@ -172,8 +198,9 @@ class AnnouncementWatcherService {
           'ids': ids,
         }),
       );
-    } catch (_) {
-      // A locked keychain: the same announcement may show again next launch.
+    } catch (error) {
+      // A locked keychain: the in-memory list still stops a repeat this run.
+      debugPrint('announcements: could not save seen list: $error');
     }
   }
 }

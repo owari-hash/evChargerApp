@@ -154,19 +154,10 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     );
     if (!signedIn || !mounted) return;
 
-    // Check if connector is plugged in. In OCPP, an unplugged connector is 'Available'.
-    // When connected to an EV, it changes to 'Preparing'.
-    final StationConnector? chosen = widget.connectors
-        .cast<StationConnector?>()
-        .firstWhere(
-          (StationConnector? c) => c?.connectorId == _selected,
-          orElse: () => null,
-        );
-    if (chosen != null && chosen.status == 'Available') {
-      setState(() => _starting = false);
-      _fail(AppStrings.get('plug_not_detected'));
-      return;
-    }
+    // No "is it plugged in?" guess from the gun's status here, as on the
+    // website: after a stop with the cable still in, a charger can report
+    // `Available`, and refusing on that blocked a restart the website let
+    // through. The charger itself decides, and its answer is shown below.
 
     setState(() => _starting = true);
     try {
@@ -192,9 +183,10 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
         );
         return;
       }
+      // Only a refusal about the cable is put as "check the plug"; every
+      // other 409 (a charge still closing, the gun taken) says what it is.
       final String msg =
-          (err.statusCode == 409 ||
-              err.message.contains('хүлээж аваагүй') ||
+          (err.message.contains('хүлээж аваагүй') ||
               err.message.contains('залгасан'))
           ? AppStrings.get('plug_not_detected')
           : err.message;
@@ -383,6 +375,18 @@ class ConnectorOptionTile extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             color: palette.inkMuted,
+                          ),
+                        ),
+                      if (chargeProgressLabel(connector) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            chargeProgressLabel(connector)!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: palette.accent,
+                            ),
                           ),
                         ),
                     ],

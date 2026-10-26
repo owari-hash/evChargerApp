@@ -37,6 +37,9 @@ class ActiveSessionState {
     int? minutesToFull,
     double? costMnt,
   }) {
+    // A different charge starts from nothing: the last one's battery reading
+    // used to carry over and show as this car's until the station sent one.
+    if (this.transactionId != transactionId) this.socPercent = null;
     this.minutesToFull = minutesToFull;
     this.transactionId = transactionId;
     this.stationName = stationName;

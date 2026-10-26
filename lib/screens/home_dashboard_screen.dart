@@ -12,6 +12,7 @@ import '../services/session_watcher_service.dart';
 import '../services/sessions_service.dart';
 import '../services/stations_service.dart';
 import '../services/wallet_service.dart';
+import '../services/wallet_watcher_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../widgets/account_widgets.dart';
@@ -61,7 +62,8 @@ class HomeDashboardScreen extends StatefulWidget {
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
 }
 
-class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
+class _HomeDashboardScreenState extends State<HomeDashboardScreen>
+    with WidgetsBindingObserver {
   final ActiveSessionState _session = ActiveSessionState.instance;
 
   AuthService get _auth => widget.authService ?? AuthService.instance;
@@ -105,6 +107,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   bool _wasSignedIn = false;
 
+  /// False while the app is in the background: nothing is polled then, and
+  /// coming back re-reads everything straight away.
+  bool _inForeground = true;
+
   final ScrollController _scroll = ScrollController();
 
   /// Waits out the pause before the guide's first step.
@@ -124,6 +130,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WalletWatcherService.instance.latest.addListener(_onWalletPolled);
+    SessionWatcherService.instance.changes.addListener(_onSessionsChanged);
     _wasSignedIn = _auth.isSignedIn;
     _auth.currentUser.addListener(_onUserChanged);
     _sessions.sessionStarted.addListener(_onSessionStartedElsewhere);
@@ -139,6 +148,47 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   void _onStationsChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// Back from another app: the running charge, history and balance may all
+  /// have moved on (or a request in flight when the app was suspended failed),
+  /// so read them again rather than waiting for a restart or sign-in.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (_inForeground) return;
+        _inForeground = true;
+        _syncWithDriverApi();
+        _loadWallet();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _inForeground = false;
+        _liveRefresh?.cancel();
+        _liveRefresh = null;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
+  /// The wallet watcher polled (or the socket made it): the balance tile
+  /// follows top-ups and charge debits without a pull of its own.
+  void _onWalletPolled() {
+    final WalletSnapshot? snapshot = WalletWatcherService.instance.latest.value;
+    if (snapshot == null || !mounted || !_auth.isSignedIn) return;
+    setState(() {
+      _wallet = snapshot;
+      _walletLoaded = true;
+    });
+  }
+
+  /// A charge started or stopped somewhere — the website, an RFID card, this
+  /// app: re-read the running charge and the balance it will be billed from.
+  void _onSessionsChanged() {
+    if (!mounted) return;
+    _syncWithDriverApi();
+    _loadWallet();
   }
 
   @override
@@ -251,6 +301,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    WalletWatcherService.instance.latest.removeListener(_onWalletPolled);
+    SessionWatcherService.instance.changes.removeListener(_onSessionsChanged);
     _auth.currentUser.removeListener(_onUserChanged);
     _sessions.sessionStarted.removeListener(_onSessionStartedElsewhere);
     StationsService.instance.stations.removeListener(_onStationsChanged);
@@ -277,7 +330,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   void _scheduleLiveRefresh() {
-    if (_remoteTransactionId == null) {
+    if (_remoteTransactionId == null || !_inForeground) {
       _liveRefresh?.cancel();
       _liveRefresh = null;
       return;
@@ -338,15 +391,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       if (active != null) _loadTariffStation(active.chargePointId);
       if (widget.guide?.requested == true) _scheduleGuideStart();
     } on ApiException {
-      // Offline, or the session list is unavailable. Showing nothing is right;
-      // inventing a charge is not.
+      // Offline, or a request cut off by the app going to the background.
+      // What the last good read said stays on screen: wiping it here made a
+      // running charge and this month's total vanish until the app was
+      // restarted, because nothing re-read them afterwards. The live refresh
+      // keeps trying, and a resume reads again. Only a screen that has never
+      // loaded says it is unavailable.
       if (!mounted) return;
       setState(() {
+        if (!_historyLoaded) _historyFailed = true;
         _historyLoaded = true;
-        _historyFailed = true;
-        _remoteTransactionId = null;
-        _sessionStart = null;
-        _session.clear();
       });
       _scheduleLiveRefresh();
       if (widget.guide?.requested == true) _scheduleGuideStart();

@@ -360,6 +360,23 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                       ),
                   ],
                 ),
+                // A busy station says how far along each car on it is, so a
+                // driver can tell how long until a gun frees up.
+                for (final StationConnector c in station.connectors)
+                  if (chargeProgressLabel(c) != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '${c.displayName(AppStrings.get('connector_label'))}: ${chargeProgressLabel(c)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: palette.accent,
+                        ),
+                      ),
+                    ),
               ],
             ),
           ),

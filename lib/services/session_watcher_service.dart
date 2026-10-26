@@ -86,6 +86,10 @@ class SessionWatcherService {
 
   Future<void>? _inFlight;
 
+  /// Ticks whenever a poll reports a charge starting or stopping, so the
+  /// dashboard can re-read the running charge and the balance right away.
+  final ValueNotifier<int> changes = ValueNotifier<int>(0);
+
   bool get isRunning => _timer != null;
 
   /// Starts (or resumes) watching [userId]'s sessions and checks right away.
@@ -238,6 +242,7 @@ class SessionWatcherService {
       }
     }
 
+    if (events.isNotEmpty) changes.value++;
     final void Function(SessionEvent event)? onEvent = _onEvent;
     if (onEvent == null) return;
     for (final SessionEvent event in events) {

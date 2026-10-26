@@ -7,6 +7,7 @@ class Announcement {
     required this.body,
     this.imageUrl,
     this.createdAt,
+    this.seen = false,
   });
 
   final String id;
@@ -17,6 +18,9 @@ class Announcement {
   /// When the operator published it. Decides whether it is news to a driver
   /// or predates them.
   final DateTime? createdAt;
+
+  /// The server says this account already dismissed it, on any device.
+  final bool seen;
 
   static Announcement? fromJson(Map<String, dynamic> json) {
     final String? id = json['id'] as String?;
@@ -32,6 +36,7 @@ class Announcement {
       createdAt: json['createdAt'] is String
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,
+      seen: json['seen'] == true,
     );
   }
 }
@@ -56,5 +61,11 @@ class AnnouncementService {
         .map(Announcement.fromJson)
         .whereType<Announcement>()
         .toList(growable: false);
+  }
+
+  /// Records on the account that [id] was shown, so it is not shown again
+  /// after the next sign-in or on another phone.
+  Future<void> markSeen(String id) async {
+    await _client.post('/app/announcements/${Uri.encodeComponent(id)}/seen');
   }
 }

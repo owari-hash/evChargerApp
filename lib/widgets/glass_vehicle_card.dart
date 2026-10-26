@@ -58,7 +58,11 @@ class GlassVehicleCard extends StatelessWidget {
                     _StatusPill(label: statusLabel, live: isCharging),
                     const SizedBox(height: 12),
                     Text(
-                      _hasCar ? name : AppStrings.get('vehicle_add_title'),
+                      _hasCar
+                          ? name
+                          : AppStrings.get(
+                              isCharging ? 'vehicle_unnamed' : 'vehicle_add_title',
+                            ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -91,10 +95,26 @@ class GlassVehicleCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          if (!_hasCar)
+          // A charge in progress is shown whether or not a car is saved; the
+          // add-car prompt then shrinks to a link under it.
+          if (isCharging && charge != null) ...<Widget>[
+            _LiveCharge(charge: charge!),
+            if (!_hasCar && onAddVehicle != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: onAddVehicle,
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.accent,
+                    padding: const EdgeInsets.only(top: 10),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(AppStrings.get('vehicle_add_cta')),
+                ),
+              ),
+          ] else if (!_hasCar)
             _AddVehicle(onAddVehicle: onAddVehicle)
-          else if (isCharging && charge != null)
-            _LiveCharge(charge: charge!)
           else if (facts.isNotEmpty)
             _Facts(facts: facts),
         ],

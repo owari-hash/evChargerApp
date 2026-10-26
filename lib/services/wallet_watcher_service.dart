@@ -33,6 +33,12 @@ class WalletWatcherService {
 
   Timer? _timer;
   String? _userId;
+  void Function(WalletEntry entry)? _onNewEntry;
+
+  /// The wallet as the last poll read it, for screens that show the balance
+  /// (the dashboard) so they follow top-ups and charge debits without their
+  /// own polling. Null when signed out.
+  final ValueNotifier<WalletSnapshot?> latest = ValueNotifier<WalletSnapshot?>(null);
   String? _lastSeenId;
   bool _primed = false;
   bool _legacyCleared = false;
@@ -47,7 +53,9 @@ class WalletWatcherService {
   void start({required String userId, required void Function(WalletEntry entry) onNewEntry}) {
     if (_timer != null && _userId == userId) return;
     stop();
+    if (_userId != userId) latest.value = null;
     _userId = userId;
+    _onNewEntry = onNewEntry;
     _lastSeenId = null;
     _primed = false;
     final int run = _run;
@@ -59,6 +67,25 @@ class WalletWatcherService {
     _run++;
     _timer?.cancel();
     _timer = null;
+  }
+
+  /// Signed out: stops and forgets the last balance read.
+  void signOut() {
+    stop();
+    _userId = null;
+    _onNewEntry = null;
+    latest.value = null;
+  }
+
+  /// Polls straight away — the notification socket said this wallet changed.
+  /// A no-op while stopped (in the background, or signed out).
+  Future<void> checkNow() {
+    final String? userId = _userId;
+    final void Function(WalletEntry entry)? onNewEntry = _onNewEntry;
+    if (_timer == null || userId == null || onNewEntry == null) {
+      return Future<void>.value();
+    }
+    return _poll(_run, userId, onNewEntry);
   }
 
   /// One poll, for tests.
@@ -85,6 +112,7 @@ class WalletWatcherService {
 
       final WalletSnapshot snapshot = await _wallet.load(entryLimit: 1);
       if (run != _run || userId != _userId) return;
+      this.latest.value = snapshot;
       final WalletEntry? latest = snapshot.entries.isNotEmpty ? snapshot.entries.first : null;
       if (latest == null) return;
 

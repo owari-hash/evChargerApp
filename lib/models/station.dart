@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart' show Color;
 
+import '../utils/app_strings.dart';
+
 /// A connector's OCPP `connectorId` (1, 2, 3…) as the letter printed on its
 /// sticker (A, B, C…) — the id itself never changes anywhere in the data or
 /// API, this is display only. Falls back to the plain number past Z, which no
@@ -48,6 +50,8 @@ class StationConnector {
     this.label,
     this.currentTransactionId,
     this.inUseByOther = false,
+    this.socPercent,
+    this.minutesToFull,
   });
 
   /// 1-based, as printed on the gun itself and on its QR sticker.
@@ -66,6 +70,18 @@ class StationConnector {
   /// Another driver has this gun — scanned it and has it open, is starting
   /// on it, or is charging on it. Only `/stations/:id/live` reports this.
   final bool inUseByOther;
+
+  /// The battery of the car charging on this gun, when the car reports it.
+  /// The server sends it only while a car is charging here.
+  final double? socPercent;
+
+  /// The server's estimate of minutes until that car is full.
+  final int? minutesToFull;
+
+  /// A car is on this gun now, paused or not.
+  bool get hasCarCharging =>
+      currentTransactionId != null &&
+      (status == 'Charging' || status == 'SuspendedEV' || status == 'SuspendedEVSE');
 
   bool get isAvailable => status == 'Available';
 
@@ -101,6 +117,12 @@ class StationConnector {
           ? (json['currentTransactionId'] as num).toInt()
           : null,
       inUseByOther: json['inUseByOther'] == true,
+      socPercent: json['lastSocPercent'] is num
+          ? (json['lastSocPercent'] as num).toDouble()
+          : null,
+      minutesToFull: json['minutesToFull'] is num
+          ? (json['minutesToFull'] as num).round()
+          : null,
     );
   }
 
@@ -109,6 +131,26 @@ class StationConnector {
     final String text = value.toString().trim();
     return text.isEmpty ? null : text;
   }
+}
+
+/// "🔋 64% · ~35 мин дүүрнэ" for a gun with a car charging on it, or null
+/// when the car does not report its battery. Shown on busy stations so a
+/// driver can tell how long until a gun frees up.
+String? chargeProgressLabel(StationConnector c) {
+  if (!c.hasCarCharging || c.socPercent == null) return null;
+  final String soc = '🔋 ${c.socPercent!.round()}%';
+  final int? minutes = c.minutesToFull;
+  if (minutes == null) return soc;
+  return '$soc · ${AppStrings.get('full_in').replaceFirst('{time}', formatMinutesShort(minutes))}';
+}
+
+/// "35 мин", "1 ц 20 мин".
+String formatMinutesShort(int minutes) {
+  if (minutes < 60) return '$minutes ${AppStrings.get('unit_min')}';
+  final int h = minutes ~/ 60;
+  final int m = minutes % 60;
+  final String hours = '$h ${AppStrings.get('unit_hour')}';
+  return m == 0 ? hours : '$hours $m ${AppStrings.get('unit_min')}';
 }
 
 /// A charge point as the driver sees it on the map and in the stations list.

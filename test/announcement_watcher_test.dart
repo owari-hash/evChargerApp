@@ -22,6 +22,11 @@ class _FakeFeed extends AnnouncementService {
     calls++;
     return items;
   }
+
+  final List<String> marked = <String>[];
+
+  @override
+  Future<void> markSeen(String id) async => marked.add(id);
 }
 
 Announcement _a(String id, DateTime at, {String? image}) => Announcement(

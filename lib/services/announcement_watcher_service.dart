@@ -129,6 +129,13 @@ class AnnouncementWatcherService {
     final List<Announcement> fresh = <Announcement>[];
     bool changed = state.isNew;
     for (final Announcement a in all) {
+      // Dismissed on this account already — the server's record does not
+      // depend on this phone's keychain, which can fail to save.
+      if (a.seen && !state.ids.contains(a.id)) {
+        state.ids.add(a.id);
+        changed = true;
+        continue;
+      }
       if (state.ids.contains(a.id)) continue;
       if (reported.contains(a.id)) {
         // Shown already this run but the keychain lost it; file it again.
@@ -145,6 +152,10 @@ class AnnouncementWatcherService {
     if (changed) await _write(userId, state);
     if (_userId != userId || fresh.isEmpty) return;
     reported.addAll(fresh.map((Announcement a) => a.id));
+    // Marked seen the moment it is reported, however it is then dismissed.
+    for (final Announcement a in fresh) {
+      unawaited(_service.markSeen(a.id).catchError((Object _) {}));
+    }
     _onNew?.call(fresh);
   }
 

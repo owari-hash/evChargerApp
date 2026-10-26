@@ -25,7 +25,10 @@ class _VehicleChargingMatrixState extends State<VehicleChargingMatrix>
     super.initState();
     _matrixController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      // One full width per loop, so the end of a loop lines up with the start
+      // of the next. It used to move 40% of the width in 3 s and then snap
+      // back, which read as the dots stopping and starting again.
+      duration: const Duration(milliseconds: 7500),
     )..repeat();
   }
 
@@ -85,7 +88,7 @@ class _ParticleMatrixPainter extends CustomPainter {
       final double baseY = random.nextDouble() * size.height;
 
       final double currentX =
-          (baseX + progress * size.width * 0.4) % size.width;
+          (baseX + progress * size.width) % size.width;
       final double currentY =
           (baseY + sin(progress * 2 * pi + i) * 8) % size.height;
       final double radius = 2.0 + (i % 3);

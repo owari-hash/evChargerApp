@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/api_config.dart';
+import 'api_client.dart';
+import 'ws/ws_connect.dart';
 
 /// [chargeStarted] and [chargeStopped] come from the session watcher: a
 /// charge on the driver's own tag beginning or ending, wherever it was
@@ -109,6 +111,12 @@ class NotificationsStore {
   bool _legacyCleared = false;
   int _counter = 0;
 
+  /// Called with each live CSMS event the socket carries (`type: "event"`,
+  /// e.g. `wallet.debited`, `transaction.stopped`) and its data, so the app
+  /// can refresh the balance or the running charge the moment it changes
+  /// instead of on its next poll. Set by the app frame.
+  void Function(String event, Map<String, dynamic> data)? onLiveEvent;
+
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _socketSub;
   Timer? _reconnectTimer;
@@ -134,7 +142,7 @@ class NotificationsStore {
       _disconnectSocket();
       return Future<void>.value();
     }
-    _connectSocket(userId);
+    unawaited(_connectSocket(userId));
     return _loading = _load(userId);
   }
 
@@ -160,9 +168,18 @@ class NotificationsStore {
   /// tag started) appears right away instead of waiting for the next time
   /// this list happens to reload. Reconnects on its own if the connection
   /// drops, as long as [userId] is still the signed-in driver.
-  void _connectSocket(String userId) {
+  Future<void> _connectSocket(String userId) async {
     _disconnectSocket();
     if (_userId != userId) return;
+
+    // The session cookie is what tells the server whose wallet and charge
+    // events this socket may carry; the query's userId alone gets nothing.
+    Map<String, String>? headers;
+    try {
+      final String? cookie = (await ApiClient.shared.streamHeaders())['Cookie'];
+      if (cookie != null) headers = <String, String>{'Cookie': cookie};
+    } catch (_) {}
+    if (_userId != userId || _channel != null) return;
 
     final Uri base = Uri.parse(ApiConfig.baseUrl);
     final String scheme = base.scheme == 'https' ? 'wss' : 'ws';
@@ -173,14 +190,23 @@ class NotificationsStore {
     );
 
     try {
-      final WebSocketChannel channel = WebSocketChannel.connect(wsUri);
+      final WebSocketChannel channel = connectWebSocket(wsUri, headers: headers);
       _channel = channel;
       _socketSub = channel.stream.listen(
         (dynamic raw) {
           if (_userId != userId) return;
           try {
             final dynamic payload = jsonDecode(raw as String);
-            if (payload is! Map<String, dynamic> || payload['type'] != 'notification') return;
+            if (payload is! Map<String, dynamic>) return;
+            if (payload['type'] == 'event') {
+              final dynamic event = payload['event'];
+              final dynamic eventData = payload['data'];
+              if (event is String && eventData is Map<String, dynamic>) {
+                onLiveEvent?.call(event, eventData);
+              }
+              return;
+            }
+            if (payload['type'] != 'notification') return;
             final dynamic data = payload['data'];
             if (data is! Map<String, dynamic>) return;
             final String? title = data['title'] as String?;
@@ -218,7 +244,7 @@ class NotificationsStore {
     _socketSub = null;
     if (_userId != userId) return;
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 4), () => _connectSocket(userId));
+    _reconnectTimer = Timer(const Duration(seconds: 4), () => unawaited(_connectSocket(userId)));
   }
 
   void _disconnectSocket() {

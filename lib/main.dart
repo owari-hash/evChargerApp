@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'models/app_update.dart';
+import 'models/auth_user.dart';
 import 'models/charging_session.dart';
 import 'models/wallet.dart';
 import 'screens/account_screen.dart';
@@ -294,6 +295,7 @@ class _MainAppFrameState extends State<MainAppFrame>
   void _startWatchers() {
     final String? userId = _auth.currentUser.value?.id;
     if (userId == null) return;
+    NotificationsStore.instance.onLiveEvent = _onLiveEvent;
     unawaited(NotificationsStore.instance.setUser(userId));
     WalletWatcherService.instance.start(
       userId: userId,
@@ -312,7 +314,7 @@ class _MainAppFrameState extends State<MainAppFrame>
 
   /// Signed out: nothing of this driver's may show for the next one.
   void _stopWatchersForSignOut() {
-    WalletWatcherService.instance.stop();
+    WalletWatcherService.instance.signOut();
     SessionWatcherService.instance.signOut();
     AnnouncementWatcherService.instance.signOut();
     unawaited(NotificationsStore.instance.setUser(null));
@@ -321,6 +323,29 @@ class _MainAppFrameState extends State<MainAppFrame>
     _announcementRetry?.cancel();
     _chargeEndShownAt = null;
     _debitShownAt = null;
+  }
+
+  /// A live event from the notification socket. The server sends every
+  /// station's events to every app, so only this driver's wallet and charges
+  /// are acted on; the watchers then read the real state from the API.
+  void _onLiveEvent(String event, Map<String, dynamic> data) {
+    final AuthUser? user = _auth.currentUser.value;
+    if (user == null) return;
+    switch (event) {
+      case 'wallet.credited':
+      case 'wallet.debited':
+        if (data['ownerType'] == 'USER' && data['ownerId']?.toString() == user.id) {
+          unawaited(WalletWatcherService.instance.checkNow());
+        }
+      case 'transaction.started':
+      case 'transaction.stopped':
+        final Object? idTag = data['idTag'];
+        // Tags are not always in the profile (one is made on the first
+        // start), so without them any charge is worth one quick look.
+        if (user.idTags.isEmpty || user.idTags.contains(idTag)) {
+          unawaited(SessionWatcherService.instance.checkNow());
+        }
+    }
   }
 
   bool _within(DateTime? at, Duration window) =>

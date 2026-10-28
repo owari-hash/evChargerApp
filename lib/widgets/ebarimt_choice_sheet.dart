@@ -368,7 +368,7 @@ class _EbarimtChoiceSheetState extends State<EbarimtChoiceSheet> {
                 label,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                   color: active ? palette.ink : palette.inkMuted,
                 ),
               ),

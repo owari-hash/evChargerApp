@@ -9,7 +9,7 @@ import '../theme/app_theme.dart';
 /// Same as the kiosk.
 const Duration kIdleNudgeDelay = Duration(seconds: 10);
 
-/// Shows a bouncing "👇 [message]" bubble above [child] once nothing has been
+/// Shows a bouncing "↓ [message]" bubble above [child] once nothing has been
 /// touched anywhere in the app for [kIdleNudgeDelay]. Any touch hides it and
 /// starts the count again. The kiosk's `NudgeHint` / `useIdleNudge`.
 ///
@@ -132,7 +132,11 @@ class _IdleNudgeState extends State<IdleNudge>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      const Text('👇', style: TextStyle(fontSize: 16)),
+                      const Icon(
+                        Icons.arrow_downward_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
@@ -141,7 +145,7 @@ class _IdleNudgeState extends State<IdleNudge>
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

@@ -197,9 +197,15 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey<String>('charge-start-button')));
       await _settle(tester);
+      // The e-Barimt step: personal is the default.
+      await tester.tap(find.byKey(const ValueKey<String>('ebarimt-start')));
+      await _settle(tester);
 
       final http.Request start = log.singleWhere(_isStart);
-      expect(jsonDecode(start.body), <String, dynamic>{'connectorId': 2});
+      expect(jsonDecode(start.body), <String, dynamic>{
+        'connectorId': 2,
+        'ebarimt': <String, dynamic>{'type': 'B2C_RECEIPT'},
+      });
       expect(find.byType(StationSheet), findsNothing);
       expect(find.text(AppStrings.get('charge_started')), findsOneWidget);
       expect(ticks, 1);
@@ -221,6 +227,8 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey<String>('charge-start-button')));
       await _settle(tester);
+      await tester.tap(find.byKey(const ValueKey<String>('ebarimt-start')));
+      await _settle(tester);
 
       expect(log.where(_isStart), hasLength(1));
       expect(find.byType(StationSheet), findsOneWidget);
@@ -232,6 +240,26 @@ void main() {
         find.byKey(const ValueKey<String>('charge-start-button')),
       );
       expect(button.onPressed, isNotNull);
+    });
+
+    testWidgets('cancelling the e-Barimt step sends nothing', (
+      WidgetTester tester,
+    ) async {
+      final List<http.Request> log = <http.Request>[];
+      await openSheet(
+        tester,
+        stations: _stations(log: log),
+        auth: await signedIn(),
+      );
+
+      await tester.tap(find.byKey(const ValueKey<String>('charge-start-button')));
+      await _settle(tester);
+      expect(find.text(AppStrings.get('ebarimt_personal')), findsOneWidget);
+      await tester.tap(find.text(AppStrings.get('start_confirm_cancel')));
+      await _settle(tester);
+
+      expect(log.where(_isStart), isEmpty);
+      expect(find.byType(StationSheet), findsOneWidget);
     });
 
     testWidgets('a guest is asked to sign in before anything is sent', (

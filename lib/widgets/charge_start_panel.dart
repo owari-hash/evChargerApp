@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/charging_session.dart';
 import '../models/station.dart';
 import '../screens/wallet_screen.dart';
 import '../services/api_client.dart';
@@ -10,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import 'account_widgets.dart';
 import 'auth_gate.dart';
+import 'ebarimt_choice_sheet.dart';
 
 const Set<String> _knownConnectorStatuses = <String>{
   'Available',
@@ -163,6 +165,14 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     );
     if (!signedIn || !mounted) return;
 
+    // Same step as the kiosk: confirm the start and pick personal or company
+    // e-Barimt. Internal users charge free, so they have nothing to receipt.
+    EbarimtChoice? ebarimt;
+    if (!_isInternal) {
+      ebarimt = await EbarimtChoiceSheet.show(context);
+      if (ebarimt == null || !mounted) return;
+    }
+
     // No "is it plugged in?" guess from the gun's status here, as on the
     // website: after a stop with the cable still in, a charger can report
     // `Available`, and refusing on that blocked a restart the website let
@@ -170,7 +180,11 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
 
     setState(() => _starting = true);
     try {
-      await _stations.startCharging(widget.stationId, connectorId: _selected);
+      await _stations.startCharging(
+        widget.stationId,
+        connectorId: _selected,
+        ebarimt: ebarimt,
+      );
       _sessions.notifySessionStarted();
       if (!mounted) return;
       setState(() => _starting = false);
@@ -203,12 +217,14 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     }
   }
 
+  bool get _isInternal =>
+      widget.authService?.currentUser.value?.isInternal == true ||
+      AuthService.instance.currentUser.value?.isInternal == true;
+
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final bool isInternal =
-        widget.authService?.currentUser.value?.isInternal == true ||
-        AuthService.instance.currentUser.value?.isInternal == true;
+    final bool isInternal = _isInternal;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

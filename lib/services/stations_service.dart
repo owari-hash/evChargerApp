@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../models/charging_session.dart';
 import '../models/station.dart';
 import '../utils/app_strings.dart';
 import 'api_client.dart';
@@ -283,12 +284,21 @@ class StationsService {
   /// `Rejected`. Anything but `Accepted` — a missing status included — is
   /// thrown as an [ApiException]: it used to be reported as "charge started"
   /// while nothing was charging.
-  Future<void> startCharging(String stationId, {int? connectorId}) async {
+  ///
+  /// [ebarimt] is the receipt the driver chose; the backend issues it for the
+  /// billed amount automatically when the charge ends.
+  Future<void> startCharging(
+    String stationId, {
+    int? connectorId,
+    EbarimtChoice? ebarimt,
+  }) async {
+    final Map<String, dynamic> request = <String, dynamic>{
+      if (connectorId != null) 'connectorId': connectorId,
+      if (ebarimt != null) 'ebarimt': ebarimt.toJson(),
+    };
     final Map<String, dynamic> body = await _client.post(
       '/stations/${Uri.encodeComponent(stationId)}/start',
-      body: connectorId != null
-          ? <String, dynamic>{'connectorId': connectorId}
-          : null,
+      body: request.isEmpty ? null : request,
     );
     final String status = (body['status'] ?? '').toString();
     if (status != 'Accepted') {

@@ -46,6 +46,28 @@ class SessionsService {
     return (body['status'] ?? 'Accepted').toString();
   }
 
+  /// Looks a company up at the tax office by TIN or register number, so the
+  /// driver sees its name before choosing a company e-Barimt. Returns
+  /// `{valid, name, tin, error}` as the backend's `verifyTaxpayer` does.
+  Future<Map<String, dynamic>> checkOrg(String code) async {
+    final Map<String, dynamic> body = await _client.get(
+      '/sessions/ebarimt/check-org/${Uri.encodeComponent(code)}',
+    );
+    final dynamic result = body['result'];
+    return result is Map<String, dynamic>
+        ? result
+        : <String, dynamic>{'valid': false};
+  }
+
+  /// One recent session by id, or null if it is not among the latest few.
+  Future<ChargingSession?> find(int transactionId) async {
+    final List<ChargingSession> recent = await list(limit: 10);
+    for (final ChargingSession s in recent) {
+      if (s.transactionId == transactionId) return s;
+    }
+    return null;
+  }
+
   /// Requests a real e-Barimt tax receipt for a past session — the same
   /// endpoint the kiosk web app's receipt flow calls, not a device-side
   /// stand-in. [customerTin] is required for [EBarimtType.b2b].

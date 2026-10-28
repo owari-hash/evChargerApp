@@ -25,6 +25,7 @@ class ChargingSession {
     this.minutesToFull,
     this.stopReason,
     this.ebarimt,
+    this.ebarimtRequest,
     this.tariffPerKwh,
     this.tariffZoneName,
   });
@@ -56,6 +57,10 @@ class ChargingSession {
   final int? minutesToFull;
   final String? stopReason;
   final EBarimtData? ebarimt;
+
+  /// The receipt the driver chose when they pressed Charge. The backend
+  /// issues it automatically once the session is billed.
+  final EbarimtChoice? ebarimtRequest;
 
   /// Per kWh this session is billed at: while running, the time-of-day zone
   /// in effect now (from the station's zones as they were at the start);
@@ -113,6 +118,11 @@ class ChargingSession {
       ebarimt: json['ebarimt'] is Map<String, dynamic>
           ? EBarimtData.fromJson(json['ebarimt'] as Map<String, dynamic>)
           : null,
+      ebarimtRequest: json['ebarimtRequest'] is Map<String, dynamic>
+          ? EbarimtChoice.fromJson(
+              json['ebarimtRequest'] as Map<String, dynamic>,
+            )
+          : null,
       tariffPerKwh: json['tariffPerKwh'] is num
           ? json['tariffPerKwh'] as num
           : null,
@@ -142,6 +152,7 @@ class ChargingSession {
       minutesToFull: minutesToFull,
       stopReason: stopReason,
       ebarimt: ebarimt,
+      ebarimtRequest: ebarimtRequest,
       tariffPerKwh: tariffPerKwh,
       tariffZoneName: tariffZoneName,
     );
@@ -240,5 +251,36 @@ class EBarimtData {
 }
 
 enum EBarimtType { b2c, b2b }
+
+/// Personal or company e-Barimt, chosen before a charge starts — the same
+/// shape as `EbarimtChoice` in the kiosk and `ebarimtRequest` on the backend.
+class EbarimtChoice {
+  const EbarimtChoice({required this.type, this.customerTin, this.customerName});
+
+  final EBarimtType type;
+  final String? customerTin;
+  final String? customerName;
+
+  factory EbarimtChoice.fromJson(Map<String, dynamic> json) {
+    String? text(dynamic v) {
+      final String s = (v ?? '').toString().trim();
+      return s.isEmpty ? null : s;
+    }
+
+    return EbarimtChoice(
+      type: json['type'] == 'B2B_RECEIPT' ? EBarimtType.b2b : EBarimtType.b2c,
+      customerTin: text(json['customerTin']),
+      customerName: text(json['customerName']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'type': type == EBarimtType.b2b ? 'B2B_RECEIPT' : 'B2C_RECEIPT',
+    if (type == EBarimtType.b2b && customerTin != null)
+      'customerTin': customerTin,
+    if (type == EBarimtType.b2b && customerName != null)
+      'customerName': customerName,
+  };
+}
 
 enum EBarimtStatus { pending, success, failed }

@@ -24,6 +24,9 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
   /// then nothing to request an e-Barimt for.
   final int? transactionId;
 
+  /// The e-Barimt chosen when the charge started; issued automatically.
+  final EbarimtChoice? ebarimtRequest;
+
   const ChargingSessionReceiptSheet({
     super.key,
     required this.stationName,
@@ -33,6 +36,7 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
     this.feeAmountMnt,
     this.feePercent,
     this.transactionId,
+    this.ebarimtRequest,
   });
 
   @override
@@ -131,6 +135,16 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
               formatMntLeading(feeAmountMnt!),
             ),
           ],
+          if (ebarimtRequest != null) ...[
+            Divider(height: 20, color: context.palette.border),
+            _buildReceiptRow(
+              context,
+              AppStrings.get('ebarimt_title'),
+              ebarimtRequest!.type == EBarimtType.b2b
+                  ? '${AppStrings.get('ebarimt_org')} · ${ebarimtRequest!.customerName ?? ebarimtRequest!.customerTin ?? ''}'
+                  : AppStrings.get('ebarimt_personal'),
+            ),
+          ],
           const SizedBox(height: 28),
 
           Row(
@@ -152,6 +166,7 @@ class ChargingSessionReceiptSheet extends StatelessWidget {
                               energyKwh: totalEnergyKwh,
                               cost: totalCostMnt,
                               stationName: stationName,
+                              ebarimtRequest: ebarimtRequest,
                             ),
                           );
                         },

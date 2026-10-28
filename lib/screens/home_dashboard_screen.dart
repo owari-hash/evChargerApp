@@ -507,6 +507,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
     double? energyCost;
     double? feeAmount;
     double? feePercent;
+    EbarimtChoice? ebarimtRequest;
     String station = _session.stationName ?? AppStrings.get('station_unknown');
 
     final int? remote = _remoteTransactionId;
@@ -545,6 +546,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
           energyCost = finished.energyCost?.toDouble();
           feeAmount = finished.feeAmount?.toDouble();
           feePercent = finished.feePercent?.toDouble();
+          ebarimtRequest = finished.ebarimtRequest;
           station = finished.displayLocation;
         }
       } on ApiException {
@@ -569,6 +571,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
           feeAmountMnt: feeAmount,
           feePercent: feePercent,
           transactionId: finishedTransactionId,
+          ebarimtRequest: ebarimtRequest,
         ),
       );
       setState(() {});

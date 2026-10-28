@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/charging_session.dart';
 import '../services/api_client.dart';
 import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 import '../utils/money.dart';
 
 /// Requests a real Mongolian e-Barimt tax receipt for a past session —
@@ -29,16 +32,75 @@ class EbarimtSheet extends StatefulWidget {
 }
 
 class _EbarimtSheetState extends State<EbarimtSheet> {
-  late EBarimtType _type = widget.session.ebarimt?.type ?? EBarimtType.b2c;
+  late EBarimtType _type =
+      widget.session.ebarimt?.type ??
+      widget.session.ebarimtRequest?.type ??
+      EBarimtType.b2c;
   late final TextEditingController _tin = TextEditingController(
-    text: widget.session.ebarimt?.customerTin ?? '',
+    text:
+        widget.session.ebarimt?.customerTin ??
+        widget.session.ebarimtRequest?.customerTin ??
+        '',
   );
   late EBarimtData? _ebarimt = widget.session.ebarimt;
   bool _loading = false;
   String? _error;
 
+  /// The driver chose a receipt when they pressed Charge, and the backend is
+  /// issuing it on its own: wait for it rather than asking again.
+  bool _waiting = false;
+  Timer? _poll;
+  int _polls = 0;
+
+  /// About two minutes of checking, as on the kiosk.
+  static const int _maxPolls = 40;
+
+  @override
+  void initState() {
+    super.initState();
+    final ChargingSession s = widget.session;
+    final bool issued = s.ebarimt?.status == EBarimtStatus.success;
+    if (s.ebarimtRequest != null &&
+        !issued &&
+        s.ebarimt?.status != EBarimtStatus.failed &&
+        (s.cost ?? 0) > 0) {
+      _waiting = true;
+      _poll = Timer.periodic(const Duration(seconds: 3), (_) => _checkIssued());
+      unawaited(_checkIssued());
+    }
+  }
+
+  Future<void> _checkIssued() async {
+    _polls++;
+    ChargingSession? latest;
+    try {
+      latest = await SessionsService.instance.find(widget.session.transactionId);
+    } on ApiException {
+      // A missed poll is retried on the next tick.
+    }
+    if (!mounted) return;
+    final EBarimtData? eb = latest?.ebarimt;
+    if (eb?.status == EBarimtStatus.success) {
+      _poll?.cancel();
+      setState(() {
+        _ebarimt = eb;
+        _waiting = false;
+      });
+      if (latest != null) widget.onSuccess?.call(latest);
+      return;
+    }
+    if (eb?.status == EBarimtStatus.failed || _polls >= _maxPolls) {
+      _poll?.cancel();
+      setState(() {
+        _waiting = false;
+        _error = AppStrings.get('ebarimt_failed');
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _poll?.cancel();
     _tin.dispose();
     super.dispose();
   }
@@ -180,6 +242,8 @@ class _EbarimtSheetState extends State<EbarimtSheet> {
             ],
             if (ebarimt?.status == EBarimtStatus.success)
               _successView(palette, ebarimt!, qrUrl)
+            else if (_waiting)
+              _waitingView(palette)
             else
               _formView(palette),
           ],
@@ -207,6 +271,54 @@ class _EbarimtSheetState extends State<EbarimtSheet> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _waitingView(AppPalette palette) {
+    final EbarimtChoice request = widget.session.ebarimtRequest!;
+    final String who = request.type == EBarimtType.b2b
+        ? '${AppStrings.get('ebarimt_org')} · ${request.customerName ?? request.customerTin ?? ''}'
+        : AppStrings.get('ebarimt_personal');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: palette.accent,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  AppStrings.get('ebarimt_pending'),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: palette.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  who,
+                  style: TextStyle(fontSize: 12, color: palette.inkMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

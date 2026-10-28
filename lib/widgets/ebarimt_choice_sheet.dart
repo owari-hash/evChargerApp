@@ -9,6 +9,7 @@ import '../services/api_client.dart';
 import '../services/sessions_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
+import 'idle_nudge.dart';
 
 /// "Start charging?" plus which e-Barimt the driver wants: personal or a
 /// company. The same step as the kiosk's start dialog. The choice goes with
@@ -247,7 +248,12 @@ class _EbarimtChoiceSheetState extends State<EbarimtChoiceSheet> {
                 style: TextStyle(fontSize: 12, color: palette.inkMuted),
               ),
               const SizedBox(height: 20),
-              Row(
+              // Step 4: idle here → point at «Тийм, эхлүүлье».
+              IdleNudge(
+                message: AppStrings.get('nudge_start_yes'),
+                enabled: _canStart,
+                alignment: Alignment.centerRight,
+                child: Row(
                 children: <Widget>[
                   Expanded(
                     child: SizedBox(
@@ -293,6 +299,7 @@ class _EbarimtChoiceSheetState extends State<EbarimtChoiceSheet> {
                     ),
                   ),
                 ],
+                ),
               ),
             ],
           ),

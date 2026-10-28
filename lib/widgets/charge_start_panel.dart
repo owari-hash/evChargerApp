@@ -12,6 +12,7 @@ import '../utils/app_strings.dart';
 import 'account_widgets.dart';
 import 'auth_gate.dart';
 import 'ebarimt_choice_sheet.dart';
+import 'idle_nudge.dart';
 
 const Set<String> _knownConnectorStatuses = <String>{
   'Available',
@@ -111,6 +112,9 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
 
   int? _selected;
   bool _starting = false;
+
+  /// The idle hint is showing: light up the next step in the step bar too.
+  bool _nudging = false;
 
   /// Every failure is reported as a toast, the same as on the web.
   void _fail(String message) {
@@ -225,11 +229,23 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final bool isInternal = _isInternal;
+    final bool signedIn =
+        (widget.authService ?? AuthService.instance).isSignedIn;
+    // From the map the driver still has to scan the gun (step 2); after a
+    // scan they are on "plug in" (step 3) with Charge as step 4.
+    final bool scanMode = widget.onScanQr != null;
+    final int currentStep = scanMode ? 1 : 2;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        ChargeStepBar(
+          current: currentStep,
+          signedIn: signedIn,
+          pointTo: _nudging ? currentStep + 1 : null,
+        ),
+        const SizedBox(height: 12),
         if (isInternal) ...<Widget>[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -263,7 +279,13 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
           ),
         ],
         const SizedBox(height: 16),
-        SizedBox(
+        IdleNudge(
+          message: AppStrings.get(scanMode ? 'nudge_scan' : 'nudge_charge'),
+          enabled: widget.stationOnline && !_starting,
+          onChanged: (bool on) {
+            if (mounted) setState(() => _nudging = on);
+          },
+          child: SizedBox(
           height: 54,
           child: widget.onScanQr != null
               ? ElevatedButton.icon(
@@ -309,6 +331,7 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
                     ),
                   ),
                 ),
+          ),
         ),
         if (!widget.stationOnline) ...<Widget>[
           const SizedBox(height: 8),
@@ -320,6 +343,153 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
         ],
         if (widget.footer != null) widget.footer!,
       ],
+    );
+  }
+}
+
+/// The kiosk's four steps — sign in, pick a gun, plug in, charge — so a
+/// driver sees the whole path. [pointTo] bounces the next step when they have
+/// been idle.
+class ChargeStepBar extends StatefulWidget {
+  const ChargeStepBar({
+    super.key,
+    required this.current,
+    required this.signedIn,
+    this.pointTo,
+  });
+
+  final int current;
+  final bool signedIn;
+  final int? pointTo;
+
+  @override
+  State<ChargeStepBar> createState() => _ChargeStepBarState();
+}
+
+class _ChargeStepBarState extends State<ChargeStepBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bounce = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChargeStepBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pointTo != widget.pointTo) _sync();
+  }
+
+  /// Animates only while pointing, so idle screens settle in tests.
+  void _sync() {
+    if (widget.pointTo != null) {
+      _bounce.repeat(reverse: true);
+    } else {
+      _bounce
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    const List<String> keys = <String>[
+      'step_signin',
+      'step_connector',
+      'step_plug',
+      'step_charge',
+    ];
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List<Widget>.generate(keys.length, (int i) {
+        // Sign-in is asked when Charge is pressed, so it is only "done" once
+        // the driver is actually signed in.
+        final bool done = i == 0 ? widget.signedIn : i < widget.current;
+        final bool current = !done && i == widget.current;
+        final bool pointed = !done && i == widget.pointTo;
+        final Color fill = done || current
+            ? AppTheme.sageGreen
+            : pointed
+            ? AppTheme.sageGreen.withValues(alpha: 0.18)
+            : palette.bg;
+        final Color text = done || current
+            ? Colors.white
+            : pointed
+            ? AppTheme.sageGreen
+            : palette.inkMuted;
+
+        Widget circle = Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: fill,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: done || current || pointed
+                  ? AppTheme.sageGreen
+                  : palette.border,
+              width: pointed || current ? 2.5 : 1,
+            ),
+          ),
+          child: Text(
+            done ? '✓' : '${i + 1}',
+            style: TextStyle(
+              color: text,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+        if (pointed) {
+          circle = AnimatedBuilder(
+            animation: _bounce,
+            builder: (BuildContext context, Widget? child) =>
+                Transform.translate(
+                  offset: Offset(0, -5 * _bounce.value),
+                  child: child,
+                ),
+            child: circle,
+          );
+        }
+
+        return Expanded(
+          child: Column(
+            children: <Widget>[
+              circle,
+              const SizedBox(height: 6),
+              Text(
+                AppStrings.get(keys[i]),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.15,
+                  fontWeight: current || pointed
+                      ? FontWeight.w800
+                      : FontWeight.w500,
+                  color: current || pointed
+                      ? AppTheme.sageGreen
+                      : (done ? palette.ink : palette.inkMuted),
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

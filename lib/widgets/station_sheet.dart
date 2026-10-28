@@ -145,7 +145,11 @@ class _StationSheetState extends State<StationSheet> {
     final ChargingStationLocation s = _station;
     final int free = _connectors.isEmpty
         ? s.availableConnectors
-        : _connectors.where((StationConnector c) => c.isStartable).length;
+        // Same rule as the server's count on the stations list: only
+        // `Available` is free. A `Preparing` gun is usually still in a car.
+        : _connectors
+              .where((StationConnector c) => c.isAvailable && !c.inUseByOther)
+              .length;
     final int total = _connectors.isEmpty ? s.totalConnectors : _connectors.length;
 
     return Container(

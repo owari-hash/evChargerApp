@@ -11,22 +11,31 @@ import '../utils/app_strings.dart';
 import 'account_widgets.dart';
 import 'auth_gate.dart';
 
-/// What a driver reads for one gun's live state.
+const Set<String> _knownConnectorStatuses = <String>{
+  'Available',
+  'Preparing',
+  'Charging',
+  'SuspendedEV',
+  'SuspendedEVSE',
+  'Finishing',
+  'Reserved',
+  'Unavailable',
+  'Faulted',
+};
+
+/// What a driver reads for one gun's live state — the kiosk's wording, so a
+/// gun reads the same in the app and on the website.
 String connectorStatusLabel(StationConnector connector, {bool online = true}) {
   if (!online) return AppStrings.get('connector_offline');
-  if (connector.inUseByOther) return AppStrings.get('connector_busy');
-  if (connector.isAvailable) return AppStrings.get('available');
-  if (connector.status == 'Preparing') {
-    return AppStrings.get('connector_plugged');
+  // Someone scanned this gun and is about to start: the station still reports
+  // it free, but it is not. Same rule as the kiosk.
+  if (connector.inUseByOther &&
+      (connector.isAvailable || connector.status == 'Preparing')) {
+    return AppStrings.get('cstatus_inUseByOther');
   }
-  // A paused session (car or station holding off for a moment) is still the
-  // driver's charge in progress, not someone else's gun.
-  if (connector.isCharging ||
-      connector.status == 'SuspendedEV' ||
-      connector.status == 'SuspendedEVSE') {
-    return AppStrings.get('charging');
+  if (_knownConnectorStatuses.contains(connector.status)) {
+    return AppStrings.get('cstatus_${connector.status}');
   }
-  if (connector.isFaulted) return AppStrings.get('connector_faulted');
   return AppStrings.get('connector_busy');
 }
 

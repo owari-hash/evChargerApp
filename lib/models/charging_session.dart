@@ -24,6 +24,7 @@ class ChargingSession {
     this.lastSocPercent,
     this.minutesToFull,
     this.stopReason,
+    this.plugError = false,
     this.ebarimt,
     this.ebarimtRequest,
     this.tariffPerKwh,
@@ -56,6 +57,10 @@ class ChargingSession {
   /// battery is full. Null when the station does not report battery %.
   final int? minutesToFull;
   final String? stopReason;
+
+  /// The station could not confirm the gun was connected to the car and
+  /// nothing was charged: the driver should re-plug and start again.
+  final bool plugError;
   final EBarimtData? ebarimt;
 
   /// The receipt the driver chose when they pressed Charge. The backend
@@ -115,6 +120,7 @@ class ChargingSession {
           ? (json['minutesToFull'] as num).round()
           : null,
       stopReason: _text(json['stopReason']),
+      plugError: json['plugError'] == true,
       ebarimt: json['ebarimt'] is Map<String, dynamic>
           ? EBarimtData.fromJson(json['ebarimt'] as Map<String, dynamic>)
           : null,
@@ -151,6 +157,7 @@ class ChargingSession {
       lastSocPercent: lastSocPercent,
       minutesToFull: minutesToFull,
       stopReason: stopReason,
+      plugError: plugError,
       ebarimt: ebarimt,
       ebarimtRequest: ebarimtRequest,
       tariffPerKwh: tariffPerKwh,

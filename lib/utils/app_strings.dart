@@ -171,6 +171,8 @@ class AppStrings {
       'notif_charge_started_body': '{station} · {time} цагаас эхэлсэн',
       'notif_charge_stopped_title': 'Цэнэглэлт дууслаа',
       'notif_charge_stopped_body': '{station} · {details}',
+      'notif_plug_error_title': 'Цэнэглэлт эхэлсэнгүй',
+      'notif_plug_error_body': 'Станц таны машинтай холболтыг баталгаажуулж чадсангүй. Цэнэглэх буугаа салгаад, дахин бүрэн залгаад цэнэглэнэ үү.',
       'notif_view': 'Харах',
       'unit_kwh': 'кВт·ц',
       // ---- Sign in / sign up ----
@@ -718,6 +720,8 @@ class AppStrings {
       'notif_charge_started_body': '{station} · started at {time}',
       'notif_charge_stopped_title': 'Charging finished',
       'notif_charge_stopped_body': '{station} · {details}',
+      'notif_plug_error_title': 'Charging did not start',
+      'notif_plug_error_body': 'The station could not confirm the connection with your car. Unplug the gun, plug it in fully again and start charging.',
       'notif_view': 'View',
       'unit_kwh': 'kWh',
       // ---- Sign in / sign up ----

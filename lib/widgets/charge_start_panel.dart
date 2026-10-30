@@ -221,6 +221,14 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     }
   }
 
+  /// The station sees the picked gun in a car.
+  bool get _pluggedIn {
+    for (final StationConnector c in widget.connectors) {
+      if (c.connectorId == _selected) return c.status == 'Preparing';
+    }
+    return false;
+  }
+
   bool get _isInternal =>
       widget.authService?.currentUser.value?.isInternal == true ||
       AuthService.instance.currentUser.value?.isInternal == true;
@@ -232,9 +240,11 @@ class _ChargeStartPanelState extends State<ChargeStartPanel> {
     final bool signedIn =
         (widget.authService ?? AuthService.instance).isSignedIn;
     // From the map the driver still has to scan the gun (step 2); after a
-    // scan they are on "plug in" (step 3) with Charge as step 4.
+    // scan they are on "plug in" (step 3) with Charge as step 4. "Plug in"
+    // ticks only once the station reports the gun in the car (Preparing).
+    // It is a hint: Charge stays enabled either way, see _start.
     final bool scanMode = widget.onScanQr != null;
-    final int currentStep = scanMode ? 1 : 2;
+    final int currentStep = scanMode ? 1 : (_pluggedIn ? 3 : 2);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

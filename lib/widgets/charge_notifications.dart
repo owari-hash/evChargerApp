@@ -25,6 +25,15 @@ import '../utils/money.dart';
     );
   }
 
+  // The station never got a connection to the car: say what to do, not
+  // "finished · 0 kWh".
+  if (session.plugError) {
+    return (
+      title: AppStrings.get('notif_plug_error_title'),
+      body: AppStrings.get('notif_plug_error_body'),
+    );
+  }
+
   final List<String> details = <String>[
     if (session.energyKwh > 0)
       '${session.energyKwh.toStringAsFixed(2)} ${AppStrings.get('unit_kwh')}',
@@ -68,19 +77,25 @@ SnackBar chargeSnackBar(
   final AppPalette palette = context.palette;
   final ({String title, String body}) text = chargeNotificationText(event);
   final bool started = event.type == SessionEventType.started;
-  final Color foreground = started ? Colors.white : palette.onPanel;
+  final bool failed = !started && event.session.plugError;
+  final Color foreground = started || failed ? Colors.white : palette.onPanel;
   // The SnackBar theme's text style carries only a colour; start from the
   // app's own body style so the title and details are in Geist.
   final TextStyle base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
 
   return SnackBar(
-    backgroundColor: started ? AppTheme.sageGreen : null,
-    duration: const Duration(seconds: 5),
+    backgroundColor: started
+        ? AppTheme.sageGreen
+        : (failed ? AppTheme.errorRed : null),
+    // Long enough to read the instructions.
+    duration: Duration(seconds: failed ? 12 : 5),
     content: Row(
       children: <Widget>[
         Icon(
-          started ? Icons.bolt_rounded : Icons.check_circle_rounded,
-          color: started ? Colors.white : AppTheme.sageGreen,
+          started
+              ? Icons.bolt_rounded
+              : (failed ? Icons.power_off_rounded : Icons.check_circle_rounded),
+          color: started || failed ? Colors.white : AppTheme.sageGreen,
           size: 22,
         ),
         const SizedBox(width: 10),
@@ -98,7 +113,7 @@ SnackBar chargeSnackBar(
               ),
               Text(
                 text.body,
-                maxLines: 2,
+                maxLines: failed ? 5 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: base.copyWith(
                   color: foreground.withValues(alpha: 0.85),
@@ -112,7 +127,7 @@ SnackBar chargeSnackBar(
     ),
     action: SnackBarAction(
       label: AppStrings.get('notif_view'),
-      textColor: started ? Colors.white : AppTheme.sageGreen,
+      textColor: started || failed ? Colors.white : AppTheme.sageGreen,
       onPressed: onView,
     ),
   );

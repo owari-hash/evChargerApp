@@ -8,8 +8,8 @@ import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import 'app_toast.dart';
 
-/// «Санал хүсэлт» at the bottom of the home screen: a card with a slow green
-/// glow that opens a short form. Lands in the console's Санал хүсэлт page,
+/// «Санал хүсэлт» at the bottom of the home screen: a frosted card with a
+/// slow breathing shadow that opens a short form. Lands in the console's Санал хүсэлт page,
 /// the same as the kiosk footer's form.
 class FeedbackCard extends StatefulWidget {
   const FeedbackCard({super.key});
@@ -35,6 +35,10 @@ class _FeedbackCardState extends State<FeedbackCard>
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
 
+    final bool isDark = ThemeController.isDark;
+    // Neutral frosted glass: the brand green is kept to the icon, so the card
+    // no longer reads as a green block. The soft breathing shadow stays, in a
+    // neutral tone.
     return AnimatedBuilder(
       animation: _glow,
       builder: (BuildContext context, Widget? child) {
@@ -44,9 +48,10 @@ class _FeedbackCardState extends State<FeedbackCard>
             borderRadius: BorderRadius.circular(22),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: palette.accent.withValues(alpha: 0.18 + 0.22 * t),
-                blurRadius: 18 + 14 * t,
-                spreadRadius: -2,
+                color: (isDark ? Colors.black : const Color(0xFF10281C))
+                    .withValues(alpha: (isDark ? 0.30 : 0.08) + 0.06 * t),
+                blurRadius: 20 + 8 * t,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -65,12 +70,21 @@ class _FeedbackCardState extends State<FeedbackCard>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: <Color>[
-                  palette.accent.withValues(alpha: 0.22),
-                  palette.card.withValues(alpha: 0.9),
-                ],
+                colors: isDark
+                    ? <Color>[
+                        Colors.white.withValues(alpha: 0.08),
+                        Colors.white.withValues(alpha: 0.03),
+                      ]
+                    : <Color>[
+                        Colors.white.withValues(alpha: 0.92),
+                        Colors.white.withValues(alpha: 0.72),
+                      ],
               ),
-              border: Border.all(color: palette.accent.withValues(alpha: 0.45)),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : palette.border,
+              ),
             ),
             child: Row(
               children: <Widget>[
@@ -79,7 +93,7 @@ class _FeedbackCardState extends State<FeedbackCard>
                   height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: palette.accent.withValues(alpha: 0.16),
+                    color: palette.accent.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Transform.rotate(
@@ -113,7 +127,7 @@ class _FeedbackCardState extends State<FeedbackCard>
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: palette.accent),
+                Icon(Icons.chevron_right_rounded, color: palette.inkMuted),
               ],
             ),
           ),

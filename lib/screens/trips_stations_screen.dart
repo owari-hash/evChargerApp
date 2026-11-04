@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/sessions_service.dart';
 import '../services/stations_service.dart';
+import '../widgets/glass.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
@@ -105,8 +106,10 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
               // The list is the last one that loaded; say so when it could not
               // be refreshed rather than passing it off as live.
               if (error != null && !loading) _buildOfflineNotice(context),
-              _buildShowFilter(context, all),
+              GlassEntrance(offset: -14, child: _buildShowFilter(context, all)),
               const SizedBox(height: 14),
+              // Cards cascade in, alternating sides; the stagger is capped so
+              // a long list doesn't keep the last cards waiting.
               ...all
                   .where(
                     (ChargingStationLocation s) => switch (_show) {
@@ -115,7 +118,19 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                       _StationShow.inactive => !_isActive(s),
                     },
                   )
-                  .map((station) => _buildStationCard(station, context)),
+                  .toList()
+                  .asMap()
+                  .entries
+                  .map(
+                    (MapEntry<int, ChargingStationLocation> e) => GlassEntrance(
+                      // Keyed by station and filter, so switching the filter
+                      // replays the cascade for the new list.
+                      key: ValueKey<String>('${_show.name}-${e.value.id}'),
+                      delay: Duration(milliseconds: 60 * e.key.clamp(0, 8)),
+                      from: Offset(e.key.isEven ? -24 : 24, 10),
+                      child: _buildStationCard(e.value, context),
+                    ),
+                  ),
             ],
           ],
         ),
@@ -132,7 +147,12 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
     final int active = all.where(_isActive).length;
     final List<(_StationShow, String, int, Color?)> options =
         <(_StationShow, String, int, Color?)>[
-          (_StationShow.all, AppStrings.get('stations_show_all'), all.length, null),
+          (
+            _StationShow.all,
+            AppStrings.get('stations_show_all'),
+            all.length,
+            null,
+          ),
           (
             _StationShow.active,
             AppStrings.get('stations_show_active'),
@@ -590,50 +610,81 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
           final bool confirming = _stage == _ScanStage.confirming;
           return Container(
             height: MediaQuery.of(context).size.height * 0.85,
+            // Night glass: deep emerald with a lit top edge.
             decoration: BoxDecoration(
-              color: palette.card,
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[Color(0xFF13241D), Color(0xFF050D0A)],
+              ),
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+                top: Radius.circular(32),
+              ),
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
               ),
             ),
             child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        confirming
-                            ? Icons.ev_station_rounded
-                            : Icons.qr_code_scanner_rounded,
-                        color: palette.accent,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          AppStrings.get(
-                            confirming ? 'confirm_start_title' : 'scan_qr',
-                          ),
-                          style: TextStyle(
-                            color: palette.ink,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                  child: GlassEntrance(
+                    offset: -10,
+                    child: Row(
+                      children: [
+                        Icon(
+                          confirming
+                              ? Icons.ev_station_rounded
+                              : Icons.qr_code_scanner_rounded,
+                          color: palette.accent,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            AppStrings.get(
+                              confirming ? 'confirm_start_title' : 'scan_qr',
+                            ),
+                            style: TextStyle(
+                              color: palette.ink,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close_rounded, color: palette.ink),
-                        tooltip: AppStrings.get('close'),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: palette.ink),
+                          tooltip: AppStrings.get('close'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 Expanded(
-                  child: confirming
-                      ? _buildConfirmView(context)
-                      : _buildScannerView(context),
+                  // Scanner and confirm views float in when they swap.
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 380),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (Widget child, Animation<double> a) =>
+                        FadeTransition(
+                          opacity: a,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.06),
+                              end: Offset.zero,
+                            ).animate(a),
+                            child: child,
+                          ),
+                        ),
+                    child: KeyedSubtree(
+                      key: ValueKey<bool>(confirming),
+                      child: confirming
+                          ? _buildConfirmView(context)
+                          : _buildScannerView(context),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -666,32 +717,44 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
         ),
         const SizedBox(height: 20),
         Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
+          child: GlassEntrance(
+            scale: 0.9,
+            offset: 0,
+            delay: const Duration(milliseconds: 80),
+            child: _ScanFrame(
+              // Only the real camera gets the moving scan line: it loops, and
+              // tests (which pass their own builder) must be able to settle.
+              animate: widget.scannerBuilder == null && !resolving,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppTheme.sageGreen, width: 3),
-                color: Colors.black,
-              ),
-              // The camera stays mounted while a code resolves, so going back
-              // to scanning only has to restart it, not rebuild it.
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  builder(context, _controller, _onDetect),
-                  if (resolving)
-                    const ColoredBox(
-                      color: Colors.black54,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppTheme.sageGreen,
-                        ),
-                      ),
+                child: Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.10),
                     ),
-                ],
+                    color: Colors.black,
+                  ),
+                  // The camera stays mounted while a code resolves, so going back
+                  // to scanning only has to restart it, not rebuild it.
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      builder(context, _controller, _onDetect),
+                      if (resolving)
+                        const ColoredBox(
+                          color: Colors.black54,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.sageGreen,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -936,4 +999,165 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
       ],
     );
   }
+}
+
+/// The QR viewfinder dressing: glowing emerald corner brackets around the
+/// camera and, while scanning, a light sweeping down and back.
+class _ScanFrame extends StatefulWidget {
+  const _ScanFrame({required this.child, required this.animate});
+
+  final Widget child;
+
+  /// Whether the scan line runs. It loops, so it stays off in tests.
+  final bool animate;
+
+  @override
+  State<_ScanFrame> createState() => _ScanFrameState();
+}
+
+class _ScanFrameState extends State<_ScanFrame>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_ScanFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animate != widget.animate) _sync();
+  }
+
+  void _sync() {
+    if (widget.animate) {
+      _sweep.repeat(reverse: true);
+    } else {
+      _sweep.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double size = 250;
+    const Color glow = Color(0xFF34D399);
+    return SizedBox(
+      width: size + 20,
+      height: size + 20,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          widget.child,
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _CornerPainter(color: glow)),
+            ),
+          ),
+          if (widget.animate)
+            AnimatedBuilder(
+              animation: _sweep,
+              builder: (BuildContext context, Widget? child) {
+                final double t = Curves.easeInOut.transform(_sweep.value);
+                return Positioned(
+                  top: 22 + (size - 24) * t,
+                  left: 26,
+                  right: 26,
+                  child: child!,
+                );
+              },
+              child: IgnorePointer(
+                child: Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        glow.withValues(alpha: 0),
+                        glow,
+                        glow.withValues(alpha: 0),
+                      ],
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: glow.withValues(alpha: 0.8),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Four rounded L-shaped corner brackets with a soft glow.
+class _CornerPainter extends CustomPainter {
+  const _CornerPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double len = 34;
+    const double r = 22;
+    const double inset = 2;
+    final Paint glowPaint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    final Paint line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    final double w = size.width - inset;
+    final double h = size.height - inset;
+    final List<Path> corners = <Path>[
+      Path()
+        ..moveTo(inset, inset + len)
+        ..lineTo(inset, inset + r)
+        ..arcToPoint(Offset(inset + r, inset), radius: const Radius.circular(r))
+        ..lineTo(inset + len, inset),
+      Path()
+        ..moveTo(w - len, inset)
+        ..lineTo(w - r, inset)
+        ..arcToPoint(Offset(w, inset + r), radius: const Radius.circular(r))
+        ..lineTo(w, inset + len),
+      Path()
+        ..moveTo(w, h - len)
+        ..lineTo(w, h - r)
+        ..arcToPoint(Offset(w - r, h), radius: const Radius.circular(r))
+        ..lineTo(w - len, h),
+      Path()
+        ..moveTo(inset + len, h)
+        ..lineTo(inset + r, h)
+        ..arcToPoint(Offset(inset, h - r), radius: const Radius.circular(r))
+        ..lineTo(inset, h - len),
+    ];
+    for (final Path p in corners) {
+      canvas.drawPath(p, glowPaint);
+      canvas.drawPath(p, line);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CornerPainter oldDelegate) => oldDelegate.color != color;
 }

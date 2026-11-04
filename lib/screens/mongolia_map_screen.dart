@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/connector_types.dart';
 import '../models/station.dart';
+import '../services/api_client.dart';
 import '../services/stations_service.dart';
 import '../services/route_service.dart';
 import '../theme/app_theme.dart';
@@ -95,6 +96,55 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
   String? _routeError;
 
   final StationsService _stations = StationsService.instance;
+
+  /// Google road tiles with live traffic, per theme, once the backend hands
+  /// out a tiles session. Null (no key, offline): OpenStreetMap as before.
+  final Map<bool, String?> _googleTiles = <bool, String?>{};
+  final Set<bool> _tilesRequested = <bool>{};
+
+  /// Asks for the Google tiles of [dark] once per theme.
+  Future<void> _loadGoogleTiles(bool dark) async {
+    if (!_tilesRequested.add(dark)) return;
+    try {
+      final Map<String, dynamic> body = await ApiClient.shared.get(
+        '/maps/tiles',
+        query: <String, String>{'theme': dark ? 'dark' : 'light'},
+      );
+      final String? url = body['urlTemplate'] as String?;
+      if (!mounted || url == null || url.isEmpty) return;
+      setState(() => _googleTiles[dark] = url);
+    } catch (_) {
+      // Not configured or offline: stay on OpenStreetMap.
+    }
+  }
+
+  static const Color _trafficNormal = GlassTones.emerald;
+  static const Color _trafficSlow = Color(0xFFF59E0B);
+  static const Color _trafficJam = Color(0xFFEF4444);
+
+  /// The route split into stretches coloured by traffic — emerald moving,
+  /// orange slow, red jammed — like Google Maps.
+  List<Polyline> _trafficPolylines(DrivingRoute route) {
+    final List<Polyline> lines = <Polyline>[];
+    for (final TrafficSpan span in route.traffic) {
+      final List<LatLng> pts = route.points.sublist(span.start, span.end + 1);
+      if (pts.length < 2) continue;
+      lines.add(
+        Polyline(
+          points: pts,
+          strokeWidth: span.speed == TrafficSpeed.normal ? 6 : 7,
+          color: switch (span.speed) {
+            TrafficSpeed.normal => _trafficNormal,
+            TrafficSpeed.slow => _trafficSlow,
+            TrafficSpeed.jam => _trafficJam,
+          },
+          borderStrokeWidth: 1.5,
+          borderColor: Colors.white.withValues(alpha: 0.85),
+        ),
+      );
+    }
+    return lines;
+  }
 
   /// Zoom a route opens at — close enough to read the next turn, as in
   /// Google Maps' driving view.
@@ -539,6 +589,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
         ? AppStrings.get('route_loading')
         : (_routeError ?? _navigationInstruction(_userPosition, routeTarget));
 
+    final bool isDark = ThemeController.isDark;
+    unawaited(_loadGoogleTiles(isDark));
+    final String? googleTiles = _googleTiles[isDark];
+
     return Scaffold(
       backgroundColor: context.palette.bg,
       body: Stack(
@@ -557,13 +611,20 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                // Google tiles carry live traffic and are already styled for
+                // the theme; OpenStreetMap is the fallback.
+                key: ValueKey<String>(googleTiles ?? 'osm-$isDark'),
+                urlTemplate:
+                    googleTiles ??
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 tileProvider: NetworkTileProvider(
                   headers: {'User-Agent': 'EplugApp/1.0 (contact@eplug.mn)'},
                 ),
                 // Same OSM tiles, inverted to a night map in dark mode so the
                 // glass panels and glowing route sit on a dark city.
-                tileBuilder: ThemeController.isDark ? darkModeTileBuilder : null,
+                tileBuilder: googleTiles == null && isDark
+                    ? darkModeTileBuilder
+                    : null,
               ),
 
               // Live Navigation Dynamic Route Polyline
@@ -582,20 +643,23 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                         alpha: _route == null ? 0.10 : 0.22,
                       ),
                     ),
-                    Polyline(
-                      points:
-                          _route?.points ??
-                          <LatLng>[_userPosition, routeTarget],
-                      strokeWidth: 6.0,
-                      color: _route == null
-                          ? GlassTones.emerald.withValues(alpha: 0.45)
-                          : GlassTones.emerald,
-                      gradientColors: _route == null
-                          ? null
-                          : const <Color>[GlassTones.deep, GlassTones.mint],
-                      borderStrokeWidth: _route == null ? 0 : 1.5,
-                      borderColor: Colors.white.withValues(alpha: 0.85),
-                    ),
+                    if (_route != null && _route!.traffic.isNotEmpty)
+                      ..._trafficPolylines(_route!)
+                    else
+                      Polyline(
+                        points:
+                            _route?.points ??
+                            <LatLng>[_userPosition, routeTarget],
+                        strokeWidth: 6.0,
+                        color: _route == null
+                            ? GlassTones.emerald.withValues(alpha: 0.45)
+                            : GlassTones.emerald,
+                        gradientColors: _route == null
+                            ? null
+                            : const <Color>[GlassTones.deep, GlassTones.mint],
+                        borderStrokeWidth: _route == null ? 0 : 1.5,
+                        borderColor: Colors.white.withValues(alpha: 0.85),
+                      ),
                   ],
                 ),
 
@@ -630,7 +694,9 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                             border: Border.all(color: Colors.white, width: 2),
                             boxShadow: [
                               BoxShadow(
-                                color: GlassTones.emerald.withValues(alpha: 0.7),
+                                color: GlassTones.emerald.withValues(
+                                  alpha: 0.7,
+                                ),
                                 blurRadius: 16,
                                 spreadRadius: 1,
                               ),
@@ -745,6 +811,21 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                 ],
               ),
             ],
+          ),
+
+          // Map data credit — required for both Google and OpenStreetMap.
+          Positioned(
+            left: 10,
+            bottom: 2,
+            child: IgnorePointer(
+              child: Text(
+                googleTiles != null ? '© Google' : '© OpenStreetMap',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: context.palette.inkMuted.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
           ),
 
           // 2. Real-Time Turn-by-Turn Navigation Live HUD Bar (When Active)
@@ -942,6 +1023,41 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // How much the traffic adds, Google Maps style.
+                      if (_route != null &&
+                          _route!.trafficDelay.inMinutes >= 1) ...[
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: _trafficJam,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _trafficJam.withValues(alpha: 0.7),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppStrings.get('nav_traffic_delay').replaceFirst(
+                                '{min}',
+                                '${_route!.trafficDelay.inMinutes}',
+                              ),
+                              style: const TextStyle(
+                                color: _trafficJam,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       GlassStatStrip(
                         items: <(String, String)>[
                           (
@@ -1028,9 +1144,9 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                           shape: BoxShape.circle,
                           gradient: GlassTones.primary,
                         )
-                      : glassDecoration(radius: 30).copyWith(
-                          color: palette.card.withValues(alpha: 0.55),
-                        ),
+                      : glassDecoration(
+                          radius: 30,
+                        ).copyWith(color: palette.card.withValues(alpha: 0.55)),
                   child: Icon(
                     icon,
                     color: badge > 0 ? Colors.white : palette.ink,

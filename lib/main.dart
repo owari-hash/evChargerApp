@@ -104,6 +104,10 @@ class _QueuedBanner {
 
 class _MainAppFrameState extends State<MainAppFrame>
     with WidgetsBindingObserver {
+  /// Per-tab counters behind [EntranceReplay]; see `build`.
+  final List<int> _tabEpochs = List<int>.filled(5, 0);
+  int? _shownTab;
+
   AuthService get _auth => widget.authService ?? AuthService.instance;
 
   /// True until a session saved on a previous launch has been checked, so the
@@ -625,9 +629,22 @@ class _MainAppFrameState extends State<MainAppFrame>
           content: Text(AppStrings.get('logout_body')),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           actions: <Widget>[
+            // Only the destructive choice is red; backing out stays neutral.
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              style: AppTheme.cancelButtonStyle,
+              style: TextButton.styleFrom(
+                foregroundColor: dialogContext.palette.ink,
+                backgroundColor: dialogContext.palette.ink.withValues(
+                  alpha: 0.07,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               child: Text(AppStrings.get('cancel')),
             ),
             FilledButton(
@@ -657,6 +674,12 @@ class _MainAppFrameState extends State<MainAppFrame>
     final AppPalette palette = context.palette;
 
     if (_bootstrapping) return const _BootSplash();
+
+    // A tab coming into view replays its screen's entrance animations.
+    if (_activeTabIndex != _shownTab) {
+      _shownTab = _activeTabIndex;
+      _tabEpochs[_activeTabIndex]++;
+    }
 
     // No sign-in wall. Every tab is reachable signed out; the ones that show a
     // driver's own vehicle, money or history say so and offer to sign them in.
@@ -754,7 +777,13 @@ class _MainAppFrameState extends State<MainAppFrame>
 
       body: Stack(
         children: <Widget>[
-          IndexedStack(index: _activeTabIndex, children: pages),
+          IndexedStack(
+            index: _activeTabIndex,
+            children: <Widget>[
+              for (int i = 0; i < pages.length; i++)
+                EntranceReplay(epoch: _tabEpochs[i], child: pages[i]),
+            ],
+          ),
           // A button the driver can drag aside: as a fixed FAB it covered the
           // map's own controls. Hidden while the guide runs, which points at
           // the very sections it would sit over.

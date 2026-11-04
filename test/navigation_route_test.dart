@@ -109,4 +109,55 @@ void main() {
       expect(routeActionLabelKey(isNavigating: true), 'stop_route');
     });
   });
+
+  group('Traffic route parsing', () {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'points': <List<double>>[
+        <double>[47.91, 106.90],
+        <double>[47.92, 106.91],
+        <double>[47.93, 106.92],
+        <double>[47.94, 106.93],
+      ],
+      'distanceMeters': 4200,
+      'durationSeconds': 900,
+      'staticDurationSeconds': 540,
+      'traffic': <Map<String, dynamic>>[
+        <String, dynamic>{'start': 0, 'end': 1, 'speed': 'NORMAL'},
+        <String, dynamic>{'start': 1, 'end': 2, 'speed': 'SLOW'},
+        <String, dynamic>{'start': 2, 'end': 3, 'speed': 'TRAFFIC_JAM'},
+      ],
+    };
+
+    test('reads points, times and coloured stretches', () {
+      final DrivingRoute route = DrivingRoute.fromTrafficJson(body)!;
+      expect(route.points.length, 4);
+      expect(route.points.first, const LatLng(47.91, 106.90));
+      expect(route.duration, const Duration(seconds: 900));
+      expect(route.trafficDelay, const Duration(minutes: 6));
+      expect(route.traffic.map((TrafficSpan t) => t.speed), <TrafficSpeed>[
+        TrafficSpeed.normal,
+        TrafficSpeed.slow,
+        TrafficSpeed.jam,
+      ]);
+    });
+
+    test('drops empty stretches and clamps out-of-range indexes', () {
+      final DrivingRoute route = DrivingRoute.fromTrafficJson(<String, dynamic>{
+        ...body,
+        'traffic': <Map<String, dynamic>>[
+          <String, dynamic>{'start': 2, 'end': 2, 'speed': 'SLOW'},
+          <String, dynamic>{'start': 1, 'end': 99, 'speed': 'TRAFFIC_JAM'},
+        ],
+      })!;
+      expect(route.traffic.length, 1);
+      expect(route.traffic.single.end, 3);
+    });
+
+    test('no geometry means no route', () {
+      expect(
+        DrivingRoute.fromTrafficJson(<String, dynamic>{'points': <dynamic>[]}),
+        isNull,
+      );
+    });
+  });
 }

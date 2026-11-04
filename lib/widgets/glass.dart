@@ -205,12 +205,10 @@ class _GlassAssembleState extends State<_GlassAssemble> {
 
   @override
   Widget build(BuildContext context) {
-    final int total = 650 + _delayMs;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: total),
-      curve: Interval(_delayMs / total, 1, curve: Curves.easeOutCubic),
-      builder: (BuildContext context, double t, Widget? child) {
+    return _Replay(
+      delay: Duration(milliseconds: _delayMs),
+      duration: const Duration(milliseconds: 650),
+      builder: (double t, Widget child) {
         final double r = 1 - t;
         final Widget moved = switch (_move) {
           _Move.zoom => Transform.scale(scale: 0.94 + 0.06 * t, child: child),
@@ -254,16 +252,10 @@ class GlassFocusIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int total = 700 + delay.inMilliseconds;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: total),
-      curve: Interval(
-        delay.inMilliseconds / total,
-        1,
-        curve: Curves.easeOutCubic,
-      ),
-      builder: (BuildContext context, double t, Widget? child) {
+    return _Replay(
+      delay: delay,
+      duration: const Duration(milliseconds: 700),
+      builder: (double t, Widget child) {
         final Widget moved = Opacity(
           opacity: t,
           child: Transform.translate(
@@ -994,36 +986,125 @@ class GlassEntrance extends StatelessWidget {
     required this.child,
     this.delay = Duration.zero,
     this.offset = 18,
+    this.from,
+    this.scale = 1,
   });
 
   final Widget child;
   final Duration delay;
+
+  /// Vertical travel; ignored when [from] is given.
   final double offset;
+
+  /// Where the child starts, relative to its resting place.
+  final Offset? from;
+
+  /// Starting scale (1 = none).
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
-    final int total = 520 + delay.inMilliseconds;
-    final double start = delay.inMilliseconds / total;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: total),
-      curve: Interval(start, 1, curve: Curves.easeOutCubic),
-      builder: (BuildContext context, double t, Widget? child) {
+    final Offset start = from ?? Offset(0, offset);
+    return _Replay(
+      delay: delay,
+      duration: const Duration(milliseconds: 560),
+      builder: (double t, Widget child) {
+        final double r = 1 - t;
         final Widget moved = Opacity(
           opacity: t,
           child: Transform.translate(
-            offset: Offset(0, offset * (1 - t)),
-            child: child,
+            offset: start * r,
+            child: scale == 1
+                ? child
+                : Transform.scale(scale: scale + (1 - scale) * t, child: child),
           ),
         );
         if (t >= 1) return moved;
-        final double sigma = 8 * (1 - t);
+        final double sigma = 8 * r;
         return ImageFiltered(
           imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
           child: moved,
         );
       },
       child: child,
+    );
+  }
+}
+
+/// Bumped by the tab bar each time a tab is opened, so the entrances on a
+/// screen kept alive in an IndexedStack play again when it comes into view —
+/// without rebuilding the screen or losing its state.
+class EntranceReplay extends InheritedWidget {
+  const EntranceReplay({super.key, required this.epoch, required super.child});
+
+  final int epoch;
+
+  static int of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<EntranceReplay>()?.epoch ?? 0;
+
+  @override
+  bool updateShouldNotify(EntranceReplay oldWidget) => oldWidget.epoch != epoch;
+}
+
+/// A one-shot 0→1 animation after [delay] that runs on mount and again
+/// whenever the surrounding [EntranceReplay] epoch changes. Finite, so tests
+/// that pump until settled still settle.
+class _Replay extends StatefulWidget {
+  const _Replay({
+    required this.builder,
+    required this.child,
+    required this.duration,
+    this.delay = Duration.zero,
+  });
+
+  final Widget Function(double t, Widget child) builder;
+  final Widget child;
+  final Duration duration;
+  final Duration delay;
+
+  @override
+  State<_Replay> createState() => _ReplayState();
+}
+
+class _ReplayState extends State<_Replay> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: widget.duration + widget.delay,
+  );
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _c,
+    curve: Interval(
+      widget.delay.inMilliseconds /
+          (widget.duration + widget.delay).inMilliseconds,
+      1,
+      curve: Curves.easeOutCubic,
+    ),
+  );
+  int? _epoch;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final int epoch = EntranceReplay.of(context);
+    if (_epoch != epoch) {
+      _epoch = epoch;
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (BuildContext context, Widget? child) =>
+          widget.builder(_t.value, child!),
+      child: widget.child,
     );
   }
 }

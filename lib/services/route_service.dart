@@ -4,6 +4,25 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
+import 'api_client.dart';
+
+/// How fast one stretch of a route is moving, Google Maps style.
+enum TrafficSpeed { normal, slow, jam }
+
+/// A run of route points sharing one [speed]: points[start..end].
+@immutable
+class TrafficSpan {
+  const TrafficSpan({
+    required this.start,
+    required this.end,
+    required this.speed,
+  });
+
+  final int start;
+  final int end;
+  final TrafficSpeed speed;
+}
+
 /// A driving route along real roads.
 @immutable
 class DrivingRoute {
@@ -11,15 +30,70 @@ class DrivingRoute {
     required this.points,
     required this.distanceMeters,
     required this.duration,
+    this.trafficFreeDuration,
+    this.traffic = const <TrafficSpan>[],
   });
 
   /// Road geometry from origin to destination.
   final List<LatLng> points;
 
   final double distanceMeters;
+
+  /// With current traffic when the route came from Google.
   final Duration duration;
 
+  /// The same trip on empty roads; null when the router has no traffic.
+  final Duration? trafficFreeDuration;
+
+  /// Slow and jammed stretches (and normal ones). Empty without traffic data.
+  final List<TrafficSpan> traffic;
+
   bool get isEmpty => points.isEmpty;
+
+  /// How much longer the traffic makes the trip, if known.
+  Duration get trafficDelay {
+    final Duration? free = trafficFreeDuration;
+    if (free == null || duration <= free) return Duration.zero;
+    return duration - free;
+  }
+
+  /// Parses `/app-api/maps/route` (Google Routes with traffic).
+  static DrivingRoute? fromTrafficJson(Map<String, dynamic> json) {
+    final List<dynamic> raw = (json['points'] as List<dynamic>?) ?? const [];
+    if (raw.length < 2) return null;
+    final List<LatLng> points = raw
+        .map(
+          (dynamic p) =>
+              LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+        )
+        .toList(growable: false);
+    final int last = points.length - 1;
+    return DrivingRoute(
+      points: points,
+      distanceMeters: (json['distanceMeters'] as num?)?.toDouble() ?? 0,
+      duration: Duration(
+        seconds: ((json['durationSeconds'] as num?) ?? 0).round(),
+      ),
+      trafficFreeDuration: json['staticDurationSeconds'] == null
+          ? null
+          : Duration(seconds: (json['staticDurationSeconds'] as num).round()),
+      traffic: ((json['traffic'] as List<dynamic>?) ?? const [])
+          .map((dynamic t) {
+            final Map<String, dynamic> m = t as Map<String, dynamic>;
+            return TrafficSpan(
+              start: ((m['start'] as num?) ?? 0).toInt().clamp(0, last),
+              end: ((m['end'] as num?) ?? last).toInt().clamp(0, last),
+              speed: switch (m['speed']) {
+                'TRAFFIC_JAM' => TrafficSpeed.jam,
+                'SLOW' => TrafficSpeed.slow,
+                _ => TrafficSpeed.normal,
+              },
+            );
+          })
+          .where((TrafficSpan t) => t.end > t.start)
+          .toList(growable: false),
+    );
+  }
 
   /// Parses an OSRM `/route/v1/driving` response.
   ///
@@ -60,9 +134,9 @@ class RouteUnavailable implements Exception {
 
 /// Fetches driving directions along real roads.
 ///
-/// Uses the public OSRM demo server, which needs no API key. It is rate
-/// limited and not intended for production traffic - swap in Mapbox
-/// Directions or Google Directions (both keyed) before a public launch.
+/// Asks our backend first, which routes with Google and live traffic when
+/// it has a key; otherwise (503, or the call fails) falls back to the public
+/// OSRM demo server, which has no traffic and is rate limited.
 class RouteService {
   const RouteService._();
 
@@ -74,7 +148,29 @@ class RouteService {
     '?overview=full&geometries=geojson',
   );
 
-  static Future<DrivingRoute> fetchDrivingRoute(LatLng from, LatLng to) async {
+  static Future<DrivingRoute> fetchDrivingRoute(
+    LatLng from,
+    LatLng to, {
+    ApiClient? api,
+  }) async {
+    try {
+      final Map<String, dynamic> body = await (api ?? ApiClient.shared).get(
+        '/maps/route',
+        query: <String, String>{
+          'from': '${from.latitude},${from.longitude}',
+          'to': '${to.latitude},${to.longitude}',
+        },
+      );
+      final DrivingRoute? route = DrivingRoute.fromTrafficJson(body);
+      if (route != null) return route;
+    } catch (e) {
+      // Not configured, offline or out of quota: the free router still works.
+      debugPrint('Traffic route unavailable, using OSRM: $e');
+    }
+    return _fetchOsrm(from, to);
+  }
+
+  static Future<DrivingRoute> _fetchOsrm(LatLng from, LatLng to) async {
     final http.Response response;
     try {
       response = await http.get(buildOsrmUri(from, to)).timeout(_timeout);

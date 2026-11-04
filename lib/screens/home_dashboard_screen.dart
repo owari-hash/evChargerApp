@@ -617,9 +617,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                 key: 'hero',
                 icon: Icons.electric_car_rounded,
                 borderRadius: 28,
-                child: VehicleChargingMatrix(
-                  isCharging: isCharging,
-                  child: _buildVehicleHero(isCharging),
+                // Each section arrives its own way, one after another.
+                child: GlassEntrance(
+                  scale: 0.94,
+                  offset: 0,
+                  child: VehicleChargingMatrix(
+                    isCharging: isCharging,
+                    child: _buildVehicleHero(isCharging),
+                  ),
                 ),
               ),
               if (isCharging && _activeSession != null) ...<Widget>[
@@ -680,7 +685,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                           ),
                         ),
                       )
-                    : _buildStartActions(),
+                    : GlassEntrance(
+                        delay: const Duration(milliseconds: 90),
+                        from: const Offset(-34, 0),
+                        child: _buildStartActions(),
+                      ),
               ),
               const SizedBox(height: 22),
               _guided(
@@ -688,7 +697,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                 key: 'wallet',
                 icon: Icons.account_balance_wallet_rounded,
                 borderRadius: 20,
-                child: _buildSummaryRow(),
+                child: GlassEntrance(
+                  delay: const Duration(milliseconds: 180),
+                  from: const Offset(34, 0),
+                  child: _buildSummaryRow(),
+                ),
               ),
               const SizedBox(height: 22),
               _guided(
@@ -699,11 +712,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen>
                 tipBelow: false,
                 // The heading sits on the bare page, not in a card.
                 contentPadding: const EdgeInsets.all(10),
-                child: _buildRecentSessions(),
+                child: GlassEntrance(
+                  delay: const Duration(milliseconds: 270),
+                  offset: 26,
+                  child: _buildRecentSessions(),
+                ),
               ),
               const SizedBox(height: 18),
               // «Санал хүсэлт» — feedback and partnership requests.
-              const FeedbackCard(),
+              const GlassEntrance(
+                delay: Duration(milliseconds: 360),
+                scale: 0.96,
+                offset: 14,
+                child: FeedbackCard(),
+              ),
               const SizedBox(height: 8),
             ],
           ),

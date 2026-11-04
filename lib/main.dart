@@ -22,6 +22,7 @@ import 'services/notifications_store.dart';
 import 'services/session_watcher_service.dart';
 import 'services/wallet_watcher_service.dart';
 import 'utils/money.dart';
+import 'widgets/glass.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_info.dart';
 import 'utils/app_strings.dart';
@@ -799,7 +800,7 @@ class _MainAppFrameState extends State<MainAppFrame>
     final bool isDark = ThemeController.isDark;
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(38),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: isDark
@@ -811,20 +812,20 @@ class _MainAppFrameState extends State<MainAppFrame>
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(38),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            height: 64,
+            height: 74,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(36),
+              borderRadius: BorderRadius.circular(38),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: isDark
                     ? <Color>[
-                        const Color(0xFF1C2A38).withValues(alpha: 0.78),
-                        const Color(0xFF14202C).withValues(alpha: 0.66),
+                        const Color(0xFF15281F).withValues(alpha: 0.78),
+                        const Color(0xFF0A1712).withValues(alpha: 0.66),
                       ]
                     : <Color>[
                         Colors.white.withValues(alpha: 0.86),
@@ -837,7 +838,7 @@ class _MainAppFrameState extends State<MainAppFrame>
                     : Colors.white.withValues(alpha: 0.9),
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.all(6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -902,71 +903,78 @@ class _MainAppFrameState extends State<MainAppFrame>
           }
         },
         behavior: HitTestBehavior.opaque,
+        // Icon over label on every tab; the selected one sits in a lighter
+        // glass capsule with a lit rim, like an iOS tab bar.
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          // The selected tab is the payment switch's glass pill.
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(32),
             gradient: isSelected
                 ? LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: ThemeController.isDark
                         ? <Color>[
-                            const Color(0xFF34D399).withValues(alpha: 0.32),
-                            const Color(0xFF10B981).withValues(alpha: 0.14),
+                            Colors.white.withValues(alpha: 0.16),
+                            Colors.white.withValues(alpha: 0.06),
                           ]
                         : <Color>[Colors.white, const Color(0xFFEFFDF5)],
                   )
                 : null,
             border: Border.all(
               color: isSelected
-                  ? const Color(
-                      0xFF10B981,
-                    ).withValues(alpha: ThemeController.isDark ? 0.42 : 0.30)
+                  ? (ThemeController.isDark
+                        ? Colors.white.withValues(alpha: 0.22)
+                        : const Color(0xFF10B981).withValues(alpha: 0.28))
                   : Colors.transparent,
             ),
             boxShadow: isSelected
                 ? <BoxShadow>[
                     BoxShadow(
                       color: ThemeController.isDark
-                          ? const Color(0xFF10B981).withValues(alpha: 0.30)
-                          : Colors.black.withValues(alpha: 0.10),
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : Colors.black.withValues(alpha: 0.08),
                       blurRadius: 12,
-                      offset: const Offset(0, 3),
+                      offset: const Offset(0, 4),
                     ),
                   ]
                 : null,
           ),
-          child: Row(
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isSelected ? palette.accent : palette.inkMuted,
+              AnimatedScale(
+                scale: isSelected ? 1.08 : 1,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutBack,
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: isSelected
+                      ? (ThemeController.isDark ? Colors.white : palette.accent)
+                      : palette.inkMuted,
+                ),
               ),
-              if (isSelected) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: palette.ink,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
-                      ),
+              const SizedBox(height: 3),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: isSelected ? palette.ink : palette.inkMuted,
+                      fontSize: 11.5,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      letterSpacing: -0.1,
                     ),
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -1122,26 +1130,256 @@ class _NotificationBellAction extends StatelessWidget {
 }
 
 /// Shown for the moment it takes to check for a saved session.
-class _BootSplash extends StatelessWidget {
+///
+/// Opens on the cream of `LaunchScreen.storyboard`, so the hand-off from the
+/// native launch screen is seamless, then fades into a night scene: the Eplug
+/// mark in a glowing glass bubble over streaks of light, a wordmark and a
+/// loading bar. Plays once (finite, so tests that pump until settled finish).
+class _BootSplash extends StatefulWidget {
   const _BootSplash();
 
-  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`, which is the
-  /// cream the Eplug logo is drawn on. Handing over from the native launch
-  /// screen to Flutter is meant to be invisible; using the theme palette here
-  /// instead made the app blink from one splash to another.
+  /// Matches the `backgroundColor` of `LaunchScreen.storyboard`.
   static const Color launchBackground = Color(0xFFFAF8F4);
 
   @override
+  State<_BootSplash> createState() => _BootSplashState();
+}
+
+class _BootSplashState extends State<_BootSplash>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..forward();
+
+  static const Color _night = Color(0xFF020A07);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  double _phase(double from, double to, [Curve curve = Curves.easeOutCubic]) =>
+      curve.transform(((_c.value - from) / (to - from)).clamp(0.0, 1.0));
+
+  @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: launchBackground,
-      child: Center(
-        child: Image(
-          image: AssetImage('assets/images/launch_badge.png'),
-          width: 220,
-          filterQuality: FilterQuality.medium,
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (BuildContext context, Widget? _) {
+        final double scene = _phase(0, 0.3, Curves.easeInOut);
+        final double bubble = _phase(0.12, 0.55, Curves.easeOutBack);
+        final double words = _phase(0.4, 0.75);
+        final double bar = _phase(0.45, 1, Curves.easeInOutCubic);
+
+        return ColoredBox(
+          color: Color.lerp(_BootSplash.launchBackground, _night, scene)!,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              // Night glow and light streaks — Eplug's emerald, not Waze blue.
+              Opacity(
+                opacity: scene,
+                child: const _SplashBackdrop(),
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Transform.scale(
+                      scale: 0.6 + 0.4 * bubble,
+                      child: Opacity(
+                        opacity: bubble.clamp(0.0, 1.0),
+                        child: GlassBubble(
+                          size: 172,
+                          glow: 0.6 + 0.4 * bubble,
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              width: 104,
+                              height: 104,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.medium,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 34),
+                    Opacity(
+                      opacity: words,
+                      child: Transform.translate(
+                        offset: Offset(0, 12 * (1 - words)),
+                        child: Column(
+                          children: <Widget>[
+                            const Text(
+                              'eplug',
+                              style: TextStyle(
+                                fontSize: 52,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -2,
+                                color: Colors.white,
+                                height: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              AppStrings.get('splash_tagline'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withValues(alpha: 0.82),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Loading bar with a glowing head, then its caption.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.of(context).padding.bottom + 70,
+                child: Opacity(
+                  opacity: words,
+                  child: Column(
+                    children: <Widget>[
+                      SizedBox(
+                        width: 200,
+                        height: 6,
+                        child: Stack(
+                          children: <Widget>[
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                            FractionallySizedBox(
+                              widthFactor: 0.08 + 0.92 * bar,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(3),
+                                  gradient: const LinearGradient(
+                                    colors: <Color>[
+                                      Color(0xFF047857),
+                                      Color(0xFF34D399),
+                                    ],
+                                  ),
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: GlassTones.mint.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        AppStrings.get('splash_loading'),
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Emerald glow from above and horizontal streaks of light at the horizon,
+/// like headlights on a wet road at night.
+class _SplashBackdrop extends StatelessWidget {
+  const _SplashBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    final Size size = MediaQuery.of(context).size;
+    final double horizon = size.height * 0.5;
+
+    Widget streak(double top, double left, double width, Color color, double alpha) {
+      return Positioned(
+        top: top,
+        left: left,
+        child: Container(
+          width: width,
+          height: 2.5,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            gradient: LinearGradient(
+              colors: <Color>[
+                color.withValues(alpha: 0),
+                color.withValues(alpha: alpha),
+                color.withValues(alpha: 0),
+              ],
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(color: color.withValues(alpha: alpha * 0.8), blurRadius: 8),
+            ],
+          ),
         ),
-      ),
+      );
+    }
+
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.35),
+                radius: 1.1,
+                colors: <Color>[
+                  const Color(0xFF0D3B2C).withValues(alpha: 0.9),
+                  const Color(0xFF020A07).withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Reflection band under the horizon.
+        Positioned(
+          top: horizon + 20,
+          left: 0,
+          right: 0,
+          height: 160,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  GlassTones.emerald.withValues(alpha: 0.16),
+                  GlassTones.emerald.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        streak(horizon + 18, -40, size.width * 0.55, GlassTones.mint, 0.9),
+        streak(horizon + 30, size.width * 0.5, size.width * 0.6, const Color(0xFF22D3EE), 0.7),
+        streak(horizon + 44, -20, size.width * 0.4, GlassTones.emerald, 0.6),
+        streak(horizon + 56, size.width * 0.35, size.width * 0.7, const Color(0xFFF87171), 0.45),
+        streak(horizon + 72, size.width * 0.1, size.width * 0.5, GlassTones.mint, 0.35),
+      ],
     );
   }
 }

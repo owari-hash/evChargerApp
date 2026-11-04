@@ -63,12 +63,14 @@ class AppPalette extends ThemeExtension<AppPalette> {
     shadow: Color(0x1A000000),
   );
 
+  // Emerald night: green-black glass rather than blue-grey, so dark mode
+  // carries the brand the way the Waze night theme carries its blue.
   static const AppPalette dark = AppPalette(
-    bg: Color(0xFF060B12),
-    card: Color(0xFF0F1722),
-    border: Color(0xFF1F2B3A),
-    ink: Color(0xFFE6EDF6),
-    inkMuted: Color(0xFF94A7BD),
+    bg: Color(0xFF040A08),
+    card: Color(0xFF0D1915),
+    border: Color(0xFF1B2D26),
+    ink: Color(0xFFE8F2EE),
+    inkMuted: Color(0xFF93A89F),
     panel: Color(0xFF192E23),
     onPanel: Color(0xFFF2F8F4),
     accent: Color(0xFF10B981),

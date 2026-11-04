@@ -149,7 +149,7 @@ class _ToastViewState extends State<_ToastView>
                           decoration: BoxDecoration(
                             color: isDark
                                 ? const Color(
-                                    0xFF14202C,
+                                    0xFF0A1712,
                                   ).withValues(alpha: 0.72)
                                 : Colors.white.withValues(alpha: 0.78),
                             borderRadius: BorderRadius.circular(20),

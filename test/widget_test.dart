@@ -26,7 +26,7 @@ void main() {
     expect(find.text('Eplug'), findsOneWidget);
     expect(find.byType(LoginRegisterScreen).hitTestable(), findsNothing);
 
-    // The map is the landing tab, so its label is the one showing.
+    // The tab bar is up, map label included.
     expect(find.text(AppStrings.get('map')), findsOneWidget);
 
     await signInThroughUi(tester);
@@ -70,12 +70,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    // The API's message is shown, and the dashboard is not reached.
+    // The API's message is shown, and the driver stays on the sign-in form.
+    // (Every tab now shows its label, so the map label can't be the signal.)
     expect(
       find.text('Утасны дугаар эсвэл PIN код буруу байна'),
       findsOneWidget,
     );
-    expect(find.text(AppStrings.get('map')), findsNothing);
+    expect(find.byType(LoginRegisterScreen).hitTestable(), findsOneWidget);
   });
 
   testWidgets('a saved session opens straight on the map', (

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -12,6 +13,7 @@ import '../utils/app_strings.dart';
 import '../widgets/station_filter_sheet.dart';
 import '../widgets/station_sheet.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/glass.dart';
 
 /// Which label the primary route button shows. Extracted so the start/stop
 /// behaviour is verifiable without driving the map widget.
@@ -559,6 +561,9 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                 tileProvider: NetworkTileProvider(
                   headers: {'User-Agent': 'EplugApp/1.0 (contact@eplug.mn)'},
                 ),
+                // Same OSM tiles, inverted to a night map in dark mode so the
+                // glass panels and glowing route sit on a dark city.
+                tileBuilder: ThemeController.isDark ? darkModeTileBuilder : null,
               ),
 
               // Live Navigation Dynamic Route Polyline
@@ -567,16 +572,29 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                   polylines: [
                     // Real road geometry when we have it; a direct line only
                     // as a fallback while it loads or if routing is down.
+                    // A wide soft halo under a bright core: the glowing route.
+                    Polyline(
+                      points:
+                          _route?.points ??
+                          <LatLng>[_userPosition, routeTarget],
+                      strokeWidth: 16.0,
+                      color: GlassTones.mint.withValues(
+                        alpha: _route == null ? 0.10 : 0.22,
+                      ),
+                    ),
                     Polyline(
                       points:
                           _route?.points ??
                           <LatLng>[_userPosition, routeTarget],
                       strokeWidth: 6.0,
                       color: _route == null
-                          ? AppTheme.sageGreen.withValues(alpha: 0.45)
-                          : AppTheme.sageGreen,
-                      borderStrokeWidth: _route == null ? 0 : 2,
-                      borderColor: Colors.white,
+                          ? GlassTones.emerald.withValues(alpha: 0.45)
+                          : GlassTones.emerald,
+                      gradientColors: _route == null
+                          ? null
+                          : const <Color>[GlassTones.deep, GlassTones.mint],
+                      borderStrokeWidth: _route == null ? 0 : 1.5,
+                      borderColor: Colors.white.withValues(alpha: 0.85),
                     ),
                   ],
                 ),
@@ -591,25 +609,38 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                   if (_isGpsPermissionGranted)
                     Marker(
                       point: _userPosition,
-                      width: 50,
-                      height: 50,
+                      width: 64,
+                      height: 64,
+                      // Glass puck: a soft emerald halo around a lit disc.
                       child: Container(
-                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: context.palette.panel,
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.sageGreen.withValues(alpha: 0.6),
-                              blurRadius: 12,
-                              spreadRadius: 3,
-                            ),
-                          ],
+                          color: GlassTones.emerald.withValues(alpha: 0.18),
+                          border: Border.all(
+                            color: GlassTones.mint.withValues(alpha: 0.35),
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.navigation_rounded,
-                          color: AppTheme.sageGreen,
-                          size: 26,
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: GlassTones.primary,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: GlassTones.emerald.withValues(alpha: 0.7),
+                                blurRadius: 16,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.navigation_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -722,66 +753,62 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
               top: MediaQuery.of(context).padding.top + 10,
               left: 16,
               right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: context.palette.panel,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black38,
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.sageGreen,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
+              child: GlassEntrance(
+                offset: -14,
+                child: GlassPanel(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+                  child: Row(
+                    children: [
+                      const Icon(
                         Icons.turn_right_rounded,
-                        color: Colors.white,
-                        size: 28,
+                        color: GlassTones.mint,
+                        size: 44,
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            navInstruction,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${navDistanceKm.toStringAsFixed(1)} ${AppStrings.get('unit_km')}',
+                              style: TextStyle(
+                                color: context.palette.ink,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${activeStation.name} • ${navDistanceKm.toStringAsFixed(1)} ${AppStrings.get('unit_km')} (${_userSpeedKmH.toInt()} ${AppStrings.get('unit_kmh')})',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
+                            const SizedBox(height: 2),
+                            Text(
+                              navInstruction,
+                              style: TextStyle(
+                                color: context.palette.ink,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              activeStation.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: ThemeController.isDark
+                                    ? GlassTones.mint
+                                    : context.palette.accent,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
+                      GlassCircleButton(
+                        icon: Icons.close_rounded,
+                        tooltip: AppStrings.get('stop_route'),
+                        onPressed: _stopNavigation,
                       ),
-                      tooltip: AppStrings.get('stop_route'),
-                      onPressed: _stopNavigation,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             )
@@ -794,18 +821,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: context.palette.card,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
+                    child: GlassPanel(
+                      padding: EdgeInsets.zero,
+                      borderRadius: BorderRadius.circular(22),
+                      blur: 20,
                       child: TextField(
                         onChanged: (val) => setState(() => _searchQuery = val),
                         decoration: InputDecoration(
@@ -864,32 +883,112 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
             ),
           ),
 
-          // 4. Bottom action: end the running route when navigating.
+          // Speed in a glass disc above the trip card, the way Waze shows it.
           if (_isNavigatingRoute)
             Positioned(
-              bottom: 20,
+              left: 16,
+              bottom: 192,
+              child: GlassEntrance(
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: Container(
+                      width: 74,
+                      height: 74,
+                      decoration: glassDecoration(radius: 37).copyWith(
+                        color: context.palette.card.withValues(alpha: 0.6),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${_userSpeedKmH.toInt()}',
+                            style: TextStyle(
+                              fontSize: 24,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: context.palette.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppStrings.get('unit_kmh'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.palette.inkMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // 4. Waze-style trip card while navigating: arrival, minutes and
+          // distance on glass, and the stop action under them.
+          if (_isNavigatingRoute)
+            Positioned(
+              bottom: 16,
               left: 16,
               // Stops short of the bottom-right corner, where the assistant
               // button rests by default.
               right: 80,
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _stopNavigation,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.errorRed,
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                  ),
-                  icon: const Icon(Icons.stop_rounded, size: 20),
-                  label: Text(
-                    AppStrings.get(
-                      routeActionLabelKey(isNavigating: true),
-                    ),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
+              child: GlassEntrance(
+                child: GlassPanel(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      GlassStatStrip(
+                        items: <(String, String)>[
+                          (
+                            _route == null
+                                ? '—'
+                                : _clock(DateTime.now().add(_route!.duration)),
+                            AppStrings.get('nav_arrival'),
+                          ),
+                          (
+                            _route == null
+                                ? '—'
+                                : '${_route!.duration.inMinutes.clamp(1, 9999)}',
+                            AppStrings.get('unit_min'),
+                          ),
+                          (
+                            (_route == null
+                                    ? navDistanceKm
+                                    : _route!.distanceMeters / 1000)
+                                .toStringAsFixed(1),
+                            AppStrings.get('unit_km'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _stopNavigation,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.errorRed,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: const StadiumBorder(),
+                          ),
+                          icon: const Icon(Icons.stop_rounded, size: 20),
+                          label: Text(
+                            AppStrings.get(
+                              routeActionLabelKey(isNavigating: true),
+                            ),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -898,6 +997,10 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
       ),
     );
   }
+
+  /// 24-hour «HH:mm» for the arrival time.
+  String _clock(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _buildMapControlBtn({
     required IconData icon,
@@ -915,23 +1018,25 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
         child: Stack(
           clipBehavior: Clip.none,
           children: <Widget>[
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: badge > 0 ? palette.panel : palette.card,
-                shape: BoxShape.circle,
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
+            ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: badge > 0
+                      ? const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: GlassTones.primary,
+                        )
+                      : glassDecoration(radius: 30).copyWith(
+                          color: palette.card.withValues(alpha: 0.55),
+                        ),
+                  child: Icon(
+                    icon,
+                    color: badge > 0 ? Colors.white : palette.ink,
+                    size: 20,
                   ),
-                ],
-              ),
-              child: Icon(
-                icon,
-                color: badge > 0 ? palette.onPanel : palette.ink,
-                size: 20,
+                ),
               ),
             ),
             // How many plugs the map is narrowed to, so an active filter is

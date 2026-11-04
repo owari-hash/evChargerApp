@@ -96,8 +96,8 @@ class NotificationsSheet extends StatelessWidget {
               end: Alignment.bottomCenter,
               colors: isDark
                   ? <Color>[
-                      const Color(0xFF1C2A38).withValues(alpha: 0.80),
-                      const Color(0xFF0F1722).withValues(alpha: 0.92),
+                      const Color(0xFF15281F).withValues(alpha: 0.80),
+                      const Color(0xFF0D1915).withValues(alpha: 0.92),
                     ]
                   : <Color>[
                       Colors.white.withValues(alpha: 0.88),

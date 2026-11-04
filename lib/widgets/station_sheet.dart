@@ -13,6 +13,7 @@ import '../utils/money.dart';
 import '../screens/trips_stations_screen.dart';
 import 'charge_start_panel.dart';
 import 'app_toast.dart';
+import 'glass.dart';
 
 /// Opens [station]'s detail sheet — the app's version of the website's
 /// station page: status, address, power and price, every gun with its live
@@ -152,145 +153,190 @@ class _StationSheetState extends State<StationSheet> {
               .length;
     final int total = _connectors.isEmpty ? s.totalConnectors : _connectors.length;
 
-    return Container(
+    final String notPublished = AppStrings.get('not_published');
+
+    return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
-      decoration: BoxDecoration(
-        color: palette.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: palette.border,
-                    borderRadius: BorderRadius.circular(2),
+      child: GlassPanel(
+        padding: EdgeInsets.zero,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: palette.inkMuted.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
+                const SizedBox(height: 16),
+                GlassEntrance(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              s.name,
+                              style: TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                color: palette.ink,
+                              ),
+                            ),
+                            if (s.address.trim().isNotEmpty ||
+                                s.distance.isNotEmpty) ...<Widget>[
+                              const SizedBox(height: 4),
+                              Text(
+                                <String>[
+                                  if (s.address.trim().isNotEmpty)
+                                    s.address.trim(),
+                                  if (s.distance.isNotEmpty) s.distance,
+                                ].join(' · '),
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: palette.inkMuted,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+                            _StatusLine(station: s, free: free, total: total),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GlassCircleButton(
+                        icon: Icons.close_rounded,
+                        tooltip: AppStrings.get('close'),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Power, price and free guns, Waze's «14 min | 7.8 mi | 10:02».
+                GlassEntrance(
+                  delay: const Duration(milliseconds: 70),
+                  child: GlassStatStrip(
+                    leading: Icons.ev_station_rounded,
+                    items: <(String, String)>[
+                      (
+                        s.kwSpeed > 0
+                            ? '${s.kwSpeed.toStringAsFixed(0)} ${AppStrings.get('unit_kw')}'
+                            : notPublished,
+                        AppStrings.get('max_power'),
+                      ),
+                      (
+                        s.basePricePerKwh > 0
+                            ? formatMntLeading(s.basePricePerKwh)
+                            : notPublished,
+                        '${AppStrings.get('price')} / ${AppStrings.get('unit_kwh')}',
+                      ),
+                      (
+                        s.isOnline && total > 0 ? '$free / $total' : '—',
+                        AppStrings.get('station_guns_title'),
+                      ),
+                    ],
+                  ),
+                ),
+                // Every gun with its live state — one someone has just scanned
+                // reads as in use. Only the QR scanner narrows this to one gun.
+                if (_connectors.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 18),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Text(
-                      s.name,
+                      AppStrings.get('station_guns_title'),
                       style: TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.4,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                         color: palette.ink,
                       ),
                     ),
                   ),
-                  // Directions sit by the name as an icon, not a full-width button.
-                  IconButton(
-                    onPressed: _navigateToMap,
-                    tooltip: AppStrings.get('directions'),
-                    visualDensity: VisualDensity.compact,
-                    style: IconButton.styleFrom(
-                      backgroundColor: palette.accent.withValues(alpha: 0.12),
+                  GlassEntrance(
+                    delay: const Duration(milliseconds: 140),
+                    child: Column(
+                      children: _connectors
+                          .map(
+                            (StationConnector c) => ConnectorOptionTile(
+                              connector: c,
+                              online: s.isOnline,
+                              // A gun is only picked by scanning its QR sticker,
+                              // so the start names the gun the driver is at.
+                              onTap: () => AppToast.show(
+                                context,
+                                AppStrings.get('qr_required_title'),
+                                kind: ToastKind.info,
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                    icon: Icon(
-                      Icons.navigation_rounded,
-                      size: 20,
-                      color: palette.accent,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    tooltip: AppStrings.get('close'),
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(Icons.close_rounded, color: palette.inkMuted),
                   ),
                 ],
-              ),
-              const SizedBox(height: 6),
-              _StatusLine(station: s, free: free, total: total),
-              if (s.address.trim().isNotEmpty || s.distance.isNotEmpty) ...<
-                Widget
-              >[
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Icon(
-                      Icons.place_outlined,
-                      size: 16,
-                      color: palette.inkMuted,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        <String>[
-                          if (s.address.trim().isNotEmpty) s.address.trim(),
-                          if (s.distance.isNotEmpty) s.distance,
-                        ].join(' · '),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: palette.inkMuted,
-                          height: 1.35,
-                        ),
+                const SizedBox(height: 18),
+                ChargeStartPanel(
+                  stationId: s.id,
+                  connectors: _connectors,
+                  stationOnline: s.isOnline,
+                  onStarted: _onStarted,
+                  onScanQr: () {
+                    Navigator.of(context).pop();
+                    showQrScannerSheet(context);
+                  },
+                  stationsService: widget.stationsService,
+                  sessionsService: widget.sessionsService,
+                  authService: widget.authService,
+                ),
+                const SizedBox(height: 10),
+                // Waze's «Route options»: a glass outline pill under the main
+                // action. Kept an OutlinedButton so it reads as one to tests
+                // and screen readers.
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _navigateToMap,
+                    icon: const Icon(Icons.navigation_rounded, size: 19),
+                    label: Text(AppStrings.get('directions')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ThemeController.isDark
+                          ? GlassTones.mint
+                          : palette.accent,
+                      backgroundColor: ThemeController.isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.white.withValues(alpha: 0.7),
+                      side: BorderSide(
+                        color: ThemeController.isDark
+                            ? Colors.white.withValues(alpha: 0.13)
+                            : palette.border,
+                      ),
+                      shape: const StadiumBorder(),
+                      textStyle: const TextStyle(
+                        fontFamily: 'Geist',
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              _FactsRow(station: s),
-              // Every gun with its live state — one someone has just scanned
-              // reads as in use. Only the QR scanner narrows this to one gun.
-              if (_connectors.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 18),
-                Text(
-                  AppStrings.get('station_guns_title'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: palette.ink,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ..._connectors.map(
-                  (StationConnector c) => ConnectorOptionTile(
-                    connector: c,
-                    online: s.isOnline,
-                    // A gun is only picked by scanning its QR sticker, so the
-                    // start names the gun the driver is standing at.
-                    onTap: () => AppToast.show(
-                      context,
-                      AppStrings.get('qr_required_title'),
-                      kind: ToastKind.info,
-                    ),
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
-              ChargeStartPanel(
-                stationId: s.id,
-                connectors: _connectors,
-                stationOnline: s.isOnline,
-                onStarted: _onStarted,
-                onScanQr: () {
-                  Navigator.of(context).pop();
-                  showQrScannerSheet(context);
-                },
-                stationsService: widget.stationsService,
-                sessionsService: widget.sessionsService,
-                authService: widget.authService,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -361,105 +407,6 @@ class _StatusLine extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Max power and the price the driver pays, side by side.
-class _FactsRow extends StatelessWidget {
-  const _FactsRow({required this.station});
-
-  final ChargingStationLocation station;
-
-  @override
-  Widget build(BuildContext context) {
-    final String notPublished = AppStrings.get('not_published');
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Expanded(
-            child: _Fact(
-              icon: Icons.bolt_rounded,
-              label: AppStrings.get('max_power'),
-              value: station.kwSpeed > 0
-                  ? '${station.kwSpeed.toStringAsFixed(0)} ${AppStrings.get('unit_kw')}'
-                  : notPublished,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _Fact(
-              icon: Icons.payments_outlined,
-              label: AppStrings.get('price'),
-              value: station.basePricePerKwh > 0
-                  ? '${formatMntLeading(station.basePricePerKwh)}/${AppStrings.get('unit_kwh')}'
-                  : notPublished,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppPalette palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: palette.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(icon, size: 15, color: palette.accent),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: palette.inkMuted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: palette.ink,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

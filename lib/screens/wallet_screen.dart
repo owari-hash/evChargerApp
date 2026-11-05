@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +15,7 @@ import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import '../services/topup_return.dart';
 import '../widgets/topup_result_dialog.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/glass.dart';
@@ -331,15 +331,18 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _glow(Color color, double size) {
+    // Gradient, not a blur: same soft light, no per-frame filter.
     return IgnorePointer(
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.35),
-            shape: BoxShape.circle,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: <Color>[
+              color.withValues(alpha: 0.35),
+              color.withValues(alpha: 0),
+            ],
           ),
         ),
       ),
@@ -1254,7 +1257,8 @@ class _InvoiceSheet extends StatefulWidget {
   State<_InvoiceSheet> createState() => _InvoiceSheetState();
 }
 
-class _InvoiceSheetState extends State<_InvoiceSheet> {
+class _InvoiceSheetState extends State<_InvoiceSheet>
+    with WidgetsBindingObserver {
   /// Matches the kiosk's own cadence and cut-off.
   static const Duration _pollInterval = Duration(seconds: 3);
   static const Duration _pollTimeout = Duration(minutes: 10);
@@ -1269,6 +1273,8 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    TopUpReturn.signal.addListener(_onBankReturn);
     _startedAt = DateTime.now();
     // QPay confirms out of band, so the sheet asks rather than making the
     // driver tap a button. It gives up after ten minutes so a sheet left open
@@ -1285,8 +1291,19 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    TopUpReturn.signal.removeListener(_onBankReturn);
     _poll?.cancel();
     super.dispose();
+  }
+
+  /// Back from the bank page (its app link, or the driver closing the
+  /// browser): ask now, so the result shows the moment the app is in front.
+  void _onBankReturn() => _check();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _fatal == null) _check();
   }
 
   Future<void> _check({bool manual = false}) async {

@@ -33,6 +33,7 @@ import 'widgets/draggable_assistant_button.dart';
 import 'widgets/charge_notifications.dart';
 import 'widgets/guided_step.dart';
 import 'widgets/notifications_sheet.dart';
+import 'services/topup_return.dart';
 import 'widgets/app_toast.dart';
 
 void main() async {
@@ -41,6 +42,8 @@ void main() async {
   // footer renders the version on the very first frame.
   WidgetsFlutterBinding.ensureInitialized();
   await AppInfo.load();
+  // Catches the bank page's "back to the app" link after a card top-up.
+  TopUpReturn.start();
   runApp(const EvChargerApp());
 }
 

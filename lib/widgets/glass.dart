@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -61,13 +59,21 @@ class _Glow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A radial gradient looks the same as a heavily blurred disc and costs
+    // nothing per frame; the blur made every screen on this background lag.
     return IgnorePointer(
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+      child: Transform.translate(
+        offset: Offset(-size * 0.3, -size * 0.3),
         child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: size * 1.6,
+          height: size * 1.6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: <Color>[color, color.withValues(alpha: 0)],
+              stops: const <double>[0.2, 1],
+            ),
+          ),
         ),
       ),
     );
@@ -110,68 +116,67 @@ class GlassCard extends StatelessWidget {
             ),
           ],
         ),
+        // No BackdropFilter: what sits behind is already a soft gradient, so
+        // a blur changed nothing visible but re-ran on every scroll frame.
         child: ClipRRect(
           borderRadius: radius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: radius,
-                child: Ink(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    // A faint sheen from the top-left, like light on glass.
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isDark
-                          ? <Color>[
-                              const Color(0xFF15281F).withValues(alpha: 0.62),
-                              const Color(0xFF0A1712).withValues(alpha: 0.48),
-                            ]
-                          : <Color>[
-                              Colors.white.withValues(alpha: 0.80),
-                              Colors.white.withValues(alpha: 0.58),
-                            ],
-                    ),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.11)
-                          : Colors.white.withValues(alpha: 0.85),
-                    ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              child: Ink(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  // A faint sheen from the top-left, like light on glass.
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? <Color>[
+                            const Color(0xFF15281F).withValues(alpha: 0.62),
+                            const Color(0xFF0A1712).withValues(alpha: 0.48),
+                          ]
+                        : <Color>[
+                            Colors.white.withValues(alpha: 0.80),
+                            Colors.white.withValues(alpha: 0.58),
+                          ],
                   ),
-                  child: Stack(
-                    children: <Widget>[
-                      // Light catching the top edge of the glass.
-                      Positioned(
-                        top: 0,
-                        left: borderRadius * 0.6,
-                        right: borderRadius * 0.6,
-                        child: IgnorePointer(
-                          child: Container(
-                            height: 1.2,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: <Color>[
-                                  Colors.white.withValues(alpha: 0),
-                                  Colors.white.withValues(
-                                    alpha: isDark ? 0.35 : 0.9,
-                                  ),
-                                  Colors.white.withValues(alpha: 0),
-                                ],
-                              ),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.11)
+                        : Colors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+                child: Stack(
+                  children: <Widget>[
+                    // Light catching the top edge of the glass.
+                    Positioned(
+                      top: 0,
+                      left: borderRadius * 0.6,
+                      right: borderRadius * 0.6,
+                      child: IgnorePointer(
+                        child: Container(
+                          height: 1.2,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: <Color>[
+                                Colors.white.withValues(alpha: 0),
+                                Colors.white.withValues(
+                                  alpha: isDark ? 0.35 : 0.9,
+                                ),
+                                Colors.white.withValues(alpha: 0),
+                              ],
                             ),
                           ),
                         ),
                       ),
-                      Padding(
-                        padding: padding,
-                        child: GlassFocusIn(child: child),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      padding: padding,
+                      child: GlassFocusIn(child: child),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -263,13 +268,9 @@ class GlassFocusIn extends StatelessWidget {
             child: child,
           ),
         );
-        // No filter once settled: a zero blur still costs a layer.
-        if (t >= 1) return moved;
-        final double sigma = 10 * (1 - t);
-        return ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: moved,
-        );
+        // Fade and slide only: an animated blur over a whole card was the
+        // costliest part of opening a screen.
+        return moved;
       },
       child: child,
     );
@@ -1010,12 +1011,7 @@ class GlassEntrance extends StatelessWidget {
                 : Transform.scale(scale: scale + (1 - scale) * t, child: child),
           ),
         );
-        if (t >= 1) return moved;
-        final double sigma = 8 * r;
-        return ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: moved,
-        );
+        return moved;
       },
       child: child,
     );

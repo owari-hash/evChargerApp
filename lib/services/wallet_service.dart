@@ -54,6 +54,8 @@ class WalletService {
         'amount': amount,
         'method': method,
         if (method == 'card' && saveCard) 'saveCard': true,
+        // The bank page then returns to the app (eplug://), not the website.
+        'client': 'app',
       },
     );
     return TopUpInvoice.fromJson(_map(body['invoice']));

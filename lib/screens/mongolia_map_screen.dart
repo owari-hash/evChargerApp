@@ -908,6 +908,12 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
                       blur: 20,
                       child: TextField(
                         onChanged: (val) => setState(() => _searchQuery = val),
+                        style: TextStyle(
+                          color: context.palette.ink,
+                          fontSize: 14,
+                        ),
+                        cursorColor: const Color(0xFF10B981),
+                        textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: AppStrings.get('search_stations'),
                           hintStyle: TextStyle(

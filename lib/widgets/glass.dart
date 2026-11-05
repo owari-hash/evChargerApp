@@ -541,18 +541,10 @@ class GlassPanel extends StatelessWidget {
                         const Color(0xFFF2F8F4).withValues(alpha: 0.86),
                       ],
               ),
-              border: Border(
-                top: BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.16)
-                      : Colors.white,
-                ),
-                left: BorderSide(
-                  color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.8),
-                ),
-                right: BorderSide(
-                  color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.8),
-                ),
+              // Must be uniform: a rounded border with mixed side colours
+              // throws while painting, and the panel's child never draws.
+              border: Border.all(
+                color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.8),
               ),
             ),
             child: child,

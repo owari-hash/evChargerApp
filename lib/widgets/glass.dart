@@ -520,35 +520,34 @@ class GlassPanel extends StatelessWidget {
           ),
         ],
       ),
+      // No BackdropFilter: the fill is ~90% opaque, so a blur barely shows,
+      // yet over the map it re-ran every frame and made panning stutter.
       child: ClipRRect(
         borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              borderRadius: borderRadius,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: isDark
-                    ? <Color>[
-                        const Color(0xFF13241D).withValues(alpha: 0.86),
-                        const Color(0xFF07110D).withValues(alpha: 0.92),
-                      ]
-                    : <Color>[
-                        Colors.white.withValues(alpha: 0.9),
-                        const Color(0xFFF2F8F4).withValues(alpha: 0.86),
-                      ],
-              ),
-              // Must be uniform: a rounded border with mixed side colours
-              // throws while painting, and the panel's child never draws.
-              border: Border.all(
-                color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.8),
-              ),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDark
+                  ? <Color>[
+                      const Color(0xFF13241D).withValues(alpha: 0.86),
+                      const Color(0xFF07110D).withValues(alpha: 0.92),
+                    ]
+                  : <Color>[
+                      Colors.white.withValues(alpha: 0.9),
+                      const Color(0xFFF2F8F4).withValues(alpha: 0.86),
+                    ],
             ),
-            child: child,
+            // Must be uniform: a rounded border with mixed side colours
+            // throws while painting, and the panel's child never draws.
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.8),
+            ),
           ),
+          child: child,
         ),
       ),
     );

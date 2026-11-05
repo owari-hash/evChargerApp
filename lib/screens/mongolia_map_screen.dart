@@ -1141,23 +1141,22 @@ class _MongoliaMapScreenState extends State<MongoliaMapScreen>
           clipBehavior: Clip.none,
           children: <Widget>[
             ClipOval(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(11),
-                  decoration: badge > 0
-                      ? const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: GlassTones.primary,
-                        )
-                      : glassDecoration(
-                          radius: 30,
-                        ).copyWith(color: palette.card.withValues(alpha: 0.55)),
-                  child: Icon(
-                    icon,
-                    color: badge > 0 ? Colors.white : palette.ink,
-                    size: 20,
-                  ),
+              // Solid fill rather than a blur: four blurred buttons over a
+              // moving map cost a re-blur each per frame.
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: badge > 0
+                    ? const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: GlassTones.primary,
+                      )
+                    : glassDecoration(
+                        radius: 30,
+                      ).copyWith(color: palette.card.withValues(alpha: 0.88)),
+                child: Icon(
+                  icon,
+                  color: badge > 0 ? Colors.white : palette.ink,
+                  size: 20,
                 ),
               ),
             ),

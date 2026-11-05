@@ -116,6 +116,7 @@ class _MainAppFrameState extends State<MainAppFrame>
 
   /// Guards the update prompt to one attempt per process.
   bool _updateChecked = false;
+
   /// 0: Home, 1: Map, 2: Quick Controls, 3: Stations, 4: Account.
   ///
   /// The map is where the app opens, for a guest and a signed-in driver alike:
@@ -184,7 +185,9 @@ class _MainAppFrameState extends State<MainAppFrame>
     WidgetsBinding.instance.removeObserver(this);
     _auth.currentUser.removeListener(_onAuthChanged);
     _guide.removeListener(_onGuideChanged);
-    StationsService.instance.targetStation.removeListener(_onTargetStationChanged);
+    StationsService.instance.targetStation.removeListener(
+      _onTargetStationChanged,
+    );
     _guide.dispose();
     if (GuidedStep.onTriggerGuide == _replayGuide) {
       GuidedStep.onTriggerGuide = null;
@@ -339,7 +342,8 @@ class _MainAppFrameState extends State<MainAppFrame>
     switch (event) {
       case 'wallet.credited':
       case 'wallet.debited':
-        if (data['ownerType'] == 'USER' && data['ownerId']?.toString() == user.id) {
+        if (data['ownerType'] == 'USER' &&
+            data['ownerId']?.toString() == user.id) {
           unawaited(WalletWatcherService.instance.checkNow());
         }
       case 'transaction.started':
@@ -488,9 +492,9 @@ class _MainAppFrameState extends State<MainAppFrame>
     if (kind == NotificationKind.chargeStarted) {
       setState(() => _activeTabIndex = _homeTab);
     } else if (kind == NotificationKind.chargeStopped) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const SessionsScreen()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const SessionsScreen()));
     }
   }
 
@@ -842,8 +846,10 @@ class _MainAppFrameState extends State<MainAppFrame>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(38),
+        // A light blur: this bar sits over the map, so it is redrawn on
+        // every pan frame and a large sigma made that visibly slower.
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             height: 74,
             decoration: BoxDecoration(
@@ -853,8 +859,8 @@ class _MainAppFrameState extends State<MainAppFrame>
                 end: Alignment.bottomRight,
                 colors: isDark
                     ? <Color>[
-                        const Color(0xFF15281F).withValues(alpha: 0.78),
-                        const Color(0xFF0A1712).withValues(alpha: 0.66),
+                        const Color(0xFF15281F).withValues(alpha: 0.86),
+                        const Color(0xFF0A1712).withValues(alpha: 0.78),
                       ]
                     : <Color>[
                         Colors.white.withValues(alpha: 0.86),
@@ -881,11 +887,7 @@ class _MainAppFrameState extends State<MainAppFrame>
                   Icons.map_rounded,
                   AppStrings.get('map'),
                 ),
-                _buildBottomNavItem(
-                  2,
-                  Icons.qr_code_scanner_rounded,
-                  'QR',
-                ),
+                _buildBottomNavItem(2, Icons.qr_code_scanner_rounded, 'QR'),
                 _buildBottomNavItem(
                   3,
                   Icons.ev_station_rounded,
@@ -998,7 +1000,9 @@ class _MainAppFrameState extends State<MainAppFrame>
                     style: TextStyle(
                       color: isSelected ? palette.ink : palette.inkMuted,
                       fontSize: 11.5,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                       letterSpacing: -0.1,
                     ),
                   ),
@@ -1130,7 +1134,11 @@ class _NotificationBellAction extends StatelessWidget {
                 border: Border.all(color: palette.border),
               ),
               child: IconButton(
-                icon: Icon(Icons.notifications_rounded, color: palette.ink, size: 20),
+                icon: Icon(
+                  Icons.notifications_rounded,
+                  color: palette.ink,
+                  size: 20,
+                ),
                 onPressed: onOpen,
                 tooltip: AppStrings.get('notifications_label'),
                 visualDensity: VisualDensity.compact,
@@ -1141,13 +1149,26 @@ class _NotificationBellAction extends StatelessWidget {
                 right: 2,
                 top: 2,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
                   child: Text(
                     unread > 9 ? '9+' : '$unread',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -1208,10 +1229,7 @@ class _BootSplashState extends State<_BootSplash>
             fit: StackFit.expand,
             children: <Widget>[
               // Night glow and light streaks — Eplug's emerald, not Waze blue.
-              Opacity(
-                opacity: scene,
-                child: const _SplashBackdrop(),
-              ),
+              Opacity(opacity: scene, child: const _SplashBackdrop()),
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1344,7 +1362,13 @@ class _SplashBackdrop extends StatelessWidget {
     final Size size = MediaQuery.of(context).size;
     final double horizon = size.height * 0.5;
 
-    Widget streak(double top, double left, double width, Color color, double alpha) {
+    Widget streak(
+      double top,
+      double left,
+      double width,
+      Color color,
+      double alpha,
+    ) {
       return Positioned(
         top: top,
         left: left,
@@ -1361,7 +1385,10 @@ class _SplashBackdrop extends StatelessWidget {
               ],
             ),
             boxShadow: <BoxShadow>[
-              BoxShadow(color: color.withValues(alpha: alpha * 0.8), blurRadius: 8),
+              BoxShadow(
+                color: color.withValues(alpha: alpha * 0.8),
+                blurRadius: 8,
+              ),
             ],
           ),
         ),
@@ -1404,10 +1431,28 @@ class _SplashBackdrop extends StatelessWidget {
           ),
         ),
         streak(horizon + 18, -40, size.width * 0.55, GlassTones.mint, 0.9),
-        streak(horizon + 30, size.width * 0.5, size.width * 0.6, const Color(0xFF22D3EE), 0.7),
+        streak(
+          horizon + 30,
+          size.width * 0.5,
+          size.width * 0.6,
+          const Color(0xFF22D3EE),
+          0.7,
+        ),
         streak(horizon + 44, -20, size.width * 0.4, GlassTones.emerald, 0.6),
-        streak(horizon + 56, size.width * 0.35, size.width * 0.7, const Color(0xFFF87171), 0.45),
-        streak(horizon + 72, size.width * 0.1, size.width * 0.5, GlassTones.mint, 0.35),
+        streak(
+          horizon + 56,
+          size.width * 0.35,
+          size.width * 0.7,
+          const Color(0xFFF87171),
+          0.45,
+        ),
+        streak(
+          horizon + 72,
+          size.width * 0.1,
+          size.width * 0.5,
+          GlassTones.mint,
+          0.35,
+        ),
       ],
     );
   }

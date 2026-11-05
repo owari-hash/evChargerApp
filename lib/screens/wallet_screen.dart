@@ -16,6 +16,7 @@ import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_strings.dart';
 import '../utils/money.dart';
+import '../widgets/topup_result_dialog.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/glass.dart';
 import '../widgets/wallet_filter_sheet.dart';
@@ -178,8 +179,12 @@ class _WalletScreenState extends State<WalletScreen> {
     final Wallet wallet = snapshot.wallet;
     final bool debt = wallet.inDebt;
     final bool low = !debt && wallet.balance < snapshot.config.minStartBalance;
-    final Color glowA = debt ? const Color(0xFFEF4444) : const Color(0xFF10B981);
-    final Color glowB = debt ? const Color(0xFFF97316) : const Color(0xFF22D3EE);
+    final Color glowA = debt
+        ? const Color(0xFFEF4444)
+        : const Color(0xFF10B981);
+    final Color glowB = debt
+        ? const Color(0xFFF97316)
+        : const Color(0xFF22D3EE);
 
     return GlassCard(
       borderRadius: 26,
@@ -662,12 +667,7 @@ class _TopUpFormState extends State<_TopUpForm> {
         setState(() => _selectedPreset = null);
         await widget.onPaid();
         if (!mounted) return;
-        showSnack(
-          context,
-          AppStrings.get(
-            'invoice_paid',
-          ).replaceFirst('{amount}', formatMnt(credited)),
-        );
+        await showTopUpResult(context, success: true, amount: credited);
       }
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -723,15 +723,15 @@ class _TopUpFormState extends State<_TopUpForm> {
         setState(() => _selectedPreset = null);
         await widget.onPaid();
         if (!mounted) return;
-        showSnack(
-          context,
-          AppStrings.get('invoice_paid')
-              .replaceFirst('{amount}', formatMnt(credited)),
-        );
+        await showTopUpResult(context, success: true, amount: credited);
         return;
       }
       if (status.invoice.status == InvoiceStatus.failed) {
-        _fail(status.invoice.declineReason ?? AppStrings.get('card_failed'));
+        await showTopUpResult(
+          context,
+          success: false,
+          reason: status.invoice.declineReason ?? AppStrings.get('card_failed'),
+        );
         return;
       }
       // The bank's answer was lost on the way: wait for it like a card page.
@@ -758,8 +758,9 @@ class _TopUpFormState extends State<_TopUpForm> {
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text(AppStrings.get('saved_card_remove_title')),
         content: Text(
-          AppStrings.get('saved_card_remove_body')
-              .replaceFirst('{card}', card.label),
+          AppStrings.get(
+            'saved_card_remove_body',
+          ).replaceFirst('{card}', card.label),
         ),
         actions: <Widget>[
           TextButton(
@@ -881,10 +882,26 @@ class _TopUpFormState extends State<_TopUpForm> {
                   // Greyscale, so they read as "not yet" at a glance.
                   child: ColorFiltered(
                     colorFilter: const ColorFilter.matrix(<double>[
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0, 0, 0, 1, 0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
                     ]),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(9),
@@ -1002,18 +1019,27 @@ class _TopUpFormState extends State<_TopUpForm> {
     final WalletConfig config = widget.config;
     final bool busy = _creating || _payingCardId != null;
     // The ways to pay this server offers, in the web's order.
-    final List<(String, IconData, String)> methods = <(String, IconData, String)>[
-      if (config.topUpEnabled)
-        ('qpay', Icons.qr_code_2_rounded, AppStrings.get('topup_method_qpay')),
-      if (config.cardTopUpEnabled)
-        ('card', Icons.credit_card_rounded, AppStrings.get('topup_method_card')),
-      if (config.socialPayEnabled)
-        (
-          'socialpay',
-          Icons.phone_iphone_rounded,
-          AppStrings.get('topup_method_socialpay'),
-        ),
-    ];
+    final List<(String, IconData, String)> methods =
+        <(String, IconData, String)>[
+          if (config.topUpEnabled)
+            (
+              'qpay',
+              Icons.qr_code_2_rounded,
+              AppStrings.get('topup_method_qpay'),
+            ),
+          if (config.cardTopUpEnabled)
+            (
+              'card',
+              Icons.credit_card_rounded,
+              AppStrings.get('topup_method_card'),
+            ),
+          if (config.socialPayEnabled)
+            (
+              'socialpay',
+              Icons.phone_iphone_rounded,
+              AppStrings.get('topup_method_socialpay'),
+            ),
+        ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1141,7 +1167,9 @@ class _TopUpFormState extends State<_TopUpForm> {
             ],
           ),
         ],
-        if (_payByCard && _cardId == null && config.savedCardsEnabled) ...<Widget>[
+        if (_payByCard &&
+            _cardId == null &&
+            config.savedCardsEnabled) ...<Widget>[
           const SizedBox(height: 6),
           InkWell(
             onTap: () => setState(() => _saveCard = !_saveCard),
@@ -1292,6 +1320,7 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
           kind: ToastKind.info,
         );
       }
+      final String? before = _fatal;
       setState(() {
         _invoice = merged;
         _checking = false;
@@ -1306,6 +1335,10 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
           _poll?.cancel();
         }
       });
+      // Play the failure once, the moment the invoice turns dead.
+      if (before == null && _fatal != null) {
+        showTopUpResult(context, success: false, reason: _fatal);
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _checking = false);
@@ -1470,7 +1503,9 @@ class _InvoiceSheetState extends State<_InvoiceSheet> {
                 : openPaymentPage(_invoice.paymentUrl!),
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
             label: Text(
-              AppStrings.get(_invoice.isSocialPay ? 'social_open' : 'card_open'),
+              AppStrings.get(
+                _invoice.isSocialPay ? 'social_open' : 'card_open',
+              ),
             ),
           ),
         ],

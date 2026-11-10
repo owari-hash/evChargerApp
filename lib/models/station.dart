@@ -52,6 +52,7 @@ class StationConnector {
     this.inUseByOther = false,
     this.socPercent,
     this.minutesToFull,
+    this.minutesLeft,
   });
 
   /// 1-based, as printed on the gun itself and on its QR sticker.
@@ -77,6 +78,11 @@ class StationConnector {
 
   /// The server's estimate of minutes until that car is full.
   final int? minutesToFull;
+
+  /// The server's best guess of minutes until this session is done: the
+  /// battery estimate when there is one, else how long sessions at this
+  /// station usually last.
+  final int? minutesLeft;
 
   /// A car is on this gun now, paused or not.
   bool get hasCarCharging =>
@@ -123,6 +129,9 @@ class StationConnector {
       minutesToFull: json['minutesToFull'] is num
           ? (json['minutesToFull'] as num).round()
           : null,
+      minutesLeft: json['minutesLeft'] is num
+          ? (json['minutesLeft'] as num).round()
+          : null,
     );
   }
 
@@ -137,9 +146,15 @@ class StationConnector {
 /// when the car does not report its battery. Shown on busy stations so a
 /// driver can tell how long until a gun frees up.
 String? chargeProgressLabel(StationConnector c) {
-  if (!c.hasCarCharging || c.socPercent == null) return null;
+  if (!c.hasCarCharging) return null;
+  if (c.socPercent == null) {
+    // No battery reading: fall back to the typical-session estimate.
+    final int? left = c.minutesLeft;
+    if (left == null) return null;
+    return '⏱ ${AppStrings.get('left_in').replaceFirst('{time}', formatMinutesShort(left))}';
+  }
   final String soc = '🔋 ${c.socPercent!.round()}%';
-  final int? minutes = c.minutesToFull;
+  final int? minutes = c.minutesToFull ?? c.minutesLeft;
   if (minutes == null) return soc;
   return '$soc · ${AppStrings.get('full_in').replaceFirst('{time}', formatMinutesShort(minutes))}';
 }
@@ -179,6 +194,7 @@ class ChargingStationLocation {
     this.baseTariffPerKwh,
     this.defaultTariffPerKwh,
     this.tariffZones = const <TariffZone>[],
+    this.waitMinutes,
   });
 
   final String id;
@@ -191,6 +207,9 @@ class ChargingStationLocation {
 
   final double kwSpeed;
   final int availableConnectors;
+
+  /// Every plug busy: the server's estimate of minutes until one frees up.
+  final int? waitMinutes;
   final int totalConnectors;
 
   /// What the driver pays per kWh, Eplug's service fee already included.
@@ -321,6 +340,7 @@ class ChargingStationLocation {
           .map(TariffZone.fromJson)
           .whereType<TariffZone>()
           .toList(growable: false),
+      waitMinutes: _toInt(json['waitMinutes']),
     );
   }
 
@@ -351,6 +371,7 @@ class ChargingStationLocation {
       baseTariffPerKwh: baseTariffPerKwh,
       defaultTariffPerKwh: defaultTariffPerKwh,
       tariffZones: tariffZones,
+      waitMinutes: waitMinutes,
     );
   }
 

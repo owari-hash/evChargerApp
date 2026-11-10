@@ -380,6 +380,20 @@ class _TripsStationsScreenState extends State<TripsStationsScreen> {
                       ),
                   ],
                 ),
+                if (station.waitMinutes != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '⏱ ${AppStrings.get('wait_free_in').replaceFirst('{time}', formatMinutesShort(station.waitMinutes!))}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                  ),
                 // A busy station says how far along each car on it is, so a
                 // driver can tell how long until a gun frees up.
                 for (final StationConnector c in station.connectors)
